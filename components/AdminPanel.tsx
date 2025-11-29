@@ -1,0 +1,294 @@
+
+import React, { useEffect, useState } from 'react';
+import { useStore } from '../store';
+import { supabase } from '../supabaseClient';
+import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { User } from '../types';
+
+export const AdminPanel: React.FC = () => {
+    const { currentUser, updateUserProfile, setActiveProject, getRegistrationStatus, toggleRegistration } = useStore();
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [users, setUsers] = useState<User[]>([]);
+    const [projects, setProjects] = useState<any[]>([]);
+    const [editingUser, setEditingUser] = useState<string | null>(null);
+    const [regOpen, setRegOpen] = useState(true);
+
+    const [editLimits, setEditLimits] = useState({
+        maxProjects: 3,
+        maxLeads: 2,
+        maxResources: 5
+    });
+
+    useEffect(() => {
+        if (currentUser?.email !== 'manavss828@gmail.com') {
+            navigate('/');
+            return;
+        }
+        fetchData();
+    }, [currentUser, navigate]);
+
+    const fetchData = async () => {
+        const { data: userData } = await supabase.from('profiles').select('*');
+        const { data: projectData } = await supabase.from('projects').select('*, manager:profiles(*)');
+
+        const mappedUsers = (userData || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            email: p.email,
+            role: p.role,
+            isPremium: p.is_premium,
+            maxProjects: p.max_projects,
+            maxLeads: p.max_leads,
+            maxResources: p.max_resources,
+            notificationsEnabled: p.notifications_enabled,
+            remindersEnabled: p.reminders_enabled,
+            timeTrackingEnabled: p.time_tracking_enabled,
+            imageUploadEnabled: p.image_upload_enabled,
+            maxAttachmentsPerTask: p.max_attachments_per_task || 3
+        }));
+
+        setUsers(mappedUsers);
+        setProjects(projectData || []);
+
+        // Fetch registration status
+        const status = await getRegistrationStatus();
+        setRegOpen(status);
+
+        setLoading(false);
+    };
+
+    const handleToggleReg = async () => {
+        await toggleRegistration(!regOpen);
+        setRegOpen(!regOpen);
+    };
+
+    const handleTogglePremium = async (userId: string, currentVal: boolean) => {
+        await updateUserProfile(userId, { isPremium: !currentVal });
+        fetchData();
+    };
+
+    const handleToggleNotifs = async (userId: string, currentVal: boolean) => {
+        await updateUserProfile(userId, { notificationsEnabled: !currentVal });
+        fetchData();
+    };
+
+    const handleToggleReminders = async (userId: string, currentVal: boolean) => {
+        await updateUserProfile(userId, { remindersEnabled: !currentVal });
+        fetchData();
+    };
+
+    const handleToggleTimeTracking = async (userId: string, currentVal: boolean) => {
+        await updateUserProfile(userId, { timeTrackingEnabled: !currentVal });
+        fetchData();
+    };
+
+    const handleToggleImageUpload = async (userId: string, currentVal: boolean) => {
+        await updateUserProfile(userId, { imageUploadEnabled: !currentVal });
+        fetchData();
+    };
+
+    const handleUpdateMaxAttachments = async (userId: string, val: number) => {
+        await updateUserProfile(userId, { maxAttachmentsPerTask: val });
+        fetchData();
+    };
+
+    const startEdit = (user: User) => {
+        setEditingUser(user.id);
+        setEditLimits({
+            maxProjects: user.maxProjects || 3,
+            maxLeads: user.maxLeads || 2,
+            maxResources: user.maxResources || 5
+        });
+    };
+
+    const saveEdit = async (userId: string) => {
+        await updateUserProfile(userId, {
+            maxProjects: editLimits.maxProjects,
+            maxLeads: editLimits.maxLeads,
+            maxResources: editLimits.maxResources
+        });
+        setEditingUser(null);
+        fetchData();
+    };
+
+    const openProject = (id: string) => {
+        setActiveProject(id);
+        navigate('/');
+    };
+
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading Admin Panel...</div>;
+
+    return (
+        <div className="h-full overflow-y-auto p-6 space-y-8 bg-gray-50 dark:bg-gray-900">
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold flex items-center gap-2 text-gray-800 dark:text-white">
+                    <Shield className="text-red-600" /> Super Admin Control Center
+                </h1>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={handleToggleReg}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm ${regOpen ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
+                    >
+                        {regOpen ? <Unlock size={16} /> : <Lock size={16} />}
+                        {regOpen ? 'Registration Open' : 'Registration Closed'}
+                    </button>
+                    <div className="text-sm text-gray-500">
+                        Logged in as: <span className="font-mono text-gray-700 dark:text-gray-300">manavss828@gmail.com</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* ... existing stats cards ... */}
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-gray-500 font-medium">Total Users</h3>
+                        <Users className="text-blue-500" />
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800 dark:text-white">{users.length}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-gray-500 font-medium">Total Projects</h3>
+                        <FolderKanban className="text-green-500" />
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800 dark:text-white">{projects.length}</p>
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700">
+                <div className="px-6 py-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                    <h3 className="font-bold text-gray-700 dark:text-gray-200">User Management & Limits</h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-3">User</th>
+                                <th className="px-4 py-3 text-center">Premium</th>
+                                <th className="px-4 py-3 text-center">Features</th>
+                                <th className="px-4 py-3 text-center">Limits (Proj/Lead/Res)</th>
+                                <th className="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y dark:divide-gray-700">
+                            {users.map(u => (
+                                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td className="px-6 py-4">
+                                        <p className="font-medium text-gray-900 dark:text-white">{u.name}</p>
+                                        <p className="text-xs text-gray-500">{u.email}</p>
+                                    </td>
+                                    <td className="px-4 py-4 text-center">
+                                        <button
+                                            onClick={() => handleTogglePremium(u.id, !!u.isPremium)}
+                                            className={`p-2 rounded-full ${u.isPremium ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400'}`}
+                                            title="Toggle Premium Status"
+                                        >
+                                            <Crown size={16} />
+                                        </button>
+                                    </td>
+                                    <td className="px-4 py-4 text-center flex justify-center gap-2">
+                                        <button
+                                            onClick={() => handleToggleNotifs(u.id, !!u.notificationsEnabled)}
+                                            className={`p-2 rounded-full ${u.notificationsEnabled ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
+                                            title="Toggle Task Notifications"
+                                        >
+                                            <Bell size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleToggleReminders(u.id, !!u.remindersEnabled)}
+                                            className={`p-2 rounded-full ${u.remindersEnabled ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}
+                                            title="Toggle Task Reminders"
+                                        >
+                                            <Clock size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleToggleTimeTracking(u.id, !!u.timeTrackingEnabled)}
+                                            className={`p-2 rounded-full ${u.timeTrackingEnabled ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}
+                                            title="Toggle Time Tracking"
+                                        >
+                                            <Timer size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleToggleImageUpload(u.id, !!u.imageUploadEnabled)}
+                                            className={`p-2 rounded-full ${u.imageUploadEnabled ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
+                                            title="Toggle Image Upload"
+                                        >
+                                            <FolderKanban size={16} />
+                                        </button>
+                                        {u.imageUploadEnabled && (
+                                            <div className="flex items-center gap-1">
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="10"
+                                                    value={u.maxAttachmentsPerTask || 3}
+                                                    onChange={(e) => handleUpdateMaxAttachments(u.id, parseInt(e.target.value))}
+                                                    className="w-12 p-1 text-xs border rounded text-center"
+                                                    title="Max Attachments per Task"
+                                                />
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-4 text-center">
+                                        {editingUser === u.id ? (
+                                            <div className="flex gap-1 justify-center">
+                                                <input type="number" className="w-12 p-1 border rounded text-center" value={editLimits.maxProjects} onChange={e => setEditLimits({ ...editLimits, maxProjects: +e.target.value })} title="Max Projects" />
+                                                <span className="text-gray-400">/</span>
+                                                <input type="number" className="w-12 p-1 border rounded text-center" value={editLimits.maxLeads} onChange={e => setEditLimits({ ...editLimits, maxLeads: +e.target.value })} title="Max Leads" />
+                                                <span className="text-gray-400">/</span>
+                                                <input type="number" className="w-12 p-1 border rounded text-center" value={editLimits.maxResources} onChange={e => setEditLimits({ ...editLimits, maxResources: +e.target.value })} title="Max Resources" />
+                                            </div>
+                                        ) : (
+                                            <span className="font-mono text-gray-600 dark:text-gray-400">
+                                                {u.maxProjects} / {u.maxLeads} / {u.maxResources}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        {editingUser === u.id ? (
+                                            <div className="flex justify-end gap-2">
+                                                <button onClick={() => saveEdit(u.id)} className="text-green-600 hover:bg-green-100 p-1 rounded"><Check size={16} /></button>
+                                                <button onClick={() => setEditingUser(null)} className="text-red-600 hover:bg-red-100 p-1 rounded"><X size={16} /></button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => startEdit(u)} className="text-gray-400 hover:text-blue-500 p-1 rounded">
+                                                <Edit2 size={16} />
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700">
+                <div className="px-6 py-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                    <h3 className="font-bold text-gray-700 dark:text-gray-200">Global Projects</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                    {projects.map(p => (
+                        <div
+                            key={p.id}
+                            onClick={() => openProject(p.id)}
+                            className="border border-gray-200 dark:border-gray-700 p-4 rounded-lg hover:shadow-md cursor-pointer bg-gray-50 dark:bg-gray-800/50 transition-all"
+                        >
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.theme_color }}></div>
+                                <h4 className="font-bold text-gray-800 dark:text-white truncate">{p.name}</h4>
+                            </div>
+                            <p className="text-xs text-gray-500 mb-2">Manager: {p.manager?.name || 'Unknown'}</p>
+                            <p className="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded w-fit text-gray-600 dark:text-gray-300">
+                                Code: {p.code}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};

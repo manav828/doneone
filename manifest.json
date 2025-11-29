@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "FlowBoard - Project Management",
+  "version": "1.1.0",
+  "description": "Universal task management tool with browser-native superpowers.",
+  "action": {
+    "default_title": "Open FlowBoard"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "commands": {
+    "quick-add-task": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F"
+      },
+      "description": "Quick add task from anywhere"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

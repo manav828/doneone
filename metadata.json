@@ -1,0 +1,5 @@
+{
+  "name": "FlowBoard",
+  "description": "A role-based project management Chrome Extension with Kanban boards, drag & drop, and customizable themes.",
+  "requestFramePermissions": []
+}
