@@ -112,29 +112,20 @@ export const TopBar: React.FC = () => {
               </div>
 
               {/* Filters */}
-              {usersToFilter.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Filter:</span>
-                  <div className="relative group">
-                    <select
-                      value={activeMemberFilter || ''}
-                      onChange={(e) => setMemberFilter(e.target.value || null)}
-                      className="appearance-none bg-transparent text-xs font-medium text-slate-600 dark:text-slate-300 pr-6 cursor-pointer focus:outline-none"
-                    >
-                      <option value="">All Members</option>
-                      {usersToFilter.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={12} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  </div>
-                </div>
-              )}
+              {/* Removed Member Filter as per request */}
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Theme Toggle */}
+          <button
+            onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+            className="p-2 text-slate-400 hover:text-yellow-500 dark:hover:text-yellow-400 transition-colors"
+            title={themeMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {themeMode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
           {activeProject && (
             <>
               {/* View Switcher */}

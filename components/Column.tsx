@@ -4,7 +4,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Column as ColumnType, Task as TaskType } from '../types';
 import { TaskCard } from './TaskCard';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Timer } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Timer, ChevronsUp, ChevronsDown } from 'lucide-react';
 import { useStore } from '../store';
 
 interface Props {
@@ -72,20 +72,24 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
               <ArrowRight size={14} />
             </button>
             <div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-1"></div>
-            {/* Collapse/Expand All */}
+            {/* Toggle Collapse/Expand All */}
             <button
-              onClick={() => useStore.getState().collapseColumnTasks(column.id)}
+              onClick={() => {
+                const allCollapsed = tasks.length > 0 && tasks.every(t => useStore.getState().collapsedTaskIds.includes(t.id));
+                if (allCollapsed) {
+                  useStore.getState().expandColumnTasks(column.id);
+                } else {
+                  useStore.getState().collapseColumnTasks(column.id);
+                }
+              }}
               className="p-1 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-              title="Collapse All"
+              title={tasks.length > 0 && tasks.every(t => useStore.getState().collapsedTaskIds.includes(t.id)) ? "Expand All" : "Collapse All"}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 9h8" /><path d="M8 15h8" /><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /></svg>
-            </button>
-            <button
-              onClick={() => useStore.getState().expandColumnTasks(column.id)}
-              className="p-1 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-              title="Expand All"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><path d="M3 9h18" /><path d="M3 15h18" /></svg>
+              {tasks.length > 0 && tasks.every(t => useStore.getState().collapsedTaskIds.includes(t.id)) ? (
+                <ChevronsDown size={14} />
+              ) : (
+                <ChevronsUp size={14} />
+              )}
             </button>
             <div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-1"></div>
             <button

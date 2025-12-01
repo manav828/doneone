@@ -317,8 +317,93 @@ export const useStore = create<AppState>((set, get) => ({
 
     supabase
       .channel('public-updates')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        if (!get().isOffline) get().refreshData();
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        if (!get().isOffline) {
+          get().refreshData();
+
+          // Notification Logic
+          const { currentUser, projects } = get();
+          if (!currentUser) return;
+
+          // 1. Task Column Change
+          if (payload.table === 'tasks' && payload.eventType === 'UPDATE') {
+            const oldTask = payload.old as any;
+            const newTask = payload.new as any;
+
+            // We need to check if column changed. 
+            // Since 'old' might be empty, we can check against our local store state BEFORE refreshData finishes (or race condition).
+            // Better: We just refreshed data, but we can't easily compare old vs new here without keeping track.
+            // Alternative: The user wants "when I am changing the column... send chrome push notification".
+            // If *I* change it, I don't need a notification? "it not sending chrome push notification".
+            // Usually notifications are for *others*. But if the user wants it for themselves or others?
+            // "when I am changing the column of the task it not sending chrome push notification" -> sounds like they want it to send to OTHERS.
+            // "manager not getting the notifiction for new request" -> Manager gets it.
+
+            // Let's implement: If a task in a project I am a member of changes column, and I am NOT the one who changed it (optional, but good UX).
+            // But payload doesn't easily tell us *who* changed it unless we have a 'modified_by' column.
+            // We don't have 'modified_by'.
+            // Simple approach: If a task changes column, notify everyone in project.
+
+            // To detect column change without 'old' payload being reliable (default postgres setting):
+            // We can't easily know if column changed just from 'new'.
+            // However, we can rely on the fact that we just called refreshData, but that's async.
+            // Let's try to use the payload if available, or just notify on any task update? No, too noisy.
+            // Assumption: The user has set REPLICA IDENTITY FULL for tasks table? Probably not.
+            // Workaround: We can't perfectly detect column change without 'old'. 
+            // BUT, if the user wants "send chrome push notification", maybe they mean *trigger* it from the client that does the change?
+            // "when I am changing the column... it not sending".
+            // If I change it, I can trigger it in `moveTask`.
+            // BUT, "manager not getting notification for new request" implies remote.
+
+            // Let's implement the "Manager Join Request" part here (remote).
+            // And for "Task Column Change", let's implement it in `moveTask` (local trigger) AND here for others?
+            // If we do it here, we need to know if it changed.
+            // Let's stick to:
+            // 1. Join Request -> Here (Remote)
+            // 2. Task Move -> Here (Remote) - We will try to see if we can detect it, or just notify "Task Updated".
+            // Actually, for "Task Column Change", if we can't see 'old', we can't know.
+            // Let's assume we can't see 'old'.
+            // So, let's trigger the "Task Column Change" notification from the `moveTask` function for the *local* user (feedback),
+            // AND for *remote* users, we might miss it unless we fetch the old task from store before refresh.
+
+            // Wait, `get().tasks` has the OLD state before `refreshData` completes (since refreshData is async and we just called it).
+            // So we can find the task in `get().tasks`!
+            const localTask = get().tasks.find(t => t.id === newTask.id);
+            if (localTask && localTask.columnId !== newTask.column_id) {
+              // Column changed!
+              // Notify if I am relevant to this project
+              const project = projects.find(p => p.id === newTask.project_id);
+              if (project) {
+                // Don't notify if I made the change? We don't know who made it.
+                // But we can check if the update time is very recent.
+                // Let's just notify.
+                chrome.notifications.create({
+                  type: 'basic',
+                  iconUrl: 'icon-128.png', // Ensure this exists or use a default
+                  title: `Task Moved: ${project.name}`,
+                  message: `Task "${newTask.title}" moved to a new column.`
+                });
+              }
+            }
+          }
+
+          // 2. Join Request (INSERT into project_members with status 'pending')
+          if (payload.table === 'project_members' && payload.eventType === 'INSERT') {
+            const newMember = payload.new;
+            if (newMember.status === 'pending') {
+              const project = projects.find(p => p.id === newMember.project_id);
+              // Only notify Manager
+              if (project && project.managerId === currentUser.id) {
+                chrome.notifications.create({
+                  type: 'basic',
+                  iconUrl: 'icon-128.png',
+                  title: 'New Join Request',
+                  message: `A user has requested to join ${project.name}.`
+                });
+              }
+            }
+          }
+        }
       })
       .subscribe();
   },

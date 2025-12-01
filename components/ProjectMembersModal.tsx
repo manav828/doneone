@@ -187,18 +187,22 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
 
                 {canManage && (
-                  <div className="mt-2 pl-10 flex items-center gap-2">
-                    <span className="text-xs text-gray-400">Reports to:</span>
-                    <select
-                      className="bg-transparent text-xs border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 outline-none cursor-pointer hover:bg-white dark:hover:bg-gray-800"
-                      value={project.reportsTo[member.id] || ''}
-                      onChange={(e) => assignMemberLead(project.id, member.id, e.target.value || null)}
-                    >
-                      <option value="">-- No Lead --</option>
-                      {leads.map(l => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
-                      ))}
-                    </select>
+                  <div className="mt-2 pl-10 flex items-center gap-2 relative">
+                    <span className="text-xs text-gray-400 whitespace-nowrap">Reports to:</span>
+                    <div className="relative w-full">
+                      <select
+                        className="appearance-none bg-transparent text-xs border border-gray-200 dark:border-gray-600 rounded px-2 py-1 pr-6 outline-none cursor-pointer hover:bg-white dark:hover:bg-gray-800 transition-colors w-full"
+                        style={{ backgroundImage: 'none', WebkitAppearance: 'none', MozAppearance: 'none' }}
+                        value={project.reportsTo[member.id] || ''}
+                        onChange={(e) => assignMemberLead(project.id, member.id, e.target.value || null)}
+                      >
+                        <option value="">-- No Lead --</option>
+                        {leads.map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={12} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
                   </div>
                 )}
               </div>
@@ -206,6 +210,6 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
           </div>
         </div>
       </div>
-    </Modal>
+    </Modal >
   );
 };
