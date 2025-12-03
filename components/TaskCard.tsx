@@ -76,6 +76,11 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   const isDueSoon = task.reminderAt && task.reminderAt > now && (task.reminderAt - now < 30 * 60 * 1000);
   const isCollapsed = collapsedTaskIds.includes(task.id);
 
+  // Animation classes
+  const animationClass = task.isHighlighted ? 'task-highlighted' :
+    isOverdue ? 'task-overdue' :
+      isDueSoon ? 'task-reminder-soon' : '';
+
   if (isDragging) {
     return (
       <div
@@ -104,8 +109,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
         {...attributes}
         {...listeners}
         onClick={handleCardClick}
-        className={`
-          group relative bg-surface-light dark:bg-surface-dark p-3.5 rounded-xl border transition-all duration-200 select-none
+        className={`group cursor-pointer bg-white dark:bg-slate-700 p-3.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm hover:shadow-md hover:border-primary dark:hover:border-primary transition-all duration-200 relative ${animationClass}
           ${canMove ? 'cursor-grab active:cursor-grabbing hover:shadow-card-hover hover:-translate-y-0.5' : 'cursor-default opacity-90'}
           ${isOverdue
             ? 'border-red-400 dark:border-red-600 bg-red-50/30 dark:bg-red-900/10'

@@ -1,6 +1,8 @@
 
+
 import { create } from 'zustand';
-import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, Notification } from './types';
+import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role } from './types';
+import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
@@ -89,6 +91,7 @@ interface AppState {
   processPendingTasks: () => Promise<void>;
   getFilteredTasks: (projectId: string) => Task[];
   getVisibleUsers: () => User[];
+  ensureFixedColumns: (projectId: string) => Promise<void>;
 
   // Collapse Feature
   collapsedTaskIds: string[];
@@ -458,6 +461,7 @@ export const useStore = create<AppState>((set, get) => ({
         code: p.code,
         managerId: p.manager_id,
         themeColor: p.theme_color || '#3b82f6',
+        autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true, // Default to true for existing projects
         leadIds: pMembers.filter((m: any) => m.role === 'Lead' && m.status === 'active').map((m: any) => m.user_id),
         resourceIds: pMembers.filter((m: any) => m.role === 'Resource' && m.status === 'active').map((m: any) => m.user_id),
         pendingJoinRequests: pMembers.filter((m: any) => m.status === 'pending').map((m: any) => m.user_id),
@@ -551,7 +555,33 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
-  setActiveProject: (id) => set({ activeProjectId: id, activeMemberFilter: null, activeTagFilter: null, activeStatusFilter: null }),
+  ensureFixedColumns: async (projectId: string) => {
+    const { columns } = get();
+    const projectColumns = columns.filter(c => c.projectId === projectId);
+    const fixedColumnTitles = ['Pending', 'In Progress', 'Done'];
+
+    for (let i = 0; i < fixedColumnTitles.length; i++) {
+      const title = fixedColumnTitles[i];
+      const existingColumn = projectColumns.find(c => c.title === title);
+
+      if (!existingColumn) {
+        await supabase.from('columns').insert({
+          project_id: projectId,
+          title: title,
+          order_index: i // Ensure they are in order
+        });
+      }
+    }
+    get().refreshData();
+  },
+
+  setActiveProject: (id) => {
+    set({ activeProjectId: id, activeMemberFilter: null, activeTagFilter: null, activeStatusFilter: null });
+    // Ensure fixed columns exist for this project
+    if (id) {
+      get().ensureFixedColumns(id);
+    }
+  },
 
   // ... (Previous addProject, updateProject, deleteProject, etc. remain unchanged)
   addProject: async (name, description, color) => {
@@ -564,7 +594,14 @@ export const useStore = create<AppState>((set, get) => ({
       return;
     }
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { data } = await supabase.from('projects').insert({ name, description, theme_color: color, manager_id: user.id, code }).select().single();
+    const { data } = await supabase.from('projects').insert({
+      name,
+      description,
+      theme_color: color,
+      manager_id: user.id,
+      code,
+      auto_move_enabled: true  // Enable auto-move by default
+    }).select().single();
     if (data) {
       await get().refreshData();
       set({ activeProjectId: data.id });
@@ -943,6 +980,60 @@ export const useStore = create<AppState>((set, get) => ({
               // So real-time push to *others* requires Supabase Realtime subscription in the background script of the *other* users.
             }
           });
+        }
+      }
+    }
+
+    // AUTO-MOVE LOGIC: When task moves to Done, auto-move highest priority Pending task to In Progress
+    if (oldColumnId !== newColumnId) {
+      const oldColumn = state.columns.find(c => c.id === oldColumnId);
+      const newColumn = state.columns.find(c => c.id === newColumnId);
+
+      // Check if moving from "In Progress" to "Done"
+      if (oldColumn?.title === 'In Progress' && newColumn?.title === 'Done' && project.autoMoveEnabled) {
+        // Find Pending and In Progress columns
+        const projectColumns = state.columns.filter(c => c.projectId === project.id);
+        const pendingColumn = projectColumns.find(c => c.title === 'Pending');
+        const inProgressColumn = projectColumns.find(c => c.title === 'In Progress');
+
+        if (pendingColumn && inProgressColumn) {
+          // Get pending tasks sorted by priority
+          const { sortTasksByPriority } = await import('./utils/taskPriority');
+          const pendingTasks = sortTasksByPriority(
+            state.tasks.filter(t => t.columnId === pendingColumn.id),
+            state.tags
+          );
+
+          if (pendingTasks.length > 0) {
+            const taskToMove = pendingTasks[0];
+            const inProgressTasks = state.tasks.filter(t => t.columnId === inProgressColumn.id);
+
+            // Move the task
+            await get().moveTask(taskToMove.id, inProgressColumn.id, inProgressTasks.length);
+
+            // Highlight the auto-moved task
+            await get().updateTask(taskToMove.id, { isHighlighted: true });
+
+            // Create notification
+            await supabase.from('notifications').insert({
+              recipient_id: user.id,
+              project_id: project.id,
+              message: `Task "${taskToMove.title}" was automatically moved to In Progress`
+            });
+
+            // Show browser notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('FlowBoard Auto-Move', {
+                body: `"${taskToMove.title}" moved to In Progress`,
+                icon: 'icon128.png'
+              });
+            }
+
+            // Remove highlight after 5 seconds
+            setTimeout(async () => {
+              await get().updateTask(taskToMove.id, { isHighlighted: false });
+            }, 5000);
+          }
         }
       }
     }

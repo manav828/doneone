@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlowBoard - Task Management Extension</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#f97316',
+                        secondary: '#3b82f6',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, #f97316, #3b82f6);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .float-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+
+        .scroll-reveal.revealed {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+
+<body class="bg-white">
+    <!-- Navigation -->
+    <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center shadow-lg">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                    </div>
+                    <span class="text-2xl font-bold gradient-text">FlowBoard</span>
+                </div>
+                <div class="hidden md:flex items-center gap-8">
+                    <a href="#features"
+                        class="text-gray-700 hover:text-primary transition-colors font-medium">Features</a>
+                    <a href="#screenshots"
+                        class="text-gray-700 hover:text-primary transition-colors font-medium">Screenshots</a>
+                    <a href="#pricing"
+                        class="text-gray-700 hover:text-primary transition-colors font-medium">Pricing</a>
+                </div>
+                <a href="https://chrome.google.com/webstore" target="_blank"
+                    class="bg-primary text-white px-6 py-3 rounded-full font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                    Add to Chrome
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section
+        class="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-blue-50 pt-20">
+        <div class="absolute inset-0 overflow-hidden">
+            <div class="absolute top-20 -left-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse"></div>
+            <div class="absolute bottom-20 -right-20 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-pulse"
+                style="animation-delay: 1s;"></div>
+        </div>
+
+        <div class="relative z-10 max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+            <div class="fade-in-up">
+                <h1 class="text-6xl md:text-7xl font-bold mb-6 leading-tight">
+                    Manage Projects <span class="gradient-text">with Flow</span>
+                </h1>
+                <p class="text-xl text-gray-600 mb-8 leading-relaxed">
+                    The all-in-one Chrome extension for seamless task management.
+                    Kanban boards, List views, and Calendar - all in your browser.
+                </p>
+                <div class="flex gap-4 mb-12">
+                    <a href="https://chrome.google.com/webstore" target="_blank"
+                        class="bg-primary text-white px-8 py-4 rounded-full font-semibold text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+                        Add to Chrome - It's Free
+                    </a>
+                    <a href="#features"
+                        class="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-full font-semibold text-lg hover:border-primary hover:text-primary transition-all duration-300">
+                        Learn More
+                    </a>
+                </div>
+                <div class="flex gap-8">
+                    <div>
+                        <div class="text-3xl font-bold text-primary">10k+</div>
+                        <div class="text-sm text-gray-500">Active Users</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold text-primary">4.8★</div>
+                        <div class="text-sm text-gray-500">Chrome Rating</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold text-primary">50k+</div>
+                        <div class="text-sm text-gray-500">Tasks Completed</div>
+                    </div>
+                </div>
+            </div>
+            <div class="relative float-animation" style="animation-delay: 0.3s;">
+                <div class="relative mx-auto max-w-[600px]">
+                    <div class="relative bg-gray-900 rounded-t-2xl p-2 shadow-2xl">
+                        <div class="bg-white rounded-lg overflow-hidden">
+                            <img src="screenshots/kanban.png" alt="FlowBoard Kanban View" class="w-full h-auto">
+                        </div>
+                    </div>
+                    <div class="h-4 bg-gray-800 rounded-b-2xl shadow-lg"></div>
+                    <div class="h-1 bg-gray-700 mx-auto w-32 rounded-b-lg"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-24 bg-white">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16 scroll-reveal">
+                <h2 class="text-5xl font-bold mb-4">
+                    Everything You Need to <span class="gradient-text">Stay Organized</span>
+                </h2>
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                    FlowBoard brings powerful project management features right into your browser
+                </p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div
+                    class="scroll-reveal p-8 rounded-2xl border border-gray-200 hover:border-primary/50 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-2">
+                    <div
+                        class="w-14 h-14 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl flex items-center justify-center text-primary mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Kanban Boards</h3>
+                    <p class="text-gray-600 leading-relaxed">Visualize your workflow with drag-and-drop Kanban boards.
+                        Organize tasks across custom columns.</p>
+                </div>
+
+                <div class="scroll-reveal p-8 rounded-2xl border border-gray-200 hover:border-primary/50 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-2"
+                    style="animation-delay: 0.1s;">
+                    <div
+                        class="w-14 h-14 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl flex items-center justify-center text-primary mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">List View</h3>
+                    <p class="text-gray-600 leading-relaxed">Get a detailed overview of all your tasks in a clean,
+                        sortable list format with advanced filtering.</p>
+                </div>
+
+                <div class="scroll-reveal p-8 rounded-2xl border border-gray-200 hover:border-primary/50 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-2"
+                    style="animation-delay: 0.2s;">
+                    <div
+                        class="w-14 h-14 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl flex items-center justify-center text-primary mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold mb-3">Team Collaboration</h3>
+                <p class="text-gray-600 leading-relaxed">Invite team members, assign tasks, and track progress
+                    together in real-time.</p>
+            </div>
+
+            <div class="scroll-reveal p-8 rounded-2xl border border-gray-200 hover:border-primary/50 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-2"
+                style="animation-delay: 0.4s;">
+                <div
+                    class="w-14 h-14 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl flex items-center justify-center text-primary mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold mb-3">Smart Tags</h3>
+                <p class="text-gray-600 leading-relaxed">Organize with colorful tags and labels. Create custom
+                    categories for better task management.</p>
+            </div>
+
+            <div class="scroll-reveal p-8 rounded-2xl border border-gray-200 hover:border-primary/50 hover:shadow-xl transition-all duration-300 bg-white hover:-translate-y-2"
+                style="animation-delay: 0.5s;">
+                <div
+                    class="w-14 h-14 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-xl flex items-center justify-center text-primary mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold mb-3">Analytics & Reports</h3>
+                <p class="text-gray-600 leading-relaxed">Track productivity with detailed analytics and generate
+                    reports for your team.</p>
+            </div>
+        </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-24 bg-gradient-to-br from-gray-50 to-blue-50">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16 scroll-reveal">
+                <h2 class="text-5xl font-bold mb-4">
+                    Simple, <span class="gradient-text">Transparent Pricing</span>
+                </h2>
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                    Choose the plan that fits your needs. Start free, upgrade when you're ready.
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                <!-- Free Plan -->
+                <div
+                    class="scroll-reveal p-8 rounded-2xl border-2 border-gray-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300 bg-white">
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Free</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-5xl font-bold text-primary">$0</span>
+                            <span class="text-gray-500">/month</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">Unlimited tasks</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">Kanban board view</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">1 project</span>
+                        </li>
+                    </ul>
+                    <a href="https://chrome.google.com/webstore" target="_blank"
+                        class="block w-full text-center bg-gray-100 text-gray-700 px-6 py-3 rounded-full font-semibold hover:bg-gray-200">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Pro Plan -->
+                <div class="scroll-reveal p-8 rounded-2xl border-2 border-primary bg-white hover:shadow-2xl relative transform scale-105"
+                    style="animation-delay: 0.1s;">
+                    <div class="absolute top-0 right-6 -translate-y-1/2">
+                        <span class="bg-primary text-white px-4 py-1 rounded-full text-sm font-semibold">Most
+                            Popular</span>
+                    </div>
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Pro</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-5xl font-bold text-primary">$9</span>
+                            <span class="text-gray-500">/month</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700"><strong>Everything in Free</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">List & Calendar views</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">Unlimited projects</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">Team collaboration</span>
+                        </li>
+                    </ul>
+                    <a href="https://chrome.google.com/webstore" target="_blank"
+                        class="block w-full text-center bg-primary text-white px-6 py-3 rounded-full font-semibold shadow-lg hover:shadow-xl">
+                        Start Free Trial
+                    </a>
+                </div>
+
+                <!-- Enterprise Plan -->
+                <div class="scroll-reveal p-8 rounded-2xl border-2 border-gray-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300 bg-white"
+                    style="animation-delay: 0.2s;">
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Enterprise</h3>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-5xl font-bold text-primary">$29</span>
+                            <span class="text-gray-500">/month</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700"><strong>Everything in Pro</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">Unlimited members</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-primary mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700">24/7 support</span>
+                        </li>
+                    </ul>
+                    <a href="https://chrome.google.com/webstore" target="_blank"
+                        class="block w-full text-center bg-gray-900 text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800">
+                        Contact Sales
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-24 bg-gradient-to-br from-primary to-secondary text-white relative overflow-hidden">
+        <div class="absolute inset-0 opacity-10">
+            <div class="absolute inset-0"
+                style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');">
+            </div>
+        </div>
+        <div class="max-w-4xl mx-auto px-6 text-center relative z-10">
+            <div class="scroll-reveal">
+                <h2 class="text-5xl font-bold mb-6">Ready to Get Started?</h2>
+                <p class="text-2xl mb-8 opacity-90">
+                    Join thousands of users who are already managing their projects more efficiently
+                </p>
+                <a href="https://chrome.google.com/webstore" target="_blank"
+                    class="inline-block bg-white text-primary px-10 py-5 rounded-full font-bold text-xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105">
+                    Add to Chrome - It's Free
+                </a>
+                <p class="mt-6 text-sm opacity-75">
+                    No credit card required • Free forever • Premium features available
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="grid md:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <div
+                            class="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <span class="text-xl font-bold">FlowBoard</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">
+                        The ultimate Chrome extension for seamless task management.
+                    </p>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-4">Product</h3>
+                    <ul class="space-y-2 text-gray-400 text-sm">
+                        <li><a href="#features" class="hover:text-white transition-colors">Features</a></li>
+                        <li><a href="#pricing" class="hover:text-white transition-colors">Pricing</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-4">Company</h3>
+                    <ul class="space-y-2 text-gray-400 text-sm">
+                        <li><a href="#" class="hover:text-white transition-colors">About</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Contact</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-4">Legal</h3>
+                    <ul class="space-y-2 text-gray-400 text-sm">
+                        <li><a href="#" class="hover:text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 pt-8 text-center">
+                <p class="text-gray-400 text-sm">© 2025 FlowBoard. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Navbar scroll effect
+        window.addEventListener('scroll', () => {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('bg-white/80', 'backdrop-blur-lg', 'border-b', 'border-white/20', 'shadow-lg');
+            } else {
+                navbar.classList.remove('bg-white/80', 'backdrop-blur-lg', 'border-b', 'border-white/20', 'shadow-lg');
+            }
+        });
+
+        // Scroll reveal animation
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('revealed');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.scroll-reveal').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+</body>
+
+</html>

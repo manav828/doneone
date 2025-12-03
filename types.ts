@@ -48,6 +48,8 @@ export interface Task {
   capturedUrl?: string; // URL of webpage where task was created
   capturedText?: string; // Selected text from webpage
   capturedScreenshot?: string; // Screenshot URL (Phase 3)
+  // Auto-move features
+  isHighlighted?: boolean; // Visual highlight for auto-moved tasks
 }
 
 export interface Column {
@@ -69,6 +71,7 @@ export interface Project {
   pendingJoinRequests: string[]; // Derived from project_members where status = pending
   reportsTo: Record<string, string>; // Map: resourceUserId -> leadUserId
   themeColor: string; // Hex for primary color
+  autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
 }
 
 export interface Activity {

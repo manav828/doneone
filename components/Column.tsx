@@ -6,6 +6,7 @@ import { Column as ColumnType, Task as TaskType } from '../types';
 import { TaskCard } from './TaskCard';
 import { Plus, Trash2, ArrowLeft, ArrowRight, Timer, ChevronsUp, ChevronsDown } from 'lucide-react';
 import { useStore } from '../store';
+import { sortTasksByPriority } from '../utils/taskPriority';
 
 interface Props {
   column: ColumnType;
@@ -15,9 +16,12 @@ interface Props {
 }
 
 export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) => {
-  const { addTask, deleteColumn, can, moveColumn, currentUser } = useStore();
+  const { addTask, deleteColumn, can, moveColumn, currentUser, tags } = useStore();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  // Sort tasks by priority if this is the Pending column
+  const displayTasks = column.title === 'Pending' ? sortTasksByPriority(tasks, tags) : tasks;
 
   // Identify if any task in this column has a running timer for the current user
   const activeTimerTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser?.id);
@@ -45,11 +49,16 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between group cursor-default border-b border-transparent">
         <div className="flex items-center gap-2.5">
-          <h3 className="font-bold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wider">
+          <h3 className="font-bold text-slate-700 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1">
             {column.title}
+            {(column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done') && (
+              <svg className="w-3 h-3 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+            )}
           </h3>
           <span className="px-2 py-0.5 bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] rounded-full font-bold shadow-sm border border-slate-100 dark:border-slate-600">
-            {tasks.length}
+            {displayTasks.length}
           </span>
         </div>
 
@@ -93,9 +102,20 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
             </button>
             <div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-1"></div>
             <button
-              onClick={() => { if (confirm('Delete column?')) deleteColumn(column.id) }}
-              className="p-1 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-all"
-              title="Delete Column"
+              onClick={() => {
+                const isFixed = column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done';
+                if (isFixed) {
+                  alert('This is a fixed column and cannot be deleted.');
+                  return;
+                }
+                if (confirm('Delete column?')) deleteColumn(column.id);
+              }}
+              disabled={column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done'}
+              className={`p-1 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-all ${(column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done')
+                  ? 'opacity-30 cursor-not-allowed'
+                  : ''
+                }`}
+              title={column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done' ? 'Fixed column cannot be deleted' : 'Delete Column'}
             >
               <Trash2 size={14} />
             </button>
@@ -117,8 +137,8 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
       <div
         className="flex-1 overflow-y-auto px-2 space-y-2.5 min-h-[100px] pt-2"
       >
-        <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-          {tasks.map(task => (
+        <SortableContext items={displayTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {displayTasks.map(task => (
             <TaskCard key={task.id} task={task} />
           ))}
         </SortableContext>
