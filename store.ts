@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role } from './types';
+import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -24,6 +24,13 @@ interface AppState {
   activities: Activity[];
   notifications: Notification[];
   tags: Tag[];
+
+  // History Management
+  taskHistory: TaskHistory[];
+  archiveSettings: ArchiveSettings | null;
+  adminRetentionSettings: AdminRetentionSettings | null;
+  historyFilters: HistoryFilter;
+  selectedHistoryIds: string[];
 
   // Selection
   activeProjectId: string | null;
@@ -103,6 +110,16 @@ interface AppState {
   isOffline: boolean;
   syncQueue: any[];
   processSyncQueue: () => Promise<void>;
+
+  // History Management Actions
+  loadTaskHistory: (projectId: string, filters?: HistoryFilter) => Promise<void>;
+  archiveTaskManually: (taskId: string) => Promise<void>;
+  updateArchiveSettings: (autoArchiveDays: number) => Promise<void>;
+  updateRetentionSettings: (retentionDays: number | null) => Promise<void>;
+  exportHistoryToCSV: (mode: 'all' | 'filtered' | 'selected', selectedIds?: string[]) => void;
+  setHistoryFilters: (filters: HistoryFilter) => void;
+  toggleHistorySelection: (historyId: string) => void;
+  clearHistorySelection: () => void;
 }
 
 const ADMIN_EMAIL = 'manavss828@gmail.com';
@@ -127,6 +144,13 @@ export const useStore = create<AppState>((set, get) => ({
   isOffline: !navigator.onLine,
 
   syncQueue: JSON.parse(localStorage.getItem('flowboard_sync_queue') || '[]'),
+
+  // History Management State
+  taskHistory: [],
+  archiveSettings: null,
+  adminRetentionSettings: null,
+  historyFilters: {},
+  selectedHistoryIds: [],
 
   setThemeMode: (mode) => set({ themeMode: mode }),
 
@@ -288,6 +312,32 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     if (profile) {
+      // Load Archive Settings
+      const { data: archiveSettings } = await supabase
+        .from('user_archive_settings')
+        .select('*')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      // Load Admin Retention Settings (if admin)
+      let adminRetentionSettings = null;
+      if (profile.email === ADMIN_EMAIL) {
+        const { data: retention } = await supabase
+          .from('admin_retention_settings')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (retention) {
+          adminRetentionSettings = {
+            id: retention.id,
+            retentionDays: retention.retention_days,
+            createdAt: new Date(retention.created_at).getTime(),
+            updatedAt: new Date(retention.updated_at).getTime()
+          };
+        }
+      }
+
       set({
         currentUser:
           {
@@ -302,8 +352,18 @@ export const useStore = create<AppState>((set, get) => ({
             timeTrackingEnabled: profile.time_tracking_enabled,
 
             imageUploadEnabled: profile.image_upload_enabled,
-            maxAttachmentsPerTask: profile.max_attachments_per_task || 3
-          } as User
+            maxAttachmentsPerTask: profile.max_attachments_per_task || 3,
+            autoArchiveDays: archiveSettings?.auto_archive_days || 0,
+            historyRetentionDays: archiveSettings?.history_retention_days || null
+          } as User,
+        archiveSettings: archiveSettings ? {
+          userId: archiveSettings.user_id,
+          autoArchiveDays: archiveSettings.auto_archive_days,
+          historyRetentionDays: archiveSettings.history_retention_days,
+          createdAt: new Date(archiveSettings.created_at).getTime(),
+          updatedAt: new Date(archiveSettings.updated_at).getTime()
+        } : null,
+        adminRetentionSettings
       });
       await get().refreshData();
 
@@ -1322,6 +1382,238 @@ export const useStore = create<AppState>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return false;
     return PERMISSIONS[currentUser.role as Role]?.[action] || false;
+  },
+
+  // =====================================================
+  // HISTORY MANAGEMENT ACTIONS
+  // =====================================================
+
+  loadTaskHistory: async (projectId, filters = {}) => {
+    const merged = { ...get().historyFilters, ...filters };
+    set({ historyFilters: merged });
+
+    // Build filter parameters for RPC call
+    const params: any = { p_project_id: projectId };
+
+    if (merged.dateStart) params.p_date_start = new Date(merged.dateStart).toISOString();
+    if (merged.dateEnd) params.p_date_end = new Date(merged.dateEnd).toISOString();
+    if (merged.assigneeIds && merged.assigneeIds.length > 0) params.p_assignee_ids = merged.assigneeIds;
+    if (merged.tagIds && merged.tagIds.length > 0) params.p_tag_ids = merged.tagIds;
+    if (merged.statusAtArchive) params.p_status = merged.statusAtArchive;
+    if (merged.timeTakenMin !== undefined) params.p_time_min = merged.timeTakenMin;
+    if (merged.timeTakenMax !== undefined) params.p_time_max = merged.timeTakenMax;
+    if (merged.searchQuery) params.p_search_query = merged.searchQuery;
+
+    const { data, error } = await supabase.rpc('get_task_history_filtered', params);
+
+    if (error) {
+      console.error('Failed to load task history:', error);
+      return;
+    }
+
+    const mappedHistory: TaskHistory[] = (data || []).map((h: any) => ({
+      id: h.id,
+      taskId: h.task_id,
+      projectId: h.project_id,
+      taskData: h.task_data,
+      statusAtArchive: h.status_at_archive,
+      timeTaken: h.time_taken,
+      archivedAt: new Date(h.archived_at).getTime(),
+      archivedBy: h.archived_by
+    }));
+
+    set({ taskHistory: mappedHistory });
+  },
+
+  archiveTaskManually: async (taskId) => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    const { data, error } = await supabase.rpc('archive_task_fn', {
+      p_task_id: taskId,
+      p_user_id: currentUser.id
+    });
+
+    if (error || !data?.success) {
+      console.error('Failed to archive task:', error || data);
+      alert('Failed to archive task. Please try again.');
+      return;
+    }
+
+    // Refresh active tasks and history
+    await get().refreshData();
+
+    // If on history page, reload history
+    const { activeProjectId } = get();
+    if (activeProjectId) {
+      await get().loadTaskHistory(activeProjectId);
+    }
+  },
+
+  updateArchiveSettings: async (autoArchiveDays) => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+      .from('user_archive_settings')
+      .upsert({
+        user_id: currentUser.id,
+        auto_archive_days: autoArchiveDays,
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to update archive settings:', error);
+      alert('Failed to save settings. Please try again.');
+      return;
+    }
+
+    set({
+      archiveSettings: {
+        userId: currentUser.id,
+        autoArchiveDays: autoArchiveDays,
+        updatedAt: Date.now()
+      }
+    });
+
+    // Also update current user
+    set(state => ({
+      currentUser: state.currentUser ? { ...state.currentUser, autoArchiveDays } : null
+    }));
+  },
+
+  updateRetentionSettings: async (retentionDays) => {
+    const { currentUser } = get();
+    if (!currentUser || currentUser.email !== ADMIN_EMAIL) {
+      alert('Only admins can update retention settings.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('admin_retention_settings')
+      .update({
+        retention_days: retentionDays,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to update retention settings:', error);
+      alert('Failed to save retention settings. Please try again.');
+      return;
+    }
+
+    set(state => ({
+      adminRetentionSettings: state.adminRetentionSettings ? {
+        ...state.adminRetentionSettings,
+        retentionDays: retentionDays,
+        updatedAt: Date.now()
+      } : {
+        id: 1,
+        retentionDays: retentionDays,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  exportHistoryToCSV: (mode, selectedIds = []) => {
+    const { taskHistory, selectedHistoryIds, users, tags } = get();
+
+    let dataToExport: TaskHistory[] = [];
+
+    if (mode === 'all') {
+      dataToExport = taskHistory;
+    } else if (mode === 'filtered') {
+      dataToExport = taskHistory;
+    } else if (mode === 'selected') {
+      dataToExport = taskHistory.filter(h => (selectedIds.length > 0 ? selectedIds : selectedHistoryIds).includes(h.id));
+    }
+
+    if (dataToExport.length === 0) {
+      alert('No data to export.');
+      return;
+    }
+
+    // CSV Headers
+    const headers = [
+      'Task ID',
+      'Title',
+      'Description',
+      'Assignee',
+      'Tags',
+      'Created Date',
+      'Archived Date',
+      'Status at Archive',
+      'Time Taken (hours)',
+      'Time Taken (seconds)'
+    ];
+
+    // CSV Rows
+    const rows = dataToExport.map(h => {
+      const task = h.taskData;
+      const assignee = users.find(u => u.id === task.assigneeId);
+      const taskTags = (task.tagIds || []).map(tid => {
+        const tag = tags.find(t => t.id === tid);
+        return tag ? tag.name : tid;
+      }).join(', ');
+
+      const createdDate = task.createdAt ? new Date(task.createdAt).toISOString() : '';
+      const archivedDate = new Date(h.archivedAt).toISOString();
+      const timeHours = (h.timeTaken / 3600).toFixed(2);
+
+      return [
+        h.taskId,
+        `"${(task.title || '').replace(/"/g, '""')}"`,
+        `"${(task.description || '').replace(/"/g, '""')}"`,
+        assignee ? assignee.name : '',
+        `"${taskTags}"`,
+        createdDate,
+        archivedDate,
+        h.statusAtArchive,
+        timeHours,
+        h.timeTaken.toString()
+      ];
+    });
+
+    // Build CSV
+    const csvContent = [
+      '\uFEFF', // BOM for Excel
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    // Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `flowboard-history-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  },
+
+  setHistoryFilters: (filters) => {
+    set({ historyFilters: filters });
+  },
+
+  toggleHistorySelection: (historyId) => {
+    set(state => {
+      const isSelected = state.selectedHistoryIds.includes(historyId);
+      return {
+        selectedHistoryIds: isSelected
+          ? state.selectedHistoryIds.filter(id => id !== historyId)
+          : [...state.selectedHistoryIds, historyId]
+      };
+    });
+  },
+
+  clearHistorySelection: () => {
+    set({ selectedHistoryIds: [] });
   },
 
 }));

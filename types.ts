@@ -17,6 +17,8 @@ export interface User {
   timeTrackingEnabled: boolean;
   imageUploadEnabled: boolean;
   maxAttachmentsPerTask: number;
+  autoArchiveDays?: number; // Auto-archive tasks after X days (0 = disabled)
+  historyRetentionDays?: number | null; // Delete history after X days (NULL = keep forever)
 }
 
 export interface Tag {
@@ -122,3 +124,43 @@ export const PERMISSIONS = {
     manageTags: true,
   },
 };
+
+export interface TaskHistory {
+  id: string;
+  taskId: string;
+  projectId: string;
+  taskData: Task;
+  statusAtArchive: string;
+  timeTaken: number;
+  archivedAt: number;
+  archivedBy?: string;
+}
+
+export interface ArchiveSettings {
+  userId: string;
+  autoArchiveDays: number;
+  historyRetentionDays?: number | null;
+  createdAt?: number;
+  updatedAt: number;
+}
+
+export interface AdminRetentionSettings {
+  id: number;
+  retentionDays: number | null;
+  createdAt?: number;
+  updatedAt: number;
+}
+
+export interface HistoryFilter {
+  projectId?: string;
+  dateStart?: string | null;
+  dateEnd?: string | null;
+  assigneeIds?: string[];
+  tagIds?: string[];
+  statusAtArchive?: string;
+  timeTakenMin?: number;
+  timeTakenMax?: number;
+  searchQuery?: string;
+  limit?: number;
+  offset?: number;
+}

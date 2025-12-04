@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { Board } from './components/Board';
 import { AdminPanel } from './components/AdminPanel';
 import { Guide } from './components/Guide';
+import { HistoryPage } from './components/HistoryPage';
 import { Login } from './Login';
 import { useStore } from './store';
 import { Loader2 } from 'lucide-react';
@@ -14,10 +15,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     init();
-    
+
     // Request notification permission
     if ('Notification' in window && Notification.permission !== 'granted') {
-        Notification.requestPermission();
+      Notification.requestPermission();
     }
   }, []);
 
@@ -25,20 +26,20 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
     const interval = setInterval(() => {
-        const now = Date.now();
-        tasks.forEach(task => {
-            if (task.reminderAt && !task.description?.includes("[Notified]")) { 
-                if (task.reminderAt <= now && task.reminderAt > now - 60000) {
-                    // Send Notification
-                    if (Notification.permission === 'granted') {
-                        new Notification(`Task Reminder: ${task.title}`, {
-                            body: `This task is due now!`,
-                            icon: 'icon128.png'
-                        });
-                    }
-                }
+      const now = Date.now();
+      tasks.forEach(task => {
+        if (task.reminderAt && !task.description?.includes("[Notified]")) {
+          if (task.reminderAt <= now && task.reminderAt > now - 60000) {
+            // Send Notification
+            if (Notification.permission === 'granted') {
+              new Notification(`Task Reminder: ${task.title}`, {
+                body: `This task is due now!`,
+                icon: 'icon128.png'
+              });
             }
-        });
+          }
+        }
+      });
     }, 30000);
     return () => clearInterval(interval);
   }, [tasks, currentUser]);
@@ -62,6 +63,7 @@ const App: React.FC = () => {
           <Route path="/" element={<Board />} />
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/guide" element={<Guide />} />
+          <Route path="/history" element={<HistoryPage />} />
         </Routes>
       </Layout>
     </Router>

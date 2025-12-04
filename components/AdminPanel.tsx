@@ -18,7 +18,8 @@ export const AdminPanel: React.FC = () => {
     const [editLimits, setEditLimits] = useState({
         maxProjects: 3,
         maxLeads: 2,
-        maxResources: 5
+        maxResources: 5,
+        historyRetentionDays: null as number | null
     });
 
     useEffect(() => {
@@ -30,24 +31,39 @@ export const AdminPanel: React.FC = () => {
     }, [currentUser, navigate]);
 
     const fetchData = async () => {
-        const { data: userData } = await supabase.from('profiles').select('*');
+        const { data: userData, error: userError } = await supabase.from('profiles').select('*, user_archive_settings(*)');
+        if (userError) console.error('Error fetching profiles:', userError);
+
+        // DEBUG: Log raw data for first user to check join
+        if (userData && userData.length > 0) {
+            console.log('Raw user data sample:', userData[0]);
+        }
+
         const { data: projectData } = await supabase.from('projects').select('*, manager:profiles(*)');
 
-        const mappedUsers = (userData || []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            email: p.email,
-            role: p.role,
-            isPremium: p.is_premium,
-            maxProjects: p.max_projects,
-            maxLeads: p.max_leads,
-            maxResources: p.max_resources,
-            notificationsEnabled: p.notifications_enabled,
-            remindersEnabled: p.reminders_enabled,
-            timeTrackingEnabled: p.time_tracking_enabled,
-            imageUploadEnabled: p.image_upload_enabled,
-            maxAttachmentsPerTask: p.max_attachments_per_task || 3
-        }));
+        const mappedUsers = (userData || []).map((p: any) => {
+            const settings = Array.isArray(p.user_archive_settings)
+                ? p.user_archive_settings[0]
+                : p.user_archive_settings;
+
+            return {
+                id: p.id,
+                name: p.name,
+                email: p.email,
+                role: p.role,
+                isPremium: p.is_premium,
+                maxProjects: p.max_projects,
+                maxLeads: p.max_leads,
+                maxResources: p.max_resources,
+                notificationsEnabled: p.notifications_enabled,
+                remindersEnabled: p.reminders_enabled,
+                timeTrackingEnabled: p.time_tracking_enabled,
+                imageUploadEnabled: p.image_upload_enabled,
+                maxAttachmentsPerTask: p.max_attachments_per_task || 3,
+                autoArchiveDays: settings?.auto_archive_days || 0,
+                historyRetentionDays: settings?.history_retention_days || null
+            };
+        });
 
         setUsers(mappedUsers);
         setProjects(projectData || []);
@@ -99,16 +115,60 @@ export const AdminPanel: React.FC = () => {
         setEditLimits({
             maxProjects: user.maxProjects || 3,
             maxLeads: user.maxLeads || 2,
-            maxResources: user.maxResources || 5
+            maxResources: user.maxResources || 5,
+            historyRetentionDays: user.historyRetentionDays || null
         });
     };
 
     const saveEdit = async (userId: string) => {
+        // 1. Update Profile Limits
         await updateUserProfile(userId, {
             maxProjects: editLimits.maxProjects,
             maxLeads: editLimits.maxLeads,
             maxResources: editLimits.maxResources
         });
+
+        // 2. Update History Retention
+        // First check if settings exist
+        const { data: existingSettings } = await supabase
+            .from('user_archive_settings')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        const payload = {
+            user_id: userId,
+            auto_archive_days: existingSettings?.auto_archive_days || 0,
+            history_retention_days: editLimits.historyRetentionDays,
+            updated_at: new Date().toISOString()
+        };
+
+        console.log('Saving history retention:', payload);
+
+        const { error } = await supabase.from('user_archive_settings').upsert(payload);
+
+        if (error) {
+            console.error('Error saving history retention:', error);
+            alert(`Failed to save history retention: ${error.message || error.details || JSON.stringify(error)}`);
+        } else {
+            // VERIFICATION: Immediately read back the data
+            const { data: verifyData, error: verifyError } = await supabase
+                .from('user_archive_settings')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+
+            if (verifyError) {
+                console.error('Verification read failed:', verifyError);
+                alert('Saved, but verification read failed. Check console.');
+            } else {
+                console.log('Verification read success:', verifyData);
+                if (verifyData.history_retention_days !== payload.history_retention_days) {
+                    alert(`Mismatch! Saved: ${payload.history_retention_days}, Read: ${verifyData.history_retention_days}`);
+                }
+            }
+        }
+
         setEditingUser(null);
         fetchData();
     };
@@ -169,6 +229,7 @@ export const AdminPanel: React.FC = () => {
                                 <th className="px-6 py-3">User</th>
                                 <th className="px-4 py-3 text-center">Premium</th>
                                 <th className="px-4 py-3 text-center">Features</th>
+                                <th className="px-4 py-3 text-center">History Retention</th>
                                 <th className="px-4 py-3 text-center">Limits (Proj/Lead/Res)</th>
                                 <th className="px-4 py-3 text-right">Actions</th>
                             </tr>
@@ -231,6 +292,31 @@ export const AdminPanel: React.FC = () => {
                                                 />
                                             </div>
                                         )}
+                                    </td>
+                                    <td className="px-4 py-4 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                            {editingUser === u.id ? (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editLimits.historyRetentionDays || ''}
+                                                    placeholder="∞"
+                                                    onChange={(e) => setEditLimits({
+                                                        ...editLimits,
+                                                        historyRetentionDays: e.target.value ? parseInt(e.target.value) : null
+                                                    })}
+                                                    className="w-16 px-2 py-1 text-sm text-center border border-purple-300 rounded bg-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                                    title="Delete history older than X days (empty = keep forever)"
+                                                />
+                                            ) : (
+                                                <span className="font-mono text-gray-700 dark:text-gray-300">
+                                                    {u.historyRetentionDays ? u.historyRetentionDays : '∞'}
+                                                </span>
+                                            )}
+                                            <span className="text-[10px] text-gray-400">
+                                                {editingUser === u.id || u.historyRetentionDays ? 'days' : 'forever'}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td className="px-4 py-4 text-center">
                                         {editingUser === u.id ? (

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings } from 'lucide-react';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
 import { DataManagementModal } from './DataManagementModal';
@@ -250,6 +250,17 @@ export const TopBar: React.FC = () => {
                     </span>
                   </div>
                 </div>
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    const event = new CustomEvent('openArchiveSettings');
+                    window.dispatchEvent(event);
+                  }}
+                  className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                >
+                  <Settings size={16} />
+                  Archive Settings
+                </button>
                 <button
                   onClick={() => {
                     signOut();

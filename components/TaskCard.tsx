@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
 import { useStore } from '../store';
-import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload } from 'lucide-react';
+import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive } from 'lucide-react';
 import { Modal } from './Modal';
 
 import { TaskEditModal } from './TaskEditModal';
@@ -16,7 +16,8 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   const {
     tags, toggleTaskTimer,
     currentUser, users, projects, activeProjectId,
-    collapsedTaskIds, toggleTaskCollapse
+    collapsedTaskIds, toggleTaskCollapse,
+    columns, archiveTaskManually
   } = useStore();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -75,6 +76,9 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   const isOverdue = task.reminderAt && task.reminderAt < now;
   const isDueSoon = task.reminderAt && task.reminderAt > now && (task.reminderAt - now < 30 * 60 * 1000);
   const isCollapsed = collapsedTaskIds.includes(task.id);
+
+  const taskColumn = columns.find(c => c.id === task.columnId);
+  const isDoneColumn = taskColumn?.title === 'Done';
 
   // Animation classes
   const animationClass = task.isHighlighted ? 'task-highlighted' :
@@ -220,6 +224,22 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Archive Button (Only in Done column) */}
+                {isDoneColumn && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Archive this task?')) {
+                        archiveTaskManually(task.id);
+                      }
+                    }}
+                    className="p-1 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                    title="Archive Task"
+                  >
+                    <Archive size={14} />
+                  </button>
+                )}
+
                 {(task.reminderAt || task.updatedAt) && (
                   <span className={`text-[10px] font-medium flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
                     {task.reminderAt && remindersEnabled && <Clock size={10} />}

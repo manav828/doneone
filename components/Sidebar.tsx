@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate } from 'lucide-react';
+import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive } from 'lucide-react';
 import { Modal } from './Modal';
 import { useNavigate } from 'react-router-dom';
 import { TemplateSelector } from './TemplateSelector';
@@ -217,6 +217,14 @@ export const Sidebar: React.FC = () => {
                 {!isCollapsed && <span className="text-sm font-medium">Admin Panel</span>}
               </button>
             )}
+            <button
+              onClick={() => { navigate('/history'); }}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
+              title={isCollapsed ? "History" : undefined}
+            >
+              <Archive size={18} />
+              {!isCollapsed && <span className="text-sm font-medium">History</span>}
+            </button>
             <button
               onClick={() => { setActiveProject(''); navigate('/guide'); }}
               className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
