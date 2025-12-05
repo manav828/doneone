@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../../store';
 import { Task, Column, User } from '../../types';
-import { Calendar, User as UserIcon, Tag as TagIcon, Clock, Plus, MoreHorizontal, Trash, X, Timer, Play, Pause, Layout, List } from 'lucide-react';
-import { Modal } from '../Modal';
+import { ChevronDown, ChevronRight, Plus, MoreHorizontal, Calendar, User as UserIcon, Tag } from 'lucide-react';
 import { TaskEditModal } from '../TaskEditModal';
 
 interface ListViewProps {
@@ -11,177 +10,184 @@ interface ListViewProps {
     users: User[];
 }
 
-const TaskRow: React.FC<{ task: Task; users: User[]; columns: Column[] }> = ({ task, users, columns }) => {
-    const { tags } = useStore();
-    const [isModalOpen, setIsModalOpen] = useState(false);
+const ListGroup: React.FC<{ column: Column; tasks: Task[]; users: User[] }> = ({ column, tasks, users }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+    const { addTask, activeProjectId, tags } = useStore();
 
+    const handleAddTask = async () => {
+        if (!activeProjectId) return;
+        const title = prompt("Enter task title:");
+        if (title) {
+            await addTask(activeProjectId, column.id, title);
+        }
+    };
+
+    return (
+        <div className="mb-6">
+            {/* Group Header */}
+            <div className="flex items-center justify-between mb-2 group">
+                <div
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                >
+                    <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500">
+                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="w-1 h-4 rounded-full" style={{ backgroundColor: column.color || '#cbd5e1' }}></div>
+                        <h3 className="font-semibold text-slate-700 dark:text-slate-200">{column.title}</h3>
+                        <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs px-2 py-0.5 rounded-full font-medium">
+                            {tasks.length}
+                        </span>
+                    </div>
+                </div>
+                <button
+                    onClick={handleAddTask}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-primary"
+                >
+                    <Plus size={16} />
+                </button>
+            </div>
+
+            {/* Tasks Table */}
+            {!isCollapsed && (
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 uppercase font-medium border-b border-slate-100 dark:border-slate-700">
+                            <tr>
+                                <th className="py-3 pl-4 pr-2 w-8">
+                                    <input type="checkbox" className="rounded border-slate-300" />
+                                </th>
+                                <th className="py-3 px-2 w-1/4">Task Name</th>
+                                <th className="py-3 px-2 w-1/4">Description</th>
+                                <th className="py-3 px-2">Estimation</th>
+                                <th className="py-3 px-2">Type</th>
+                                <th className="py-3 px-2">People</th>
+                                <th className="py-3 px-2">Priority</th>
+                                <th className="py-3 pr-4 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                            {tasks.map(task => (
+                                <ListRow key={task.id} task={task} users={users} tags={tags} />
+                            ))}
+                            {tasks.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className="py-8 text-center text-slate-400 text-sm italic">
+                                        No tasks in this stage
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ListRow: React.FC<{ task: Task; users: User[]; tags: any[] }> = ({ task, users, tags }) => {
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const assignee = users.find(u => u.id === task.assigneeId);
-    const taskTags = tags.filter(t => task.tagIds.includes(t.id));
+
+    // Filter tags by type
+    const priorityTag = tags.find(t => task.tagIds.includes(t.id) && t.type === 'Priority');
+    const typeTags = tags.filter(t => task.tagIds.includes(t.id) && t.type !== 'Priority');
+
+    const formatDate = (ts?: number) => {
+        if (!ts) return '-';
+        return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
 
     return (
         <>
             <tr
+                className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer text-sm"
                 onClick={() => setIsModalOpen(true)}
-                className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0"
             >
-                <td className="py-2 pl-3 pr-2">
-                    <div className="font-medium text-sm text-slate-800 dark:text-slate-200">{task.title}</div>
+                <td className="py-3 pl-4 pr-2" onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" className="rounded border-slate-300" />
                 </td>
-                <td className="py-2 px-2">
-                    {assignee ? (
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-[10px] font-bold" title={assignee.name}>
-                            {assignee.name.charAt(0)}
+                <td className="py-3 px-2 font-medium text-slate-700 dark:text-slate-200">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-400">
+                            <Tag size={12} />
                         </div>
-                    ) : (
-                        <UserIcon size={14} className="text-slate-300" />
-                    )}
-                </td>
-                <td className="py-2 px-2">
-                    <div className="flex flex-wrap gap-1">
-                        {taskTags.map(tag => (
-                            <span key={tag.id} className="px-1.5 py-0.5 rounded text-[10px] font-medium text-white whitespace-nowrap" style={{ backgroundColor: tag.color }}>
-                                {tag.name}
-                            </span>
-                        ))}
+                        <span className="capitalize">{task.title}</span>
                     </div>
                 </td>
-                <td className="py-2 pr-6 text-right">
-                    {task.reminderAt && (
-                        <div className={`text-[10px] ${task.reminderAt < Date.now() ? 'text-red-500' : 'text-slate-400'}`}>
-                            {new Date(task.reminderAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                <td className="py-3 px-2 text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                    {task.description || '-'}
+                </td>
+                <td className="py-3 px-2 text-slate-500 dark:text-slate-400">
+                    {task.reminderAt ? (
+                        <div className="flex items-center gap-1.5">
+                            <Calendar size={14} />
+                            <span>{formatDate(task.reminderAt)}</span>
                         </div>
+                    ) : '-'}
+                </td>
+                <td className="py-3 px-2">
+                    <div className="flex gap-1 flex-wrap">
+                        {typeTags.length > 0 ? typeTags.map(t => (
+                            <span
+                                key={t.id}
+                                className="px-2 py-0.5 rounded text-[10px] font-medium border"
+                                style={{
+                                    borderColor: t.color,
+                                    color: t.color,
+                                    backgroundColor: `${t.color}10`
+                                }}
+                            >
+                                {t.name}
+                            </span>
+                        )) : '-'}
+                    </div>
+                </td>
+                <td className="py-3 px-2">
+                    {assignee ? (
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[10px] font-bold">
+                                {assignee.name.charAt(0)}
+                            </div>
+                            <span className="text-slate-600 dark:text-slate-300">{assignee.name.split(' ')[0]}</span>
+                        </div>
+                    ) : (
+                        <span className="text-slate-400">-</span>
                     )}
                 </td>
+                <td className="py-3 px-2">
+                    {priorityTag ? (
+                        <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium text-white"
+                            style={{ backgroundColor: priorityTag.color }}
+                        >
+                            {priorityTag.name}
+                        </span>
+                    ) : '-'}
+                </td>
+                <td className="py-3 pr-4 text-right">
+                    <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-400">
+                        <MoreHorizontal size={16} />
+                    </button>
+                </td>
             </tr>
-
             <TaskEditModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} task={task} />
         </>
     );
 };
 
 export const ListView: React.FC<ListViewProps> = ({ tasks, columns, users }) => {
-    const { addTask, activeProjectId } = useStore();
-
-    const handleAddTask = async (columnId: string) => {
-        if (!activeProjectId) return;
-        const title = prompt("Enter task title:");
-        if (title) {
-            await addTask(activeProjectId, columnId, title);
-        }
-    };
-
-    const [layout, setLayout] = useState<'1x1' | '2x1'>('2x1');
-    const [activeTabId, setActiveTabId] = useState<string>(columns[0]?.id || '');
-
-    useEffect(() => {
-        if (columns.length > 0 && !activeTabId) {
-            setActiveTabId(columns[0].id);
-        }
-    }, [columns, activeTabId]);
-
-    const visibleColumns = layout === '1x1'
-        ? columns.filter(c => c.id === activeTabId)
-        : columns;
-
     return (
-        <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-6">
-            {/* View Controls */}
-            <div className="flex flex-col gap-4 mb-4">
-                <div className="flex justify-between items-center">
-                    {/* View Switcher (Grid/List) */}
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <button
-                            onClick={() => setLayout('1x1')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${layout === '1x1' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                        >
-                            Single Column
-                        </button>
-                        <button
-                            onClick={() => setLayout('2x1')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${layout === '2x1' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                        >
-                            Grid View
-                        </button>
-                    </div>
-                </div>
-
-                {/* Tabs for Single Column View - Seamless Design */}
-                {layout === '1x1' && (
-                    <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto custom-scrollbar">
-                        {columns.map(col => (
-                            <button
-                                key={col.id}
-                                onClick={() => setActiveTabId(col.id)}
-                                className={`pb-3 text-sm font-medium transition-all whitespace-nowrap relative ${activeTabId === col.id
-                                    ? 'text-primary'
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                                    }`}
-                            >
-                                {col.title}
-                                <span className={`ml-2 text-xs ${activeTabId === col.id ? 'text-primary/80' : 'text-slate-400'}`}>
-                                    {tasks.filter(t => t.columnId === col.id).length}
-                                </span>
-                                {activeTabId === col.id && (
-                                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></div>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            <div className={`grid gap-6 pb-20 ${layout === '2x1' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
-                {visibleColumns.map(column => {
-                    const columnTasks = tasks.filter(t => t.columnId === column.id);
-                    return (
-                        <div key={column.id} className={`bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 flex flex-col ${layout === '1x1' ? 'h-[600px]' : 'h-[400px]'}`}>
-                            {/* Header - Only show in Grid View since Tabs cover it in Single View */}
-                            {layout === '2x1' && (
-                                <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50 rounded-t-xl">
-                                    <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm">{column.title}</h3>
-                                    <span className="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                                        {columnTasks.length}
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* Table */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                <table className="w-full text-left border-collapse table-fixed">
-                                    <thead className="sticky top-0 bg-white dark:bg-slate-800 z-10 shadow-sm">
-                                        <tr className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                                            <th className="py-3 pl-4 w-auto">Task</th> {/* Flexible width */}
-                                            <th className="py-3 px-2 w-[10%]">User</th>
-                                            <th className="py-3 px-2 w-[20%]">Tags</th> {/* Reduced tags width */}
-                                            <th className="py-3 pr-6 text-right w-24">Due</th> {/* Fixed small width */}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                                        {columnTasks.map(task => (
-                                            <TaskRow key={task.id} task={task} users={users} columns={columns} />
-                                        ))}
-                                    </tbody>
-                                </table>
-                                {columnTasks.length === 0 && (
-                                    <div className="text-center py-8 text-slate-400 text-xs italic">
-                                        No tasks
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Footer Action */}
-                            <div className="p-2 border-t border-slate-100 dark:border-slate-700">
-                                <button
-                                    onClick={() => handleAddTask(column.id)}
-                                    className="w-full py-2 flex items-center justify-center gap-1.5 text-sm font-medium text-slate-500 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition-all border border-dashed border-slate-200 dark:border-slate-700 hover:border-primary/30"
-                                >
-                                    <Plus size={14} /> Add Task
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+        <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-8">
+            {columns.map(column => (
+                <ListGroup
+                    key={column.id}
+                    column={column}
+                    tasks={tasks.filter(t => t.columnId === column.id)}
+                    users={users}
+                />
+            ))}
         </div>
     );
 };

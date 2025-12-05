@@ -45,6 +45,8 @@ export interface Task {
   timeTracked?: number; // Total seconds tracked
   estimatedTime?: number; // Estimated time in seconds
   timerStartedAt?: number; // Timestamp when timer started, or null if stopped
+  startedAt?: number; // When task moved to In Progress
+  completedAt?: number; // When task moved to Done
   attachments?: string[]; // Array of image URLs
   // Browser capture features (Phase 1)
   capturedUrl?: string; // URL of webpage where task was created
@@ -74,6 +76,7 @@ export interface Project {
   reportsTo: Record<string, string>; // Map: resourceUserId -> leadUserId
   themeColor: string; // Hex for primary color
   autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
+  viewAllReportsEnabled?: boolean; // If true, all members can see all reports (default: false)
 }
 
 export interface Activity {

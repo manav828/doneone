@@ -1,11 +1,11 @@
-
 import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Board } from './components/Board';
 import { AdminPanel } from './components/AdminPanel';
-import { Guide } from './components/Guide';
 import { HistoryPage } from './components/HistoryPage';
+import { ReportsPage } from './components/ReportsPage';
+import { Guide } from './components/Guide';
 import { Login } from './Login';
 import { useStore } from './store';
 import { Loader2 } from 'lucide-react';
@@ -64,6 +64,7 @@ const App: React.FC = () => {
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/guide" element={<Guide />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
         </Routes>
       </Layout>
     </Router>

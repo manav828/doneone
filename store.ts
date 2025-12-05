@@ -50,8 +50,16 @@ interface AppState {
   archiveProject: (projectId: string) => Promise<void>;
 
   // Initialization
+  initialized: boolean;
   init: () => Promise<void>;
   refreshData: () => Promise<void>;
+  fetchUsers: () => Promise<User[]>;
+  fetchProjects: () => Promise<Project[]>;
+  fetchColumns: () => Promise<Column[]>;
+  fetchTasks: () => Promise<Task[]>;
+  fetchActivities: () => Promise<any[]>;
+  fetchNotifications: () => Promise<any[]>;
+  fetchTags: () => Promise<any[]>;
   signIn: (user: User) => void;
   signOut: () => Promise<void>;
 
@@ -124,6 +132,75 @@ interface AppState {
 
 const ADMIN_EMAIL = 'manavss828@gmail.com';
 
+let realtimeSubscription: any = null;
+let refreshTimeouts: Record<string, any> = {};
+
+const setupRealtimeSubscription = (get: any, set: any) => {
+  if (realtimeSubscription) realtimeSubscription.unsubscribe();
+
+  realtimeSubscription = supabase
+    .channel('public-updates')
+    .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+      if (!get().isOffline) {
+        const table = payload.table;
+
+        if (refreshTimeouts[table]) clearTimeout(refreshTimeouts[table]);
+
+        refreshTimeouts[table] = setTimeout(() => {
+          switch (table) {
+            case 'tasks': get().fetchTasks(); break;
+            case 'columns': get().fetchColumns(); break;
+            case 'projects': get().fetchProjects(); break;
+            case 'project_members': get().fetchProjects(); break;
+            case 'activities': get().fetchActivities(); break;
+            case 'notifications': get().fetchNotifications(); break;
+            case 'tags': get().fetchTags(); break;
+            case 'profiles': get().fetchUsers(); break;
+            default: get().refreshData();
+          }
+        }, 1000);
+
+        // Notification Logic
+        const { currentUser, projects } = get();
+        if (!currentUser) return;
+
+        // 1. Task Column Change
+        if (payload.table === 'tasks' && payload.eventType === 'UPDATE') {
+          const newTask = payload.new as any;
+          const localTask = get().tasks.find(t => t.id === newTask.id);
+          if (localTask && localTask.columnId !== newTask.column_id) {
+            const project = projects.find(p => p.id === newTask.project_id);
+            if (project) {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icon-128.png',
+                title: `Task Moved: ${project.name}`,
+                message: `Task "${newTask.title}" moved to a new column.`
+              });
+            }
+          }
+        }
+
+        // 2. Join Request (INSERT into project_members with status 'pending')
+        if (payload.table === 'project_members' && payload.eventType === 'INSERT') {
+          const newMember = payload.new;
+          if (newMember.status === 'pending') {
+            const project = projects.find(p => p.id === newMember.project_id);
+            if (project && project.managerId === currentUser.id) {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icon-128.png',
+                title: 'New Join Request',
+                message: `A user has requested to join ${project.name}.`
+              });
+            }
+          }
+        }
+      }
+    })
+    .subscribe();
+};
+
 export const useStore = create<AppState>((set, get) => ({
   isLoading: true,
   currentUser: null,
@@ -182,7 +259,10 @@ export const useStore = create<AppState>((set, get) => ({
     return { collapsedTaskIds: state.collapsedTaskIds.filter(id => !columnTaskIds.includes(id)) };
   }),
 
-  signIn: (user) => set({ currentUser: user }),
+  signIn: (user) => {
+    set({ currentUser: user });
+    setupRealtimeSubscription(get, set);
+  },
 
   archiveProject: async (projectId) => {
     // Soft delete or status update? For now, let's just delete it as per current deleteProject logic, 
@@ -207,6 +287,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
+    if (realtimeSubscription) {
+      realtimeSubscription.unsubscribe();
+      realtimeSubscription = null;
+    }
     set({ currentUser: null, projects: [], tasks: [] });
   },
 
@@ -249,40 +333,57 @@ export const useStore = create<AppState>((set, get) => ({
     await get().refreshData();
   },
 
+  initialized: false,
+
   init: async () => {
-    set({ isLoading: true });
-
     // Offline Listeners
-    window.addEventListener('online', () => {
-      set({ isOffline: false });
-      get().processSyncQueue();
-      get().refreshData();
-    });
-    window.addEventListener('offline', () => set({ isOffline: true }));
-
-    // Load from LocalStorage if available
-    const cached = localStorage.getItem('flowboard_state');
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      set({
-        projects: parsed.projects || [],
-        columns: parsed.columns || [],
-        tasks: parsed.tasks || [],
-        users: parsed.users || [],
-        currentUser: parsed.currentUser || null,
-        tags: parsed.tags || DEFAULT_TAGS
+    if (!get().initialized) {
+      window.addEventListener('online', () => {
+        set({ isOffline: false });
+        get().processSyncQueue();
+        get().refreshData();
       });
+      window.addEventListener('offline', () => set({ isOffline: true }));
     }
 
     const { data: { session } } = await supabase.auth.getSession();
+
+    // If no session, clear user and return
     if (!session) {
-      // If offline and we have a cached user, don't logout
-      if (get().isOffline && get().currentUser) {
-        set({ isLoading: false });
-        return;
+      // If we have an active subscription, unsubscribe
+      if (realtimeSubscription) {
+        realtimeSubscription.unsubscribe();
+        realtimeSubscription = null;
       }
-      set({ isLoading: false, currentUser: null });
+      set({ isLoading: false, currentUser: null, initialized: true });
       return;
+    }
+
+    // If already initialized and user matches, just ensure listener is active
+    if (get().initialized && get().currentUser?.id === session.user.id) {
+      if (!realtimeSubscription) {
+        setupRealtimeSubscription(get, set);
+      }
+      set({ isLoading: false });
+      return;
+    }
+
+    set({ isLoading: true, initialized: true });
+
+    // Load from LocalStorage if available (only on first load)
+    if (!get().currentUser) {
+      const cached = localStorage.getItem('flowboard_state');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        set({
+          projects: parsed.projects || [],
+          columns: parsed.columns || [],
+          tasks: parsed.tasks || [],
+          users: parsed.users || [],
+          currentUser: parsed.currentUser || null,
+          tags: parsed.tags || DEFAULT_TAGS
+        });
+      }
     }
 
     let { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -374,118 +475,16 @@ export const useStore = create<AppState>((set, get) => ({
       setInterval(() => {
         get().processPendingTasks();
       }, 2000);
+
+      setupRealtimeSubscription(get, set);
+
     } else {
       set({ isLoading: false, currentUser: null });
     }
-
-    supabase
-      .channel('public-updates')
-      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-        if (!get().isOffline) {
-          get().refreshData();
-
-          // Notification Logic
-          const { currentUser, projects } = get();
-          if (!currentUser) return;
-
-          // 1. Task Column Change
-          if (payload.table === 'tasks' && payload.eventType === 'UPDATE') {
-            const oldTask = payload.old as any;
-            const newTask = payload.new as any;
-
-            // We need to check if column changed. 
-            // Since 'old' might be empty, we can check against our local store state BEFORE refreshData finishes (or race condition).
-            // Better: We just refreshed data, but we can't easily compare old vs new here without keeping track.
-            // Alternative: The user wants "when I am changing the column... send chrome push notification".
-            // If *I* change it, I don't need a notification? "it not sending chrome push notification".
-            // Usually notifications are for *others*. But if the user wants it for themselves or others?
-            // "when I am changing the column of the task it not sending chrome push notification" -> sounds like they want it to send to OTHERS.
-            // "manager not getting the notifiction for new request" -> Manager gets it.
-
-            // Let's implement: If a task in a project I am a member of changes column, and I am NOT the one who changed it (optional, but good UX).
-            // But payload doesn't easily tell us *who* changed it unless we have a 'modified_by' column.
-            // We don't have 'modified_by'.
-            // Simple approach: If a task changes column, notify everyone in project.
-
-            // To detect column change without 'old' payload being reliable (default postgres setting):
-            // We can't easily know if column changed just from 'new'.
-            // However, we can rely on the fact that we just called refreshData, but that's async.
-            // Let's try to use the payload if available, or just notify on any task update? No, too noisy.
-            // Assumption: The user has set REPLICA IDENTITY FULL for tasks table? Probably not.
-            // Workaround: We can't perfectly detect column change without 'old'. 
-            // BUT, if the user wants "send chrome push notification", maybe they mean *trigger* it from the client that does the change?
-            // "when I am changing the column... it not sending".
-            // If I change it, I can trigger it in `moveTask`.
-            // BUT, "manager not getting notification for new request" implies remote.
-
-            // Let's implement the "Manager Join Request" part here (remote).
-            // And for "Task Column Change", let's implement it in `moveTask` (local trigger) AND here for others?
-            // If we do it here, we need to know if it changed.
-            // Let's stick to:
-            // 1. Join Request -> Here (Remote)
-            // 2. Task Move -> Here (Remote) - We will try to see if we can detect it, or just notify "Task Updated".
-            // Actually, for "Task Column Change", if we can't see 'old', we can't know.
-            // Let's assume we can't see 'old'.
-            // So, let's trigger the "Task Column Change" notification from the `moveTask` function for the *local* user (feedback),
-            // AND for *remote* users, we might miss it unless we fetch the old task from store before refresh.
-
-            // Wait, `get().tasks` has the OLD state before `refreshData` completes (since refreshData is async and we just called it).
-            // So we can find the task in `get().tasks`!
-            const localTask = get().tasks.find(t => t.id === newTask.id);
-            if (localTask && localTask.columnId !== newTask.column_id) {
-              // Column changed!
-              // Notify if I am relevant to this project
-              const project = projects.find(p => p.id === newTask.project_id);
-              if (project) {
-                // Don't notify if I made the change? We don't know who made it.
-                // But we can check if the update time is very recent.
-                // Let's just notify.
-                chrome.notifications.create({
-                  type: 'basic',
-                  iconUrl: 'icon-128.png', // Ensure this exists or use a default
-                  title: `Task Moved: ${project.name}`,
-                  message: `Task "${newTask.title}" moved to a new column.`
-                });
-              }
-            }
-          }
-
-          // 2. Join Request (INSERT into project_members with status 'pending')
-          if (payload.table === 'project_members' && payload.eventType === 'INSERT') {
-            const newMember = payload.new;
-            if (newMember.status === 'pending') {
-              const project = projects.find(p => p.id === newMember.project_id);
-              // Only notify Manager
-              if (project && project.managerId === currentUser.id) {
-                chrome.notifications.create({
-                  type: 'basic',
-                  iconUrl: 'icon-128.png',
-                  title: 'New Join Request',
-                  message: `A user has requested to join ${project.name}.`
-                });
-              }
-            }
-          }
-        }
-      })
-      .subscribe();
   },
 
-  refreshData: async () => {
-    const { currentUser } = get();
-    if (!currentUser) return;
-
+  fetchUsers: async () => {
     const { data: allProfiles } = await supabase.from('profiles').select('*');
-    const { data: projects } = await supabase.from('projects').select('*');
-    const { data: members } = await supabase.from('project_members').select('*');
-    const { data: columns } = await supabase.from('columns').select('*').order('order_index');
-    const { data: tasks } = await supabase.from('tasks').select('*').order('order_index');
-    const { data: activities } = await supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(50);
-    const { data: notifs } = await supabase.from('notifications').select('*').eq('recipient_id', currentUser.id).order('created_at', { ascending: false });
-
-    const { data: tags } = await supabase.from('tags').select('*');
-
-
     const mappedUsers: User[] = (allProfiles || []).map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -495,25 +494,30 @@ export const useStore = create<AppState>((set, get) => ({
       maxProjects: p.max_projects,
       maxLeads: p.max_leads,
       maxResources: p.max_resources,
-
       notificationsEnabled: p.notifications_enabled,
       remindersEnabled: p.reminders_enabled,
       timeTrackingEnabled: p.time_tracking_enabled,
-
       imageUploadEnabled: p.image_upload_enabled,
       maxAttachmentsPerTask: p.max_attachments_per_task || 3
     }));
+    set({ users: mappedUsers });
+    return mappedUsers;
+  },
+
+  fetchProjects: async () => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+    const { data: projects } = await supabase.from('projects').select('*');
+    const { data: members } = await supabase.from('project_members').select('*');
 
     const processedProjects: Project[] = (projects || []).map((p: any) => {
       const pMembers = (members || []).filter((m: any) => m.project_id === p.id);
-
       const reportsToMap: Record<string, string> = {};
       pMembers.forEach((m: any) => {
         if (m.lead_id && m.role === 'Resource') {
           reportsToMap[m.user_id] = m.lead_id;
         }
       });
-
       return {
         id: p.id,
         name: p.name,
@@ -521,7 +525,7 @@ export const useStore = create<AppState>((set, get) => ({
         code: p.code,
         managerId: p.manager_id,
         themeColor: p.theme_color || '#3b82f6',
-        autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true, // Default to true for existing projects
+        autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true,
         leadIds: pMembers.filter((m: any) => m.role === 'Lead' && m.status === 'active').map((m: any) => m.user_id),
         resourceIds: pMembers.filter((m: any) => m.role === 'Resource' && m.status === 'active').map((m: any) => m.user_id),
         pendingJoinRequests: pMembers.filter((m: any) => m.status === 'pending').map((m: any) => m.user_id),
@@ -536,7 +540,24 @@ export const useStore = create<AppState>((set, get) => ({
       p.leadIds.includes(currentUser.id) ||
       p.resourceIds.includes(currentUser.id)
     );
+    set({ projects: validProjects });
+    return validProjects;
+  },
 
+  fetchColumns: async () => {
+    const { data: columns } = await supabase.from('columns').select('*').order('order_index');
+    const processedColumns: Column[] = (columns || []).map((c: any) => ({
+      id: c.id,
+      projectId: c.project_id,
+      title: c.title,
+      orderIndex: c.order_index
+    }));
+    set({ columns: processedColumns });
+    return processedColumns;
+  },
+
+  fetchTasks: async () => {
+    const { data: tasks } = await supabase.from('tasks').select('*').order('order_index');
     const processedTasks: Task[] = (tasks || []).map((t: any) => ({
       id: t.id,
       projectId: t.project_id,
@@ -559,59 +580,78 @@ export const useStore = create<AppState>((set, get) => ({
       capturedText: t.captured_text,
       capturedScreenshot: t.captured_screenshot
     }));
+    set({ tasks: processedTasks });
+    return processedTasks;
+  },
 
-    const processedColumns: Column[] = (columns || []).map((c: any) => ({
-      id: c.id,
-      projectId: c.project_id,
-      title: c.title,
-      orderIndex: c.order_index
+  fetchActivities: async () => {
+    const { data: activities } = await supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(50);
+    const processedActivities = (activities || []).map((a: any) => ({
+      id: a.id,
+      projectId: a.project_id,
+      userId: a.user_id,
+      description: a.description,
+      timestamp: new Date(a.created_at).getTime()
     }));
+    set({ activities: processedActivities });
+    return processedActivities;
+  },
 
-    set({
-      isLoading: false,
-      users: mappedUsers,
-      projects: validProjects,
-      columns: processedColumns,
-      tasks: processedTasks,
-      activities: (activities || []).map((a: any) => ({
-        id: a.id,
-        projectId: a.project_id,
-        userId: a.user_id,
-        description: a.description,
-        timestamp: new Date(a.created_at).getTime()
-      })),
-      notifications: (notifs || []).map((n: any) => ({
-        id: n.id,
-        recipientId: n.recipient_id,
-        projectId: n.project_id,
-        message: n.message,
-        read: n.is_read,
-        type: n.type || 'info',
-        timestamp: new Date(n.created_at).getTime()
-      })),
-      tags: [...DEFAULT_TAGS, ...(tags || []).map((t: any) => ({
-        id: t.id,
-        projectId: t.project_id,
-        name: t.name,
-        color: t.color,
-        type: t.type
-      }))]
-    });
+  fetchNotifications: async () => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+    const { data: notifs } = await supabase.from('notifications').select('*').eq('recipient_id', currentUser.id).order('created_at', { ascending: false });
+    const processedNotifs = (notifs || []).map((n: any) => ({
+      id: n.id,
+      recipientId: n.recipient_id,
+      projectId: n.project_id,
+      message: n.message,
+      read: n.is_read,
+      type: n.type || 'info',
+      timestamp: new Date(n.created_at).getTime()
+    }));
+    set({ notifications: processedNotifs });
+    return processedNotifs;
+  },
+
+  fetchTags: async () => {
+    const { data: tags } = await supabase.from('tags').select('*');
+    const processedTags = [...DEFAULT_TAGS, ...(tags || []).map((t: any) => ({
+      id: t.id,
+      projectId: t.project_id,
+      name: t.name,
+      color: t.color,
+      type: t.type
+    }))];
+    set({ tags: processedTags });
+    return processedTags;
+  },
+
+  refreshData: async () => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    await Promise.all([
+      get().fetchUsers(),
+      get().fetchProjects(),
+      get().fetchColumns(),
+      get().fetchTasks(),
+      get().fetchActivities(),
+      get().fetchNotifications(),
+      get().fetchTags()
+    ]);
+
+    set({ isLoading: false });
 
     // Cache to LocalStorage
+    const { projects, columns, tasks, users, tags } = get();
     localStorage.setItem('flowboard_state', JSON.stringify({
-      projects: validProjects,
-      columns: processedColumns,
-      tasks: processedTasks,
-      users: mappedUsers,
-      currentUser: currentUser,
-      tags: [...DEFAULT_TAGS, ...(tags || []).map((t: any) => ({
-        id: t.id,
-        projectId: t.project_id,
-        name: t.name,
-        color: t.color,
-        type: t.type
-      }))]
+      projects,
+      columns,
+      tasks,
+      users,
+      currentUser,
+      tags
     }));
   },
 
@@ -632,7 +672,7 @@ export const useStore = create<AppState>((set, get) => ({
         });
       }
     }
-    get().refreshData();
+    get().fetchColumns();
   },
 
   setActiveProject: (id) => {
@@ -663,7 +703,8 @@ export const useStore = create<AppState>((set, get) => ({
       auto_move_enabled: true  // Enable auto-move by default
     }).select().single();
     if (data) {
-      await get().refreshData();
+      await get().fetchProjects();
+      await get().fetchColumns();
       set({ activeProjectId: data.id });
       ['Pending', 'In Progress', 'Done'].forEach(title => get().addColumn(data.id, title));
     }
@@ -707,14 +748,16 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
-      await get().refreshData();
+      await get().fetchProjects();
+      await get().fetchColumns();
+      await get().fetchTags();
       set({ activeProjectId: data.id });
     }
   },
 
   updateProject: async (id, updates) => {
     await supabase.from('projects').update({ name: updates.name, description: updates.description, theme_color: updates.themeColor }).eq('id', id);
-    get().refreshData();
+    get().fetchProjects();
   },
 
   deleteProject: async (id) => {
@@ -725,7 +768,7 @@ export const useStore = create<AppState>((set, get) => ({
   joinProject: async (code) => {
     const { data, error } = await supabase.rpc('join_project_secure', { p_code: code });
     if (error) return 'error';
-    await get().refreshData();
+    await get().fetchProjects();
     return data.status;
   },
 
@@ -745,12 +788,12 @@ export const useStore = create<AppState>((set, get) => ({
     } else {
       await supabase.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId);
     }
-    get().refreshData();
+    get().fetchProjects();
   },
 
   addMember: async (projectId, userId, role) => {
     await supabase.from('project_members').insert({ project_id: projectId, user_id: userId, role, status: 'active' });
-    get().refreshData();
+    get().fetchProjects();
   },
 
   changeMemberRole: async (projectId, userId, role) => {
@@ -767,7 +810,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }
     await supabase.from('project_members').update({ role }).eq('project_id', projectId).eq('user_id', userId);
-    get().refreshData();
+    get().fetchProjects();
   },
 
   assignMemberLead: async (projectId, resourceId, leadId) => {
@@ -784,26 +827,26 @@ export const useStore = create<AppState>((set, get) => ({
     const { error } = await supabase.from('project_members').update({ lead_id: leadId }).eq('project_id', projectId).eq('user_id', resourceId);
     if (error) {
       if (error.code === '400' || error.code === 'PGRST204') alert("Database missing 'lead_id' column.");
-      get().refreshData();
+      get().fetchProjects();
     } else {
-      get().refreshData();
+      get().fetchProjects();
     }
   },
 
   removeMember: async (projectId, userId) => {
     await supabase.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId);
-    get().refreshData();
+    get().fetchProjects();
   },
 
   addColumn: async (projectId, title) => {
     const currentCols = get().columns.filter(c => c.projectId === projectId);
     await supabase.from('columns').insert({ project_id: projectId, title, order_index: currentCols.length });
-    get().refreshData();
+    get().fetchColumns();
   },
 
   deleteColumn: async (id) => {
     await supabase.from('columns').delete().eq('id', id);
-    get().refreshData();
+    get().fetchColumns();
   },
 
   moveColumn: async (columnId, direction) => {
@@ -873,7 +916,7 @@ export const useStore = create<AppState>((set, get) => ({
       tag_ids: [],
       estimated_time: 0
     });
-    get().refreshData();
+    get().fetchTasks();
     return newTask;
   },
 
@@ -922,7 +965,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     await supabase.from('tasks').delete().eq('id', taskId);
-    get().refreshData();
+    get().fetchTasks();
   },
 
   // ... (moveTask, toggleTaskTimer remain mostly the same)
@@ -945,6 +988,16 @@ export const useStore = create<AppState>((set, get) => ({
     const allTasks = [...state.tasks];
     const oldColumnId = task.columnId;
 
+    const updatedTask = { ...task, columnId: newColumnId };
+
+    // Update timestamps based on column
+    const newColumnTitle = state.columns.find(c => c.id === newColumnId)?.title;
+    if (newColumnTitle === 'In Progress' && !updatedTask.startedAt) {
+      updatedTask.startedAt = Date.now();
+    } else if (newColumnTitle === 'Done') {
+      updatedTask.completedAt = Date.now();
+    }
+
     if (oldColumnId === newColumnId) {
       let colTasks = allTasks.filter(t => t.columnId === newColumnId).sort((a, b) => a.orderIndex - b.orderIndex);
       const currentIndex = colTasks.findIndex(t => t.id === taskId);
@@ -961,7 +1014,7 @@ export const useStore = create<AppState>((set, get) => ({
       oldColTasks.forEach((t, i) => { t.orderIndex = i; });
 
       let newColTasks = allTasks.filter(t => t.columnId === newColumnId).sort((a, b) => a.orderIndex - b.orderIndex);
-      const updatedTask = { ...task, columnId: newColumnId };
+
       newColTasks.splice(newIndex, 0, updatedTask);
       newColTasks.forEach((t, i) => { t.orderIndex = i; });
 
@@ -974,7 +1027,8 @@ export const useStore = create<AppState>((set, get) => ({
       });
     }
 
-    await get().updateTask(taskId, { columnId: newColumnId, orderIndex: newIndex });
+    // Removed redundant updateTask call
+    // await get().updateTask(taskId, { columnId: newColumnId, orderIndex: newIndex });
 
     const finalTasks = get().tasks.filter(t => t.columnId === newColumnId || t.columnId === oldColumnId);
     const batch = finalTasks.map(t => ({
@@ -983,7 +1037,10 @@ export const useStore = create<AppState>((set, get) => ({
       column_id: t.columnId,
       title: t.title,
       order_index: t.orderIndex,
-      creator_id: t.creatorId
+      creator_id: t.creatorId,
+      updated_at: new Date().toISOString(),
+      started_at: t.startedAt ? new Date(t.startedAt).toISOString() : null,
+      completed_at: t.completedAt ? new Date(t.completedAt).toISOString() : null
     }));
     await supabase.from('tasks').upsert(batch);
 
@@ -1187,7 +1244,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (data) {
       const newTag: Tag = { id: data.id, projectId: data.project_id, name: data.name, color: data.color, type: 'Custom' };
       set(state => ({ tags: [...state.tags, newTag] }));
-      await get().refreshData();
+      await get().fetchTags();
       return newTag;
     }
     throw new Error("Failed");
@@ -1195,7 +1252,7 @@ export const useStore = create<AppState>((set, get) => ({
   deleteTag: async (tagId) => {
     await supabase.from('tags').delete().eq('id', tagId);
     set(state => ({ tags: state.tags.filter(t => t.id !== tagId) }));
-    await get().refreshData();
+    await get().fetchTags();
   },
   markNotificationRead: async (notificationId) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
@@ -1223,7 +1280,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (error) {
       console.error("Update Profile Error:", error);
     } else {
-      await get().refreshData();
+      await get().fetchUsers();
     }
   },
 
@@ -1293,7 +1350,7 @@ export const useStore = create<AppState>((set, get) => ({
         chrome.storage.local.set({ pendingTasks: [] });
 
         // Refresh to get latest data
-        await get().refreshData();
+        await get().fetchTasks();
       });
     }
   },

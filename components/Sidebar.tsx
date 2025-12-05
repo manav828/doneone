@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive } from 'lucide-react';
+import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2 } from 'lucide-react';
 import { Modal } from './Modal';
 import { useNavigate } from 'react-router-dom';
 import { TemplateSelector } from './TemplateSelector';
@@ -38,6 +38,7 @@ export const Sidebar: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editColor, setEditColor] = useState('');
+  const [editViewAllReports, setEditViewAllReports] = useState(false);
 
   const [joinCode, setJoinCode] = useState('');
   const [joinMessage, setJoinMessage] = useState({ type: '', text: '' });
@@ -107,6 +108,7 @@ export const Sidebar: React.FC = () => {
     setEditName(project.name);
     setEditDesc(project.description || '');
     setEditColor(project.themeColor);
+    setEditViewAllReports(project.viewAllReportsEnabled || false);
     setIsEditModalOpen(true);
   };
 
@@ -116,7 +118,8 @@ export const Sidebar: React.FC = () => {
       updateProject(editProjectId, {
         name: editName,
         description: editDesc,
-        themeColor: editColor
+        themeColor: editColor,
+        viewAllReportsEnabled: editViewAllReports
       });
       setIsEditModalOpen(false);
     }
@@ -217,6 +220,14 @@ export const Sidebar: React.FC = () => {
                 {!isCollapsed && <span className="text-sm font-medium">Admin Panel</span>}
               </button>
             )}
+            <button
+              onClick={() => { navigate('/reports'); }}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
+              title={isCollapsed ? "Reports" : undefined}
+            >
+              <BarChart2 size={18} />
+              {!isCollapsed && <span className="text-sm font-medium">Reports</span>}
+            </button>
             <button
               onClick={() => { navigate('/history'); }}
               className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
@@ -380,6 +391,24 @@ export const Sidebar: React.FC = () => {
               <span className="text-sm text-slate-500">{editColor}</span>
             </div>
           </div>
+
+          {isSuperAdmin && (
+            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">View All Reports</label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Allow all members to see all project reports</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={editViewAllReports}
+                  onChange={e => setEditViewAllReports(e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 dark:peer-focus:ring-primary/20 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+              </label>
+            </div>
+          )}
           <div className="flex justify-end gap-3 mt-8">
             <button
               type="button"

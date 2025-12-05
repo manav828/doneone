@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store';
-import { Archive, Download, X, Search, Calendar, User, Tag, Clock, Filter as FilterIcon } from 'lucide-react';
+import { Archive, Download, X, Search, Calendar, User, Tag, Clock } from 'lucide-react';
 import { TaskHistory } from '../types';
 
 export const HistoryPage: React.FC = () => {
@@ -16,10 +16,10 @@ export const HistoryPage: React.FC = () => {
         toggleHistorySelection,
         clearHistorySelection,
         users,
-        tags
+        tags,
+        currentUser
     } = useStore();
 
-    const [showFilterPanel, setShowFilterPanel] = useState(true);
     const [selectedHistory, setSelectedHistory] = useState<TaskHistory | null>(null);
 
     const activeProject = projects.find(p => p.id === activeProjectId);
@@ -29,6 +29,48 @@ export const HistoryPage: React.FC = () => {
             loadTaskHistory(activeProjectId);
         }
     }, [activeProjectId, loadTaskHistory]);
+
+    // Role-based User Filter Logic
+    const availableUsers = useMemo(() => {
+        if (!activeProject || !currentUser) return [];
+
+        const isManager = activeProject.managerId === currentUser.id;
+        const isLead = activeProject.leadIds?.includes(currentUser.id);
+        const viewAllEnabled = activeProject.viewAllReportsEnabled; // Reusing this setting for consistency
+
+        if (isManager || viewAllEnabled) {
+            return users;
+        }
+
+        if (isLead) {
+            // Lead sees self + team members
+            const teamMemberIds = Object.entries(activeProject.reportsTo || {})
+                .filter(([_, leadId]) => leadId === currentUser.id)
+                .map(([resourceId]) => resourceId);
+            teamMemberIds.push(currentUser.id);
+            return users.filter(u => teamMemberIds.includes(u.id));
+        }
+
+        // Resource sees only self
+        return users.filter(u => u.id === currentUser.id);
+    }, [activeProject, currentUser, users]);
+
+    // Apply role-based filter automatically if not manager/lead
+    useEffect(() => {
+        if (!activeProject || !currentUser) return;
+
+        const isManager = activeProject.managerId === currentUser.id;
+        const isLead = activeProject.leadIds?.includes(currentUser.id);
+        const viewAllEnabled = activeProject.viewAllReportsEnabled;
+
+        if (!isManager && !viewAllEnabled && !isLead) {
+            // Force filter to self for resources
+            if (!historyFilters.assigneeIds?.includes(currentUser.id)) {
+                setHistoryFilters({ ...historyFilters, assigneeIds: [currentUser.id] });
+            }
+        }
+    }, [activeProject, currentUser, historyFilters, setHistoryFilters]);
+
 
     const handleExport = (mode: 'all' | 'filtered' | 'selected') => {
         exportHistoryToCSV(mode);
@@ -64,56 +106,97 @@ export const HistoryPage: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-900">
-            {/* Header */}
-            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            <Archive size={24} />
-                            Task History
-                        </h1>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                            {activeProject.name} • {taskHistory.length} archived task{taskHistory.length !== 1 ? 's' : ''}
-                        </p>
+            {/* Toolbar */}
+            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 flex-1">
+                    {/* Search */}
+                    <div className="relative max-w-md w-full">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Search tasks..."
+                            value={historyFilters.searchQuery || ''}
+                            onChange={e => setHistoryFilters({ ...historyFilters, searchQuery: e.target.value })}
+                            className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setShowFilterPanel(!showFilterPanel)}
-                            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-                            title="Toggle Filters"
-                        >
-                            <FilterIcon size={20} />
-                        </button>
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                        <input
+                            type="date"
+                            className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
+                            onChange={e => setHistoryFilters({ ...historyFilters, dateStart: e.target.value })}
+                        />
+                        <span className="text-slate-400">-</span>
+                        <input
+                            type="date"
+                            className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
+                            onChange={e => setHistoryFilters({ ...historyFilters, dateEnd: e.target.value })}
+                        />
+                    </div>
 
-                        <div className="relative group">
+                    {/* Assignee Filter */}
+                    <div className="relative">
+                        <select
+                            className="appearance-none bg-slate-100 dark:bg-slate-700 border-none rounded-lg pl-3 pr-8 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer dark:text-white"
+                            value={historyFilters.assigneeIds?.[0] || 'all'}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setHistoryFilters({
+                                    ...historyFilters,
+                                    assigneeIds: val === 'all' ? undefined : [val]
+                                });
+                            }}
+                        >
+                            <option value="all">All Assignees</option>
+                            {availableUsers.map(u => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg width="8" height="5" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m1 1 4 4 4-4" /></svg>
+                        </div>
+                    </div>
+
+                    {(historyFilters.dateStart || historyFilters.dateEnd || historyFilters.searchQuery || historyFilters.assigneeIds) && (
+                        <button
+                            onClick={() => activeProjectId && setHistoryFilters({ projectId: activeProjectId })}
+                            className="text-xs text-red-500 hover:text-red-600 font-medium px-2"
+                        >
+                            Clear Filters
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <div className="relative group">
+                        <button
+                            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-medium transition-all"
+                        >
+                            <Download size={18} />
+                            Export
+                        </button>
+                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
                             <button
-                                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-medium transition-all"
+                                onClick={() => handleExport('all')}
+                                className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-slate-700 dark:text-slate-300 first:rounded-t-lg"
                             >
-                                <Download size={18} />
-                                Export
+                                Export All History
                             </button>
-                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                                <button
-                                    onClick={() => handleExport('all')}
-                                    className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-slate-700 dark:text-slate-300 first:rounded-t-lg"
-                                >
-                                    Export All History
-                                </button>
-                                <button
-                                    onClick={() => handleExport('filtered')}
-                                    className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-slate-700 dark:text-slate-300"
-                                >
-                                    Export Filtered View
-                                </button>
-                                <button
-                                    onClick={() => handleExport('selected')}
-                                    disabled={selectedHistoryIds.length === 0}
-                                    className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed last:rounded-b-lg"
-                                >
-                                    Export Selected ({selectedHistoryIds.length})
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => handleExport('filtered')}
+                                className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-slate-700 dark:text-slate-300"
+                            >
+                                Export Filtered View
+                            </button>
+                            <button
+                                onClick={() => handleExport('selected')}
+                                disabled={selectedHistoryIds.length === 0}
+                                className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed last:rounded-b-lg"
+                            >
+                                Export Selected ({selectedHistoryIds.length})
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -121,35 +204,6 @@ export const HistoryPage: React.FC = () => {
 
             {/* Content */}
             <div className="flex-1 flex overflow-hidden">
-                {/* Filter Panel */}
-                {showFilterPanel && (
-                    <div className="w-80 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto p-4">
-                        <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-4 uppercase tracking-wide">Filters</h3>
-                        {/* Filter content will be in HistoryFilterPanel component */}
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Search</label>
-                                <input
-                                    type="text"
-                                    placeholder="Search tasks..."
-                                    value={historyFilters.searchQuery || ''}
-                                    onChange={e => setHistoryFilters({ ...historyFilters, searchQuery: e.target.value })}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                                />
-                            </div>
-
-                            <div>
-                                <button
-                                    onClick={() => activeProjectId && setHistoryFilters({ projectId: activeProjectId })}
-                                    className="w-full px-3 py-2 text-sm text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                                >
-                                    Clear All Filters
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* History Table */}
                 <div className="flex-1 overflow-auto p-6">
                     {taskHistory.length === 0 ? (
@@ -163,7 +217,7 @@ export const HistoryPage: React.FC = () => {
                             <table className="w-full">
                                 <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                                     <tr>
-                                        <th className="px-4 py-3 text-left">
+                                        <th className="px-4 py-3 text-left w-10">
                                             <input
                                                 type="checkbox"
                                                 onChange={e => {
@@ -181,7 +235,8 @@ export const HistoryPage: React.FC = () => {
                                         <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Task</th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Assignee</th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Status</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Archived</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Started</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Completed</th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Time Taken</th>
                                     </tr>
                                 </thead>
@@ -209,7 +264,7 @@ export const HistoryPage: React.FC = () => {
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <div className="font-medium text-slate-800 dark:text-white">{task.title}</div>
+                                                    <div className="font-medium text-slate-800 dark:text-white capitalize">{task.title}</div>
                                                     {task.description && (
                                                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
                                                             {task.description}
@@ -235,7 +290,10 @@ export const HistoryPage: React.FC = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                                                    {formatDate(history.archivedAt)}
+                                                    {task.startedAt ? formatDate(task.startedAt) : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                                                    {task.completedAt ? formatDate(task.completedAt) : '-'}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
                                                     {formatTime(history.timeTaken)}
@@ -266,7 +324,7 @@ export const HistoryPage: React.FC = () => {
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Title</label>
-                                <p className="text-slate-800 dark:text-white font-medium mt-1">{selectedHistory.taskData.title}</p>
+                                <p className="text-slate-800 dark:text-white font-medium mt-1 capitalize">{selectedHistory.taskData.title}</p>
                             </div>
                             {selectedHistory.taskData.description && (
                                 <div>

@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { ArchiveSettingsModal } from './ArchiveSettingsModal';
 import { useStore } from '../store';
+import { LayoutDashboard, Users, Settings, History, BarChart2, HelpCircle, LogOut, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { themeMode } = useStore();
-  const [isArchiveSettingsOpen, setIsArchiveSettingsOpen] = React.useState(false);
+  const [isArchiveSettingsOpen, setIsArchiveSettingsOpen] = useState(false);
 
   React.useEffect(() => {
     const root = window.document.documentElement;
