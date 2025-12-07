@@ -1,4 +1,4 @@
-let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick-add"&&(g(e.data),n({success:!0})),!0));function g(e){l(),o=document.createElement("div"),o.id="flowboard-quick-add-modal",o.style.cssText=`
+let d=null;chrome.runtime.onMessage.addListener((t,x,r)=>(t.action==="show-quick-add"&&(j(t.data),r({success:!0})),!0));function j(t){g(),d=document.createElement("div"),d.id="flowboard-quick-add-modal",d.style.cssText=`
     position: fixed;
     top: 0;
     left: 0;
@@ -11,23 +11,23 @@ let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick
     justify-content: center;
     z-index: 2147483647;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  `;const a=document.createElement("div");a.style.cssText=`
+  `;const x=document.createElement("div");x.style.cssText=`
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     padding: 2px;
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     max-width: 500px;
     width: 90%;
-  `;const n=document.createElement("div");n.style.cssText=`
+  `;const r=document.createElement("div");r.style.cssText=`
     background: white;
     border-radius: 14px;
     padding: 24px;
-  `;const p=document.createElement("h2");p.textContent="📋 Add Task to FlowBoard",p.style.cssText=`
+  `;const v=document.createElement("h2");v.textContent="📋 Add Task to FlowBoard",v.style.cssText=`
     margin: 0 0 20px 0;
     font-size: 20px;
     font-weight: 600;
     color: #1f2937;
-  `;const f=e.selectedText||document.title,t=document.createElement("input");t.type="text",t.placeholder="Task title...",t.value=f,t.style.cssText=`
+  `;const I=t.selectedText||document.title,n=document.createElement("input");n.type="text",n.placeholder="Task title...",n.value=I,n.style.cssText=`
     width: 100%;
     padding: 12px 16px;
     border: 2px solid #e5e7eb;
@@ -37,33 +37,61 @@ let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick
     outline: none;
     transition: border-color 0.2s;
     box-sizing: border-box;
-  `,t.onfocus=()=>{t.style.borderColor="#667eea"},t.onfocus=()=>{t.style.borderColor="#e5e7eb"};const r=document.createElement("textarea");r.placeholder="Description (optional)...",r.value=`📎 From: ${e.url}`,r.style.cssText=`
+  `,n.onfocus=()=>{n.style.borderColor="#667eea"},n.onblur=()=>{n.style.borderColor="#e5e7eb"};const a=document.createElement("textarea");a.placeholder="Description (optional)...",a.value=`📎 From: ${t.url}`,a.style.cssText=`
     width: 100%;
     padding: 12px 16px;
     border: 2px solid #e5e7eb;
     border-radius: 8px;
     font-size: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     outline: none;
     resize: vertical;
     min-height: 80px;
     font-family: inherit;
     box-sizing: border-box;
-  `,r.onfocus=()=>{r.style.borderColor="#667eea"},r.onblur=()=>{r.style.borderColor="#e5e7eb"};const u=document.createElement("div");u.style.cssText=`
+  `,a.onfocus=()=>{a.style.borderColor="#667eea"},a.onblur=()=>{a.style.borderColor="#e5e7eb"};const h=document.createElement("div");h.style.cssText=`
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  `;const s=document.createElement("select");s.id="flowboard-project-select",s.style.cssText=`
+    flex: 1;
+    padding: 10px 12px;
+    height: 42px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    background: white;
+    box-sizing: border-box;
+    color: #1f2937;
+  `,s.innerHTML='<option value="" disabled selected>Select Project *</option>';const o=document.createElement("select");o.id="flowboard-assignee-select",o.disabled=!0,o.style.cssText=`
+    flex: 1;
+    padding: 10px 12px;
+    height: 42px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    cursor: not-allowed;
+    background: #f9fafb;
+    box-sizing: border-box;
+    color: #9ca3af;
+  `,o.innerHTML='<option value="" selected>Assignee (Select Project First)</option>';let f=[],w=[],m=null;chrome.storage.local.get(["cachedProjects","cachedUsers","cachedCurrentUser"],e=>{f=e.cachedProjects||[],w=e.cachedUsers||[],m=e.cachedCurrentUser?e.cachedCurrentUser.id:null,f.forEach(l=>{const u=document.createElement("option");u.value=l.id,u.textContent=l.name,s.appendChild(u)}),f.length===1&&(s.value=f[0].id,C(f[0].id))});const C=e=>{o.innerHTML='<option value="" disabled>Select Assignee</option>',o.disabled=!1,o.style.cursor="pointer",o.style.background="white",o.style.color="#1f2937";const l=f.find(i=>i.id===e);if(!l)return;const u=new Set([l.managerId,...l.leadIds||[],...l.resourceIds||[]]),z=w.filter(i=>u.has(i.id));let U=!1;z.sort((i,b)=>i.id===m?-1:b.id===m?1:i.name.localeCompare(b.name)),z.forEach(i=>{const b=document.createElement("option");b.value=i.id,b.textContent=i.name,m&&i.id===m&&(b.textContent="Assign to Me",U=!0),o.appendChild(b)}),U&&m&&(o.value=m)};s.addEventListener("change",e=>{C(e.target.value)}),h.appendChild(s),h.appendChild(o);const k=document.createElement("div");k.style.cssText=`
     background: #f3f4f6;
     padding: 10px 12px;
     border-radius: 6px;
     margin-bottom: 16px;
     font-size: 12px;
     color: #6b7280;
-  `,u.innerHTML=`
+  `,k.innerHTML=`
     <div style="margin-bottom: 4px;">📎 <strong>Captured from:</strong></div>
-    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.url}</div>
-  `;const c=document.createElement("div");c.style.cssText=`
+    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t.url}</div>
+  `;const y=document.createElement("div");y.style.cssText=`
     display: flex;
     gap: 12px;
     justify-content: flex-end;
-  `;const i=document.createElement("button");i.textContent="Cancel",i.style.cssText=`
+  `;const c=document.createElement("button");c.textContent="Cancel",c.style.cssText=`
     padding: 10px 20px;
     border: 2px solid #e5e7eb;
     background: white;
@@ -72,7 +100,7 @@ let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
-  `,i.onmouseenter=()=>{i.style.background="#f9fafb"},i.onmouseleave=()=>{i.style.background="white"},i.onclick=l;const s=document.createElement("button");s.textContent="Add Task",s.style.cssText=`
+  `,c.onmouseenter=()=>{c.style.background="#f9fafb"},c.onmouseleave=()=>{c.style.background="white"},c.onclick=g;const p=document.createElement("button");p.textContent="Add Task",p.style.cssText=`
     padding: 10px 20px;
     border: none;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -82,7 +110,7 @@ let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s;
-  `,s.onmouseenter=()=>{s.style.transform="scale(1.05)"},s.onmouseleave=()=>{s.style.transform="scale(1)"},s.onclick=()=>{const d={title:t.value.trim(),description:r.value.trim(),capturedUrl:e.url,capturedText:e.selectedText,linkUrl:e.linkUrl,srcUrl:e.srcUrl};d.title&&chrome.storage.local.get(["pendingTasks"],b=>{const x=b.pendingTasks||[];x.push({...d,timestamp:Date.now()}),chrome.storage.local.set({pendingTasks:x},()=>{h(),l()})})},c.appendChild(i),c.appendChild(s),n.appendChild(p),n.appendChild(t),n.appendChild(r),n.appendChild(u),n.appendChild(c),a.appendChild(n),o.appendChild(a),document.body.appendChild(o),setTimeout(()=>t.focus(),100);const m=d=>{d.key==="Escape"&&(l(),document.removeEventListener("keydown",m))};document.addEventListener("keydown",m),o.addEventListener("click",d=>{d.target===o&&l()}),t.addEventListener("keydown",d=>{d.key==="Enter"&&s.click()})}function l(){o&&(o.remove(),o=null)}function h(){const e=document.createElement("div");e.textContent="✅ Task added to FlowBoard!",e.style.cssText=`
+  `,p.onmouseenter=()=>{p.style.transform="scale(1.05)"},p.onmouseleave=()=>{p.style.transform="scale(1)"};const T=()=>{if(!s.value){s.style.borderColor="#ef4444";return}const e={title:n.value.trim(),description:a.value.trim(),projectId:s.value,assigneeId:o.value||void 0,capturedUrl:t.url,capturedText:t.selectedText,linkUrl:t.linkUrl,srcUrl:t.srcUrl};e.title&&chrome.storage.local.get(["pendingTasks"],l=>{const u=l.pendingTasks||[];u.push({...e,timestamp:Date.now()}),chrome.storage.local.set({pendingTasks:u},()=>{M(),g()})})};p.onclick=T,y.appendChild(c),y.appendChild(p),r.appendChild(v),r.appendChild(n),r.appendChild(a),r.appendChild(h),r.appendChild(k),r.appendChild(y),x.appendChild(r),d.appendChild(x),document.body.appendChild(d),setTimeout(()=>n.focus(),100);const E=e=>{e.key==="Escape"&&(g(),document.removeEventListener("keydown",E))};document.addEventListener("keydown",E),d.addEventListener("click",e=>{e.target===d&&g()}),n.addEventListener("keydown",e=>{e.key==="Enter"&&T()})}function g(){d&&(d.remove(),d=null)}function M(){const t=document.createElement("div");t.textContent="✅ Task added to FlowBoard!",t.style.cssText=`
     position: fixed;
     bottom: 24px;
     right: 24px;
@@ -96,7 +124,7 @@ let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     animation: slideIn 0.3s ease-out;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  `;const a=document.createElement("style");a.textContent=`
+  `;const x=document.createElement("style");x.textContent=`
     @keyframes slideIn {
       from {
         transform: translateX(400px);
@@ -117,4 +145,4 @@ let o=null;chrome.runtime.onMessage.addListener((e,a,n)=>(e.action==="show-quick
         opacity: 0;
       }
     }
-  `,document.head.appendChild(a),document.body.appendChild(e),setTimeout(()=>{e.style.animation="slideOut 0.3s ease-out",setTimeout(()=>e.remove(),300)},3e3)}window.location.href.startsWith("chrome-extension://")||console.log("FlowBoard content script loaded");
+  `,document.head.appendChild(x),document.body.appendChild(t),setTimeout(()=>{t.style.animation="slideOut 0.3s ease-out",setTimeout(()=>t.remove(),300)},3e3)}window.location.href.startsWith("chrome-extension://")||console.log("FlowBoard content script loaded");

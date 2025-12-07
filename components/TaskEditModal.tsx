@@ -17,7 +17,7 @@ interface TaskEditModalProps {
 export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, task, isCreating, onSaveNew }) => {
     const {
         tags, updateTask, deleteTask, createTag, toggleTaskTimer,
-        users, uploadFile, isOffline, currentUser, projects, activeProjectId, deleteTag, archiveTaskManually
+        users, uploadFile, deleteFile, isOffline, currentUser, projects, activeProjectId, deleteTag, archiveTaskManually
     } = useStore();
 
     const activeProject = projects.find(p => p.id === activeProjectId);
@@ -38,7 +38,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [localAssignee, setLocalAssignee] = useState(task.assigneeId || '');
     const [localTags, setLocalTags] = useState<string[]>(task.tagIds);
     const [newTagName, setNewTagName] = useState('');
-    const [localAttachments, setLocalAttachments] = useState<string[]>(task.attachments || []);
+    const [localAttachments, setLocalAttachments] = useState<(string | File)[]>(task.attachments || []);
     const [reminderDate, setReminderDate] = useState(task.reminderAt ? new Date(task.reminderAt).toISOString().slice(0, 16) : '');
     const [localReminderUsers, setLocalReminderUsers] = useState<string[]>(task.reminderUserIds || []);
     const [showReminder, setShowReminder] = useState(!!task.reminderAt);
@@ -131,10 +131,29 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             tagIds: finalTags,
             reminderAt: showReminder && reminderDate ? new Date(reminderDate).getTime() : undefined,
             reminderUserIds: showReminder && reminderDate ? localReminderUsers : undefined,
-            attachments: localAttachments,
+            attachments: [] as string[], // Placeholder, will be filled below
             estimatedTime: localEstimatedMinutes * 60,
             timeTracked: localActualMinutes * 60
         };
+
+        // 1. Process Uploads (Convert File objects to URLs)
+        const finalAttachments: string[] = [];
+        for (const item of localAttachments) {
+            if (item instanceof File) {
+                const url = await uploadFile(item);
+                if (url) finalAttachments.push(url);
+            } else {
+                finalAttachments.push(item as string);
+            }
+        }
+        taskData.attachments = finalAttachments;
+
+        // 2. Process Cleanup (Delete removed files)
+        const originalAttachments = task.attachments || [];
+        const removedAttachments = originalAttachments.filter(url => !finalAttachments.includes(url));
+
+        // Execute cleanup in background (don't block save)
+        removedAttachments.forEach(url => deleteFile(url).catch(console.error));
 
         if (isCreating && onSaveNew) {
             await onSaveNew(taskData);
@@ -171,8 +190,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            const url = await uploadFile(e.target.files[0]);
-            if (url) setLocalAttachments([...localAttachments, url]);
+            // DEFERRED UPLOAD: Store the File object directly
+            setLocalAttachments([...localAttachments, e.target.files[0]]);
         }
     };
 
@@ -352,17 +371,20 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                     <div>
                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Attachments</label>
                         <div className="flex flex-wrap gap-2 mb-2">
-                            {localAttachments.map((url, i) => (
-                                <div key={i} className="relative group w-16 h-16 rounded overflow-hidden border border-slate-200">
-                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
-                                    <button
-                                        onClick={() => setLocalAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                        className="absolute top-0 right-0 bg-red-500 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <X size={10} />
-                                    </button>
-                                </div>
-                            ))}
+                            {localAttachments.map((item, i) => {
+                                const url = item instanceof File ? URL.createObjectURL(item) : item;
+                                return (
+                                    <div key={i} className="relative group w-16 h-16 rounded overflow-hidden border border-slate-200">
+                                        <img src={url} alt="Attachment" className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
+                                        <button
+                                            onClick={() => setLocalAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                            className="absolute top-0 right-0 bg-red-500 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    </div>
+                                );
+                            })}
                             {imageUploadEnabled ? (
                                 <div className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-300 cursor-pointer hover:border-primary hover:text-primary">
                                     <label className="w-full h-full flex items-center justify-center">

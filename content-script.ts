@@ -82,7 +82,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
     box-sizing: border-box;
   `;
   input.onfocus = () => { input.style.borderColor = "#667eea"; };
-  input.onfocus = () => { input.style.borderColor = "#e5e7eb"; };
+  input.onblur = () => { input.style.borderColor = "#e5e7eb"; };
 
   // Description textarea (pre-filled with URL)
   const description = document.createElement("textarea");
@@ -94,7 +94,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
     border: 2px solid #e5e7eb;
     border-radius: 8px;
     font-size: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     outline: none;
     resize: vertical;
     min-height: 80px;
@@ -103,6 +103,137 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
   `;
   description.onfocus = () => { description.style.borderColor = "#667eea"; };
   description.onblur = () => { description.style.borderColor = "#e5e7eb"; };
+
+  // Dropdowns Container
+  const dropdownsContainer = document.createElement("div");
+  dropdownsContainer.style.cssText = `
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  `;
+
+  // Project Select
+  const projectSelect = document.createElement("select");
+  projectSelect.id = "flowboard-project-select";
+  projectSelect.style.cssText = `
+    flex: 1;
+    padding: 10px 12px;
+    height: 42px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    background: white;
+    box-sizing: border-box;
+    color: #1f2937;
+  `;
+  projectSelect.innerHTML = `<option value="" disabled selected>Select Project *</option>`;
+
+  // Assignee Select
+  const assigneeSelect = document.createElement("select");
+  assigneeSelect.id = "flowboard-assignee-select";
+  assigneeSelect.disabled = true; // Disabled by default
+  assigneeSelect.style.cssText = `
+    flex: 1;
+    padding: 10px 12px;
+    height: 42px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    cursor: not-allowed;
+    background: #f9fafb;
+    box-sizing: border-box;
+    color: #9ca3af;
+  `;
+  assigneeSelect.innerHTML = `<option value="" selected>Assignee (Select Project First)</option>`;
+
+  // State to hold data
+  let availableProjects: any[] = [];
+  let availableUsers: any[] = [];
+  let currentUserId: string | null = null;
+
+  // Load data from storage
+  chrome.storage.local.get(['cachedProjects', 'cachedUsers', 'cachedCurrentUser'], (result: any) => {
+    availableProjects = result.cachedProjects || [];
+    availableUsers = result.cachedUsers || [];
+    currentUserId = result.cachedCurrentUser ? result.cachedCurrentUser.id : null;
+
+    // Populate Projects
+    availableProjects.forEach((p: any) => {
+      const option = document.createElement("option");
+      option.value = p.id;
+      option.textContent = p.name;
+      projectSelect.appendChild(option);
+    });
+
+    // If only one project, select it automatically
+    if (availableProjects.length === 1) {
+      projectSelect.value = availableProjects[0].id;
+      updateAssignees(availableProjects[0].id);
+    }
+  });
+
+  // Function to update assignees based on project
+  const updateAssignees = (projectId: string) => {
+    assigneeSelect.innerHTML = `<option value="" disabled>Select Assignee</option>`;
+    assigneeSelect.disabled = false;
+    assigneeSelect.style.cursor = 'pointer';
+    assigneeSelect.style.background = 'white';
+    assigneeSelect.style.color = '#1f2937';
+
+    const project = availableProjects.find(p => p.id === projectId);
+    if (!project) return;
+
+    // Collect all member IDs
+    const memberIds = new Set([
+      project.managerId,
+      ...(project.leadIds || []),
+      ...(project.resourceIds || [])
+    ]);
+
+    // Filter users
+    const projectMembers = availableUsers.filter(u => memberIds.has(u.id));
+
+    // Populate Option
+    // Add "Assign to me" as first option if I am a member
+    let meFound = false;
+
+    // Sort: Me first, then alphabetical
+    projectMembers.sort((a, b) => {
+      if (a.id === currentUserId) return -1;
+      if (b.id === currentUserId) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    projectMembers.forEach((u: any) => {
+      const option = document.createElement("option");
+      option.value = u.id;
+      option.textContent = u.name;
+
+      if (currentUserId && u.id === currentUserId) {
+        option.textContent = "Assign to Me"; // Friendlier text
+        meFound = true;
+      }
+
+      assigneeSelect.appendChild(option);
+    });
+
+    // Auto-select Me
+    if (meFound && currentUserId) {
+      assigneeSelect.value = currentUserId;
+    }
+  };
+
+  // Event Listener for Project Change
+  projectSelect.addEventListener('change', (e: any) => {
+    updateAssignees(e.target.value);
+  });
+
+  dropdownsContainer.appendChild(projectSelect);
+  dropdownsContainer.appendChild(assigneeSelect);
+
 
   // Captured data info
   const capturedInfo = document.createElement("div");
@@ -160,10 +291,19 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
   `;
   addBtn.onmouseenter = () => { addBtn.style.transform = "scale(1.05)"; };
   addBtn.onmouseleave = () => { addBtn.style.transform = "scale(1)"; };
-  addBtn.onclick = () => {
+
+  const submitTask = () => {
+    // Validate
+    if (!projectSelect.value) {
+      projectSelect.style.borderColor = "#ef4444";
+      return;
+    }
+
     const taskData = {
       title: input.value.trim(),
       description: description.value.trim(),
+      projectId: projectSelect.value,
+      assigneeId: assigneeSelect.value || undefined,
       capturedUrl: data.url,
       capturedText: data.selectedText,
       linkUrl: data.linkUrl,
@@ -186,6 +326,8 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
     }
   };
 
+  addBtn.onclick = submitTask;
+
   // Assemble modal
   buttonsContainer.appendChild(cancelBtn);
   buttonsContainer.appendChild(addBtn);
@@ -193,6 +335,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
   modalInner.appendChild(title);
   modalInner.appendChild(input);
   modalInner.appendChild(description);
+  modalInner.appendChild(dropdownsContainer);
   modalInner.appendChild(capturedInfo);
   modalInner.appendChild(buttonsContainer);
 
@@ -223,7 +366,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
   // Submit on Enter (in input only)
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-      addBtn.click();
+      submitTask();
     }
   });
 }

@@ -1,32 +1,34 @@
--- 1. Create app_settings table (if missing)
-CREATE TABLE IF NOT EXISTS app_settings (
-  id BIGINT PRIMARY KEY DEFAULT 1,
-  registration_open BOOLEAN DEFAULT TRUE,
-  image_upload_enabled BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- 1. Create system_settings table (if missing)
+-- NOTE: Renamed from app_settings to match Login.tsx and complete_schema.sql
+CREATE TABLE IF NOT EXISTS system_settings (
+  key text PRIMARY KEY,
+  value boolean DEFAULT true
 );
 
 -- 2. Insert default settings row if not exists
-INSERT INTO app_settings (id, registration_open, image_upload_enabled)
-VALUES (1, TRUE, FALSE)
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO system_settings (key, value)
+VALUES ('registration_open', TRUE), ('image_upload_enabled', FALSE)
+ON CONFLICT (key) DO NOTHING;
 
 -- 3. Enable RLS
-ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 
 -- 4. Create Robust Policies
 -- Drop existing policies to ensure clean state
+DROP POLICY IF EXISTS "Public read access" ON system_settings;
+DROP POLICY IF EXISTS "Admin update access" ON system_settings;
+DROP POLICY IF EXISTS "Admin insert access" ON system_settings;
+DROP POLICY IF EXISTS "Admin All Access" ON system_settings;
+-- Also drop old table policies if they exist just in case
 DROP POLICY IF EXISTS "Public read access" ON app_settings;
-DROP POLICY IF EXISTS "Admin update access" ON app_settings;
-DROP POLICY IF EXISTS "Admin insert access" ON app_settings;
 DROP POLICY IF EXISTS "Admin All Access" ON app_settings;
 
--- A. READ Policy (Everyone)
-CREATE POLICY "Public read access" ON app_settings FOR SELECT USING (true);
+-- A. READ Policy (Everyone - crucial for Login page)
+CREATE POLICY "Public read access" ON system_settings FOR SELECT USING (true);
 
 -- B. WRITE Policies (Admin Only)
-CREATE POLICY "Admin All Access" ON app_settings FOR ALL USING (
+-- B. WRITE Policies (Admin Only)
+CREATE POLICY "Admin All Access" ON system_settings FOR ALL USING (
   EXISTS (
     SELECT 1 FROM profiles 
     WHERE id = auth.uid() 
@@ -68,5 +70,5 @@ $$;
 -- 6. Grant execute permissions
 GRANT EXECUTE ON FUNCTION get_storage_stats TO authenticated;
 GRANT EXECUTE ON FUNCTION get_storage_stats TO service_role;
-GRANT ALL ON app_settings TO authenticated;
-GRANT ALL ON app_settings TO service_role;
+GRANT ALL ON system_settings TO authenticated;
+GRANT ALL ON system_settings TO service_role;

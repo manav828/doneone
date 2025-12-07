@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats } from './types';
+import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -101,6 +101,7 @@ interface AppState {
   toggleImageUpload: (isOpen: boolean) => Promise<void>;
   fetchStorageStats: () => Promise<StorageStats | null>;
   uploadFile: (file: File) => Promise<string | null>;
+  deleteFile: (url: string) => Promise<void>;
 
 
   // Helpers
@@ -474,6 +475,10 @@ export const useStore = create<AppState>((set, get) => ({
         } : null,
         adminRetentionSettings
       });
+
+      // Update Chrome Storage cache for content script
+      syncToChromeStorage('cachedCurrentUser', get().currentUser);
+
       await get().refreshData();
 
       // Process any pending tasks from content script
@@ -491,6 +496,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     } else {
       set({ isLoading: false, currentUser: null });
+      syncToChromeStorage('cachedCurrentUser', null);
     }
   },
 
@@ -524,6 +530,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     set({ users: mappedUsers });
+    syncToChromeStorage('cachedUsers', mappedUsers);
     return mappedUsers;
   },
   fetchProjects: async () => {
@@ -582,6 +589,7 @@ export const useStore = create<AppState>((set, get) => ({
       p.resourceIds.includes(currentUser.id)
     );
     set({ projects: validProjects });
+    syncToChromeStorage('cachedProjects', validProjects);
     return validProjects;
   },
 
@@ -1329,22 +1337,22 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Registration Control
   getRegistrationStatus: async () => {
-    const { data } = await supabase.from('app_settings').select('registration_open').eq('id', 1).single();
-    return data?.registration_open ?? true;
+    const { data } = await supabase.from('system_settings').select('value').eq('key', 'registration_open').single();
+    return (data?.value) ?? true;
   },
 
   toggleRegistration: async (isOpen) => {
-    const { error } = await supabase.from('app_settings').upsert({ id: 1, registration_open: isOpen });
+    const { error } = await supabase.from('system_settings').upsert({ key: 'registration_open', value: isOpen });
     if (error) console.error("Error toggling registration:", error);
   },
 
   getImageUploadStatus: async () => {
-    const { data } = await supabase.from('app_settings').select('image_upload_enabled').eq('id', 1).single();
-    return data?.image_upload_enabled ?? false;
+    const { data } = await supabase.from('system_settings').select('value').eq('key', 'image_upload_enabled').single();
+    return (data?.value) ?? false;
   },
 
   toggleImageUpload: async (isOpen) => {
-    const { error } = await supabase.from('app_settings').upsert({ id: 1, image_upload_enabled: isOpen });
+    const { error } = await supabase.from('system_settings').upsert({ key: 'image_upload_enabled', value: isOpen });
     if (error) console.error("Error toggling image upload:", error);
   },
 
@@ -1419,9 +1427,20 @@ export const useStore = create<AppState>((set, get) => ({
       const { data } = supabase.storage.from('task-attachments').getPublicUrl(filePath);
       return data.publicUrl;
 
-    } catch (err) {
-      console.error("Upload error:", err);
-      return null;
+    } catch (s) {
+      return console.error("Upload error:", s), null;
+    }
+  },
+
+  deleteFile: async (url: string) => {
+    try {
+      // Extract file path from URL
+      const path = url.split('/task-attachments/')[1];
+      if (!path) return;
+      const { error } = await supabase.storage.from('task-attachments').remove([path]);
+      if (error) console.error("Error deleting file:", error);
+    } catch (e) {
+      console.error("Delete file error:", e);
     }
   },
 
@@ -1490,8 +1509,8 @@ export const useStore = create<AppState>((set, get) => ({
 
         // Process each pending task
         for (const taskData of pendingTasks) {
-          // Find first available project/column or use active project
-          const targetProjectId = get().activeProjectId || projects[0]?.id;
+          // Use provided projectId or fallback to active/first project
+          const targetProjectId = taskData.projectId || get().activeProjectId || projects[0]?.id;
           if (!targetProjectId) continue;
 
           const projectColumns = columns.filter(c => c.projectId === targetProjectId);
@@ -1508,6 +1527,8 @@ export const useStore = create<AppState>((set, get) => ({
             title: taskData.title,
             description: taskData.description || '',
             creatorId: currentUser.id,
+            // Assignee ID from popup or default to curator/current user
+            assigneeId: taskData.assigneeId || currentUser.id,
             orderIndex: currentTasks.length,
             tagIds: [],
             estimatedTime: 0,
@@ -1530,6 +1551,7 @@ export const useStore = create<AppState>((set, get) => ({
               title: newTask.title,
               description: newTask.description,
               creator_id: currentUser.id,
+              assignee_id: newTask.assigneeId,
               order_index: currentTasks.length,
               tag_ids: [],
               estimated_time: 0,
@@ -1750,8 +1772,14 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   archiveTaskManually: async (taskId) => {
-    const { currentUser } = get();
+    const { currentUser, tasks } = get();
     if (!currentUser) return;
+
+    // Aggressive Cleanup: Delete images before archiving
+    const task = tasks.find(t => t.id === taskId);
+    if (task && task.attachments && task.attachments.length > 0) {
+      task.attachments.forEach(url => get().deleteFile(url).catch(console.error));
+    }
 
     const { data, error } = await supabase.rpc('archive_task_fn', {
       p_task_id: taskId,

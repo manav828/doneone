@@ -148,6 +148,17 @@ export interface ArchiveSettings {
   updatedAt: number;
 }
 
+declare var chrome: any;
+
+// Helper to sync data to Chrome Storage for content script access
+export const syncToChromeStorage = (key: string, data: any) => {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ [key]: data });
+  }
+};
+
+
+
 export interface StorageStats {
   totalBytes: number;
   fileCount: number;
