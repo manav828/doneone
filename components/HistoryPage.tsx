@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store';
-import { Archive, Download, X, Search, Calendar, User, Tag, Clock } from 'lucide-react';
+import { Archive, Download, X, Search, CheckCircle } from 'lucide-react';
 import { TaskHistory } from '../types';
 
 export const HistoryPage: React.FC = () => {
     const {
         activeProjectId,
+        setActiveProject,
         projects,
         taskHistory,
         loadTaskHistory,
@@ -16,61 +17,85 @@ export const HistoryPage: React.FC = () => {
         toggleHistorySelection,
         clearHistorySelection,
         users,
-        tags,
         currentUser
     } = useStore();
 
     const [selectedHistory, setSelectedHistory] = useState<TaskHistory | null>(null);
 
+    // Project Dropdown State
+    const [isProjectOpen, setIsProjectOpen] = useState(false);
+    const [projectSearch, setProjectSearch] = useState('');
+
     const activeProject = projects.find(p => p.id === activeProjectId);
+    const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()));
 
     useEffect(() => {
         if (activeProjectId) {
             loadTaskHistory(activeProjectId);
+        } else if (projects.length > 0) {
+            setActiveProject(projects[0].id);
         }
-    }, [activeProjectId, loadTaskHistory]);
+    }, [activeProjectId, loadTaskHistory, projects, setActiveProject]);
 
     // Role-based User Filter Logic
     const availableUsers = useMemo(() => {
         if (!activeProject || !currentUser) return [];
 
-        const isManager = activeProject.managerId === currentUser.id;
+        // Filter to Project Members only
+        const projectMembers = users.filter(u =>
+            u.id === activeProject.managerId ||
+            activeProject.leadIds?.includes(u.id) ||
+            activeProject.resourceIds?.includes(u.id) ||
+            Object.keys(activeProject.reportsTo || {}).includes(u.id)
+        );
+
+        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
-        const viewAllEnabled = activeProject.viewAllReportsEnabled; // Reusing this setting for consistency
+        const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
         if (isManager || viewAllEnabled) {
-            return users;
+            return projectMembers;
         }
 
         if (isLead) {
-            // Lead sees self + team members
             const teamMemberIds = Object.entries(activeProject.reportsTo || {})
                 .filter(([_, leadId]) => leadId === currentUser.id)
                 .map(([resourceId]) => resourceId);
             teamMemberIds.push(currentUser.id);
-            return users.filter(u => teamMemberIds.includes(u.id));
+            return projectMembers.filter(u => teamMemberIds.includes(u.id));
         }
 
-        // Resource sees only self
-        return users.filter(u => u.id === currentUser.id);
+        return projectMembers.filter(u => u.id === currentUser.id);
     }, [activeProject, currentUser, users]);
 
-    // Apply role-based filter automatically if not manager/lead
+    // Apply role-based filter automatically
     useEffect(() => {
         if (!activeProject || !currentUser) return;
-
-        const isManager = activeProject.managerId === currentUser.id;
+        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
         const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
         if (!isManager && !viewAllEnabled && !isLead) {
-            // Force filter to self for resources
             if (!historyFilters.assigneeIds?.includes(currentUser.id)) {
                 setHistoryFilters({ ...historyFilters, assigneeIds: [currentUser.id] });
             }
         }
     }, [activeProject, currentUser, historyFilters, setHistoryFilters]);
 
+    // Filter history based on Hierarchy
+    const visibleHistory = useMemo(() => {
+        if (!activeProject || !currentUser) return [];
+
+        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        if (isManager || activeProject.viewAllReportsEnabled) return taskHistory;
+
+        const allowedUserIds = availableUsers.map(u => u.id);
+        return taskHistory.filter(h => {
+            // Visible if assigned to visible user OR created by current user
+            return (h.taskData.assigneeId && allowedUserIds.includes(h.taskData.assigneeId)) ||
+                h.taskData.creatorId === currentUser.id;
+        });
+    }, [taskHistory, availableUsers, activeProject, currentUser]);
 
     const handleExport = (mode: 'all' | 'filtered' | 'selected') => {
         exportHistoryToCSV(mode);
@@ -92,13 +117,12 @@ export const HistoryPage: React.FC = () => {
         });
     };
 
-    if (!activeProjectId || !activeProject) {
+    if (projects.length === 0) {
         return (
             <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-900">
                 <div className="text-center p-8">
-                    <Archive size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
-                    <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">Select a Project</h2>
-                    <p className="text-slate-500 dark:text-slate-400">Choose a project from the sidebar to view its history</p>
+                    <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">No Projects</h2>
+                    <p className="text-slate-500 dark:text-slate-400">Create a project to view history</p>
                 </div>
             </div>
         );
@@ -108,6 +132,59 @@ export const HistoryPage: React.FC = () => {
         <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-900">
             {/* Toolbar */}
             <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between gap-4">
+
+                {/* Project Selector */}
+                <div className="relative mr-4 border-r border-slate-200 dark:border-slate-700 pr-4">
+                    <button
+                        onClick={() => setIsProjectOpen(!isProjectOpen)}
+                        className="flex items-center gap-2 font-bold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                        <span>{activeProject?.name || 'Select Project'}</span>
+                        <svg className={`w-4 h-4 transition-transform ${isProjectOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+
+                    {isProjectOpen && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setIsProjectOpen(false)}></div>
+                            <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                                <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search projects..."
+                                            className="w-full pl-8 pr-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 dark:text-white"
+                                            value={projectSearch}
+                                            onChange={(e) => setProjectSearch(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
+                                <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                                    {filteredProjects.map(p => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { setActiveProject(p.id); setIsProjectOpen(false); }}
+                                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeProjectId === p.id
+                                                ? 'bg-primary/5 text-primary font-medium'
+                                                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                        >
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.themeColor }}></span>
+                                            <span className="truncate">{p.name}</span>
+                                            {activeProjectId === p.id && <CheckCircle size={14} className="ml-auto opacity-50" />}
+                                        </button>
+                                    ))}
+                                    {filteredProjects.length === 0 && (
+                                        <div className="px-3 py-4 text-center text-xs text-slate-400">
+                                            No projects found
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
                 <div className="flex items-center gap-4 flex-1">
                     {/* Search */}
                     <div className="relative max-w-md w-full">
@@ -117,7 +194,7 @@ export const HistoryPage: React.FC = () => {
                             placeholder="Search tasks..."
                             value={historyFilters.searchQuery || ''}
                             onChange={e => setHistoryFilters({ ...historyFilters, searchQuery: e.target.value })}
-                            className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                            className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary/20 outline-none dark:text-white"
                         />
                     </div>
 
@@ -241,7 +318,7 @@ export const HistoryPage: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                    {taskHistory.map(history => {
+                                    {visibleHistory.map(history => {
                                         const task = history.taskData;
                                         const assignee = users.find(u => u.id === task.assigneeId);
 

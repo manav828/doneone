@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Task, User } from '../types';
 import { Modal } from './Modal';
-import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
+import { PremiumModal } from './PremiumModal';
+import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users } from 'lucide-react';
 
 interface TaskEditModalProps {
     isOpen: boolean;
@@ -19,11 +21,17 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     } = useStore();
 
     const activeProject = projects.find(p => p.id === activeProjectId);
+
+    // FIXED PERMISSION LOGIC:
+    // If I am the manager of this project, use MY settings (always fresh from currentUser)
+    // If I am NOT the manager, use the project manager's settings
     const isManager = activeProject?.managerId === currentUser?.id;
+    const effectiveManager = isManager ? currentUser : activeProject?.manager;
+
     const isLead = activeProject?.leadIds.includes(currentUser?.id || '');
-    const projectManager = users.find(u => u.id === activeProject?.managerId);
-    const remindersEnabled = projectManager?.remindersEnabled || false;
-    const timeTrackingEnabled = projectManager?.timeTrackingEnabled || false;
+    const remindersEnabled = effectiveManager?.remindersEnabled || false;
+    const timeTrackingEnabled = effectiveManager?.timeTrackingEnabled || false;
+    const imageUploadEnabled = effectiveManager?.imageUploadEnabled || false;
 
     const [localTitle, setLocalTitle] = useState(task.title);
     const [localDesc, setLocalDesc] = useState(task.description || '');
@@ -32,7 +40,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [newTagName, setNewTagName] = useState('');
     const [localAttachments, setLocalAttachments] = useState<string[]>(task.attachments || []);
     const [reminderDate, setReminderDate] = useState(task.reminderAt ? new Date(task.reminderAt).toISOString().slice(0, 16) : '');
+    const [localReminderUsers, setLocalReminderUsers] = useState<string[]>(task.reminderUserIds || []);
     const [showReminder, setShowReminder] = useState(!!task.reminderAt);
+    const [premiumModalFeature, setPremiumModalFeature] = useState<string | null>(null);
     const [localPriority, setLocalPriority] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -40,6 +50,21 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [localEstimatedMinutes, setLocalEstimatedMinutes] = useState(Math.floor((task.estimatedTime || 0) / 60));
     const [localActualMinutes, setLocalActualMinutes] = useState(Math.floor((task.timeTracked || 0) / 60));
     const [elapsedTime, setElapsedTime] = useState(task.timeTracked || 0);
+
+    // Confirm Modal State
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        isDestructive?: boolean;
+        confirmText?: string;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+    });
 
     // Reset state when task changes or modal opens
     useEffect(() => {
@@ -50,6 +75,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             setLocalTags(task.tagIds);
             setLocalAttachments(task.attachments || []);
             setReminderDate(task.reminderAt ? new Date(task.reminderAt).toISOString().slice(0, 16) : '');
+            setLocalReminderUsers(task.reminderUserIds || []);
             setShowReminder(!!task.reminderAt);
             setLocalEstimatedMinutes(Math.floor((task.estimatedTime || 0) / 60));
             setLocalActualMinutes(Math.floor((task.timeTracked || 0) / 60));
@@ -104,6 +130,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             assigneeId: localAssignee || undefined,
             tagIds: finalTags,
             reminderAt: showReminder && reminderDate ? new Date(reminderDate).getTime() : undefined,
+            reminderUserIds: showReminder && reminderDate ? localReminderUsers : undefined,
             attachments: localAttachments,
             estimatedTime: localEstimatedMinutes * 60,
             timeTracked: localActualMinutes * 60
@@ -118,10 +145,17 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     };
 
     const handleDelete = async () => {
-        if (confirm('Delete this task?')) {
-            await deleteTask(task.id);
-            onClose();
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Task',
+            message: 'Are you sure you want to delete this task? This action cannot be undone.',
+            confirmText: 'Delete',
+            isDestructive: true,
+            onConfirm: async () => {
+                await deleteTask(task.id);
+                onClose();
+            }
+        });
     };
 
     const handleCreateTag = async (e: React.FormEvent) => {
@@ -151,10 +185,17 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     };
 
     const handleDeleteTag = async (tagId: string) => {
-        if (confirm('Are you sure you want to permanently delete this tag?')) {
-            setLocalTags(prev => prev.filter(id => id !== tagId));
-            await deleteTag(tagId);
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Tag',
+            message: 'Are you sure you want to permanently delete this tag?',
+            confirmText: 'Delete',
+            isDestructive: true,
+            onConfirm: async () => {
+                setLocalTags(prev => prev.filter(id => id !== tagId));
+                await deleteTag(tagId);
+            }
+        });
     };
 
     const projectTags = tags.filter(t => !t.projectId || t.projectId === task.projectId);
@@ -162,195 +203,294 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const typeTags = projectTags.filter(t => t.type !== 'Priority');
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={isCreating ? "New Task" : "Edit Task"}>
-            <div className="space-y-4">
-                {/* Title Input */}
-                <div>
-                    <input
-                        type="text"
-                        value={localTitle}
-                        onChange={e => setLocalTitle(e.target.value)}
-                        placeholder="Task Title"
-                        className="w-full p-3 border rounded-lg text-lg font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600 dark:text-white placeholder-slate-400"
-                    />
-                </div>
-
-                {/* Description */}
-                <div>
-                    <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Description / Discuss Points</label>
-                    <textarea
-                        value={localDesc}
-                        onChange={e => setLocalDesc(e.target.value)}
-                        placeholder="Add description or discussion points..."
-                        className="w-full p-3 border rounded-lg h-24 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
-                    />
-                </div>
-
-                {/* Properties Grid */}
-                <div className="grid grid-cols-2 gap-4">
+        <>
+            <Modal isOpen={isOpen} onClose={onClose} title={isCreating ? "New Task" : "Edit Task"}>
+                <div className="space-y-4">
+                    {/* Title Input */}
                     <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assignee</label>
-                        <select value={localAssignee} onChange={e => setLocalAssignee(e.target.value)} className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none">
-                            <option value="">Unassigned</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Priority</label>
-                        <select value={localPriority} onChange={e => setLocalPriority(e.target.value)} className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none">
-                            <option value="">None</option>
-                            {priorityTags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                {/* Time Tracking & Reminder */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Estimated Time (min)</label>
-                        <input
-                            type="number"
-                            value={localEstimatedMinutes}
-                            onChange={e => setLocalEstimatedMinutes(parseInt(e.target.value) || 0)}
-                            className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Actual Time (min)</label>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="number"
-                                value={localActualMinutes}
-                                onChange={e => {
-                                    const val = parseInt(e.target.value) || 0;
-                                    setLocalActualMinutes(val);
-                                    setElapsedTime(val * 60);
-                                }}
-                                className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
-                            />
-                            <button
-                                onClick={() => toggleTaskTimer(task.id)}
-                                title={task.timerStartedAt ? "Stop Timer" : "Start Timer"}
-                                className={`p-2 rounded border transition-colors ${task.timerStartedAt ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'}`}
-                            >
-                                {task.timerStartedAt ? <Pause size={16} /> : <Play size={16} />}
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Reminder</label>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={showReminder}
-                                onChange={e => setShowReminder(e.target.checked)}
-                                className="rounded border-slate-300 text-primary focus:ring-primary"
-                            />
-                            <input
-                                type="datetime-local"
-                                value={reminderDate}
-                                onChange={e => setReminderDate(e.target.value)}
-                                disabled={!showReminder}
-                                className="flex-1 p-2 border rounded text-sm dark:bg-slate-800 dark:border-slate-600 disabled:opacity-50"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Attachments */}
-                <div>
-                    <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Attachments</label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                        {localAttachments.map((url, i) => (
-                            <div key={i} className="relative group w-16 h-16 rounded overflow-hidden border border-slate-200">
-                                <img src={url} alt="Attachment" className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
-                                <button
-                                    onClick={() => setLocalAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                    className="absolute top-0 right-0 bg-red-500 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <X size={10} />
-                                </button>
-                            </div>
-                        ))}
-                        <label className="w-16 h-16 flex items-center justify-center border-2 border-dashed border-slate-300 rounded cursor-pointer hover:border-primary hover:text-primary transition-colors">
-                            <Plus size={20} />
-                            <input type="file" className="hidden" onChange={handleFileUpload} />
-                        </label>
-                    </div>
-                </div>
-
-                {/* Tags */}
-                <div>
-                    <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags</label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                        {typeTags.map(tag => (
-                            <div
-                                key={tag.id}
-                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${localTags.includes(tag.id) ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-slate-500'}`}
-                            >
-                                <button onClick={() => handleTagToggle(tag.id)}>{tag.name}</button>
-                                <button onClick={() => handleDeleteTag(tag.id)} className="hover:text-red-500 ml-1 text-slate-400"><Trash size={10} /></button>
-                            </div>
-                        ))}
-                    </div>
-                    <form onSubmit={handleCreateTag} className="flex gap-2">
                         <input
                             type="text"
-                            value={newTagName}
-                            onChange={e => setNewTagName(e.target.value)}
-                            placeholder="New tag..."
-                            className="flex-1 p-1.5 text-sm border rounded dark:bg-slate-800 dark:border-slate-600"
+                            value={localTitle}
+                            onChange={e => setLocalTitle(e.target.value)}
+                            placeholder="Task Title"
+                            className="w-full p-3 border rounded-lg text-lg font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600 dark:text-white placeholder-slate-400"
                         />
-                        <button type="submit" className="p-1.5 bg-slate-100 dark:bg-slate-700 rounded hover:bg-slate-200">
-                            <Plus size={16} />
-                        </button>
-                    </form>
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
-                    {!isCreating && (
-                        <>
-                            <button onClick={handleDelete} className="px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                                Delete Task
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    if (confirm('Archive this task? It will move to History and can be viewed in the History page.')) {
-                                        await archiveTaskManually(task.id);
-                                        onClose();
-                                    }
-                                }}
-                                className="px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg flex items-center gap-2 font-medium"
-                            >
-                                <Archive size={16} />
-                                Archive Now
-                            </button>
-                        </>
-                    )}
-                    <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg ml-auto">
-                        Cancel
-                    </button>
-                    <button onClick={handleSave} className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-blue-600 shadow-sm">
-                        {isCreating ? "Create Task" : "Save Changes"}
-                    </button>
-                </div>
-            </div>
-
-            {/* Image Preview Modal */}
-            {previewImage && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImage(null)}>
-                    <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
-                        <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
-                        <button
-                            onClick={() => setPreviewImage(null)}
-                            className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-sm transition-all"
-                        >
-                            <X size={24} />
-                        </button>
                     </div>
-                </div>
-            )}
-        </Modal>
+
+                    {/* Description */}
+                    <div>
+                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Description / Discuss Points</label>
+                        <textarea
+                            value={localDesc}
+                            onChange={e => setLocalDesc(e.target.value)}
+                            placeholder="Add description or discussion points..."
+                            className="w-full p-3 border rounded-lg h-24 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
+                        />
+                    </div>
+
+                    {/* Properties Grid */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assignee</label>
+                            <select value={localAssignee} onChange={e => setLocalAssignee(e.target.value)} className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none">
+                                <option value="">Unassigned</option>
+                                {users
+                                    .filter(u =>
+                                        !activeProject ? false :
+                                            u.id === activeProject.managerId ||
+                                            activeProject.leadIds.includes(u.id) ||
+                                            activeProject.resourceIds.includes(u.id)
+                                    )
+                                    .map(u => <option key={u.id} value={u.id}>{u.name}</option>)
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Priority</label>
+                            <select value={localPriority} onChange={e => setLocalPriority(e.target.value)} className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none">
+                                <option value="">None</option>
+                                {priorityTags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Time Tracking & Reminder */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* Reminder Section */}
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1.5">
+                                    <Clock size={12} /> Reminder
+                                    {!remindersEnabled && <Lock size={12} className="text-amber-500 opacity-70 ml-0.5" />}
+                                </label>
+                            </div>
+
+                            <div className="space-y-2">
+                                <input
+                                    type="datetime-local"
+                                    value={reminderDate}
+                                    onChange={e => setReminderDate(e.target.value)}
+                                    disabled={!remindersEnabled}
+                                    className={`w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 text-sm ${!remindersEnabled ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900' : ''}`}
+                                />
+                                {!remindersEnabled && (
+                                    <div
+                                        onClick={() => setPremiumModalFeature('Reminders')}
+                                        className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5 rounded border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                                    >
+                                        <Lock size={12} className="shrink-0" />
+                                        <span>Upgrade to enable reminders</span>
+                                    </div>
+                                )}
+
+                                {/* Multi-Select Recipients */}
+                                {remindersEnabled && reminderDate && (
+                                    <div className="border rounded dark:border-slate-600 overflow-hidden">
+                                        <div className="bg-slate-50 dark:bg-slate-700/50 px-2 py-1.5 border-b border-slate-100 dark:border-slate-600 flex items-center gap-2">
+                                            <Users size={12} className="text-slate-400" />
+                                            <span className="text-xs font-medium text-slate-500">Notify Members</span>
+                                        </div>
+                                        <div className="max-h-24 overflow-y-auto p-1.5 space-y-0.5">
+                                            {users
+                                                .filter(u => activeProject?.managerId === u.id || activeProject?.leadIds.includes(u.id) || activeProject?.resourceIds.includes(u.id))
+                                                .map(user => (
+                                                    <label key={user.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="rounded border-slate-300 text-primary focus:ring-primary/20"
+                                                            checked={localReminderUsers.includes(user.id)}
+                                                            onChange={e => {
+                                                                if (e.target.checked) setLocalReminderUsers([...localReminderUsers, user.id]);
+                                                                else setLocalReminderUsers(localReminderUsers.filter(id => id !== user.id));
+                                                            }}
+                                                        />
+                                                        <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{user.name} {user.id === currentUser?.id ? '(Me)' : ''}</span>
+                                                    </label>
+                                                ))
+                                            }
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Time Tracking (Existing) */}
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Estimated Time (min)</label>
+                            <input
+                                type="number"
+                                value={localEstimatedMinutes}
+                                onChange={e => setLocalEstimatedMinutes(parseInt(e.target.value) || 0)}
+                                className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Actual Time (min)</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    value={localActualMinutes}
+                                    onChange={e => {
+                                        const val = parseInt(e.target.value) || 0;
+                                        setLocalActualMinutes(val);
+                                        setElapsedTime(val * 60);
+                                    }}
+                                    className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
+                                />
+                                <button
+                                    onClick={() => toggleTaskTimer(task.id)}
+                                    title={task.timerStartedAt ? "Stop Timer" : "Start Timer"}
+                                    className={`p-2 rounded border transition-colors ${task.timerStartedAt ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'}`}
+                                >
+                                    {task.timerStartedAt ? <Pause size={16} /> : <Play size={16} />}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Attachments */}
+                    <div>
+                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Attachments</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {localAttachments.map((url, i) => (
+                                <div key={i} className="relative group w-16 h-16 rounded overflow-hidden border border-slate-200">
+                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
+                                    <button
+                                        onClick={() => setLocalAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                        className="absolute top-0 right-0 bg-red-500 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <X size={10} />
+                                    </button>
+                                </div>
+                            ))}
+                            {imageUploadEnabled ? (
+                                <div className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-300 cursor-pointer hover:border-primary hover:text-primary">
+                                    <label className="w-full h-full flex items-center justify-center">
+                                        <Plus size={20} />
+                                        <input type="file" className="hidden" onChange={handleFileUpload} />
+                                    </label>
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={() => setPremiumModalFeature('Image Uploads')}
+                                    className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-200 bg-slate-50 cursor-not-allowed"
+                                    title="Image Upload Disabled"
+                                >
+                                    <Lock size={16} className="text-slate-400" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div>
+                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags</label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {typeTags.map(tag => (
+                                <div
+                                    key={tag.id}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${localTags.includes(tag.id) ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-slate-500'}`}
+                                >
+                                    <button onClick={() => handleTagToggle(tag.id)}>{tag.name}</button>
+                                    <button onClick={() => handleDeleteTag(tag.id)} className="hover:text-red-500 ml-1 text-slate-400"><Trash size={10} /></button>
+                                </div>
+                            ))}
+                        </div>
+                        <form onSubmit={handleCreateTag} className="flex gap-2">
+                            <input
+                                type="text"
+                                value={newTagName}
+                                onChange={e => setNewTagName(e.target.value)}
+                                placeholder="New tag..."
+                                className="flex-1 p-1.5 text-sm border rounded dark:bg-slate-800 dark:border-slate-600"
+                            />
+                            <button type="submit" className="p-1.5 bg-slate-100 dark:bg-slate-700 rounded hover:bg-slate-200">
+                                <Plus size={16} />
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Actions - Single Line */}
+                    <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
+                        {!isCreating && (
+                            <div className="flex gap-2 mr-auto">
+                                <button
+                                    onClick={handleDelete}
+                                    className="px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg whitespace-nowrap"
+                                    title="Delete Task"
+                                >
+                                    <Trash size={16} className="inline mr-1" />
+                                    Delete
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setConfirmModal({
+                                            isOpen: true,
+                                            title: 'Archive Task',
+                                            message: 'Archive this task? It will move to History and can be viewed in the History page.',
+                                            confirmText: 'Archive Now',
+                                            onConfirm: async () => {
+                                                await archiveTaskManually(task.id);
+                                                onClose();
+                                            }
+                                        });
+                                    }}
+                                    className="px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg flex items-center gap-1 whitespace-nowrap font-medium"
+                                    title="Archive Task"
+                                >
+                                    <Archive size={16} />
+                                    Archive
+                                </button>
+                            </div>
+                        )}
+                        <div className={`flex gap-2 ${isCreating ? 'w-full justify-end' : ''}`}>
+                            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg whitespace-nowrap">
+                                Cancel
+                            </button>
+                            <button onClick={handleSave} className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-blue-600 shadow-sm whitespace-nowrap">
+                                {isCreating ? "Create Task" : "Save Changes"}
+                            </button>
+                        </div>
+                    </div>
+                </div >
+
+                {/* Image Preview Modal */}
+                {
+                    previewImage && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImage(null)}>
+                            <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
+                                <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+                                <button
+                                    onClick={() => setPreviewImage(null)}
+                                    className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-sm transition-all"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+                        </div>
+                    )
+                }
+            </Modal >
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                isDestructive={confirmModal.isDestructive}
+                confirmText={confirmModal.confirmText}
+            />
+            {/* Premium Upsell Modal */}
+            {
+                premiumModalFeature && (
+                    <PremiumModal
+                        isOpen={!!premiumModalFeature}
+                        onClose={() => setPremiumModalFeature(null)}
+                        featureName={premiumModalFeature}
+                    />
+                )
+            }
+        </>
     );
 };

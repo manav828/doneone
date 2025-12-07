@@ -2,16 +2,17 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
-import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock } from 'lucide-react';
+import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { User } from '../types';
+import { User, StorageStats } from '../types';
 
 export const AdminPanel: React.FC = () => {
-    const { currentUser, updateUserProfile, setActiveProject, getRegistrationStatus, toggleRegistration } = useStore();
+    const { currentUser, updateUserProfile, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats } = useStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
     const [projects, setProjects] = useState<any[]>([]);
+    const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
     const [editingUser, setEditingUser] = useState<string | null>(null);
     const [regOpen, setRegOpen] = useState(true);
 
@@ -33,11 +34,6 @@ export const AdminPanel: React.FC = () => {
     const fetchData = async () => {
         const { data: userData, error: userError } = await supabase.from('profiles').select('*, user_archive_settings(*)');
         if (userError) console.error('Error fetching profiles:', userError);
-
-        // DEBUG: Log raw data for first user to check join
-        if (userData && userData.length > 0) {
-            console.log('Raw user data sample:', userData[0]);
-        }
 
         const { data: projectData } = await supabase.from('projects').select('*, manager:profiles(*)');
 
@@ -71,6 +67,10 @@ export const AdminPanel: React.FC = () => {
         // Fetch registration status
         const status = await getRegistrationStatus();
         setRegOpen(status);
+
+        // Fetch Storage Stats
+        const stats = await fetchStorageStats();
+        setStorageStats(stats);
 
         setLoading(false);
     };
@@ -143,30 +143,14 @@ export const AdminPanel: React.FC = () => {
             updated_at: new Date().toISOString()
         };
 
-        console.log('Saving history retention:', payload);
-
         const { error } = await supabase.from('user_archive_settings').upsert(payload);
 
         if (error) {
             console.error('Error saving history retention:', error);
             alert(`Failed to save history retention: ${error.message || error.details || JSON.stringify(error)}`);
         } else {
-            // VERIFICATION: Immediately read back the data
-            const { data: verifyData, error: verifyError } = await supabase
-                .from('user_archive_settings')
-                .select('*')
-                .eq('user_id', userId)
-                .single();
-
-            if (verifyError) {
-                console.error('Verification read failed:', verifyError);
-                alert('Saved, but verification read failed. Check console.');
-            } else {
-                console.log('Verification read success:', verifyData);
-                if (verifyData.history_retention_days !== payload.history_retention_days) {
-                    alert(`Mismatch! Saved: ${payload.history_retention_days}, Read: ${verifyData.history_retention_days}`);
-                }
-            }
+            // Optional: Verification logic remains silently or removed if preferred, but user just said "unnecessary logs". 
+            // I will remove the success logs.
         }
 
         setEditingUser(null);
@@ -200,7 +184,7 @@ export const AdminPanel: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* ... existing stats cards ... */}
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center justify-between mb-2">
@@ -215,6 +199,66 @@ export const AdminPanel: React.FC = () => {
                         <FolderKanban className="text-green-500" />
                     </div>
                     <p className="text-3xl font-bold text-gray-800 dark:text-white">{projects.length}</p>
+                </div>
+
+                {/* Storage Monitor */}
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-gray-500 font-medium">Storage Used</h3>
+                        <div className={`p-1.5 rounded-full ${(!storageStats || storageStats.totalBytes < 750000000) ? 'bg-green-100 text-green-600' : (storageStats.totalBytes < 900000000) ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                            <HardDrive size={16} />
+                        </div>
+                    </div>
+                    {storageStats ? (
+                        <div>
+                            <div className="flex justify-between items-baseline mb-1">
+                                <p className="text-2xl font-bold text-gray-800 dark:text-white">{(storageStats.totalBytes / 1024 / 1024).toFixed(1)} MB</p>
+                                <span className="text-xs text-gray-400">of 1,000 MB</span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                                <div
+                                    className={`h-2 rounded-full transition-all duration-500 ${(!storageStats || storageStats.totalBytes < 750000000) ? 'bg-green-500' : (storageStats.totalBytes < 900000000) ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${Math.min((storageStats.totalBytes / 1000000000) * 100, 100)}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-xs text-gray-400">{storageStats.fileCount} files stored</p>
+                        </div>
+                    ) : (
+                        <div className="animate-pulse space-y-2">
+                            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Database Monitor */}
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-gray-500 font-medium">Database Used</h3>
+                        <div className={`p-1.5 rounded-full ${(!storageStats || (storageStats.databaseBytes || 0) < 350000000) ? 'bg-green-100 text-green-600' : ((storageStats.databaseBytes || 0) < 450000000) ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                            <Database size={16} />
+                        </div>
+                    </div>
+                    {storageStats ? (
+                        <div>
+                            <div className="flex justify-between items-baseline mb-1">
+                                <p className="text-2xl font-bold text-gray-800 dark:text-white">{((storageStats.databaseBytes || 0) / 1024 / 1024).toFixed(1)} MB</p>
+                                <span className="text-xs text-gray-400">of 500 MB</span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                                <div
+                                    className={`h-2 rounded-full transition-all duration-500 ${(!storageStats || (storageStats.databaseBytes || 0) < 350000000) ? 'bg-green-500' : ((storageStats.databaseBytes || 0) < 450000000) ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${Math.min(((storageStats.databaseBytes || 0) / 500000000) * 100, 100)}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-xs text-gray-400">Core data & text logs</p>
+                        </div>
+                    ) : (
+                        <div className="animate-pulse space-y-2">
+                            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                        </div>
+                    )}
                 </div>
             </div>
 

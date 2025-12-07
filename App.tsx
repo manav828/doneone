@@ -30,8 +30,10 @@ const App: React.FC = () => {
       tasks.forEach(task => {
         if (task.reminderAt && !task.description?.includes("[Notified]")) {
           if (task.reminderAt <= now && task.reminderAt > now - 60000) {
-            // Send Notification
-            if (Notification.permission === 'granted') {
+            // Send Notification ONLY if tasked to me or in reminder list
+            const isRecipient = task.assigneeId === currentUser.id || (task.reminderUserIds && task.reminderUserIds.includes(currentUser.id));
+
+            if (isRecipient && Notification.permission === 'granted') {
               new Notification(`Task Reminder: ${task.title}`, {
                 body: `This task is due now!`,
                 icon: 'icon128.png'

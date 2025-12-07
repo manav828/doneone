@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings } from 'lucide-react';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
 import { DataManagementModal } from './DataManagementModal';
+import { PremiumModal } from './PremiumModal';
 
 export const TopBar: React.FC = () => {
   const {
@@ -23,7 +25,8 @@ export const TopBar: React.FC = () => {
     currentView,
     setView,
     searchQuery,
-    setSearchQuery
+    setSearchQuery,
+    canAccessPremium
   } = useStore();
 
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
@@ -31,9 +34,12 @@ export const TopBar: React.FC = () => {
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState('');
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
   const recentActivity = activities.find(a => a.projectId === activeProjectId);
@@ -67,8 +73,9 @@ export const TopBar: React.FC = () => {
   }, [activeProject]);
 
   const handleViewChange = (view: 'board' | 'list' | 'calendar') => {
-    if (view !== 'board' && !currentUser?.isPremium) {
-      alert("Upgrade to Premium to access List and Calendar views!");
+    if (view !== 'board' && !canAccessPremium()) {
+      setPremiumFeature(view === 'list' ? 'List View' : 'Calendar View');
+      setIsPremiumModalOpen(true);
       return;
     }
     setView(view);
@@ -97,7 +104,7 @@ export const TopBar: React.FC = () => {
             <h2 className="text-lg font-medium text-slate-400">Dashboard</h2>
           )}
 
-          {activeProject && (
+          {activeProject && location.pathname === '/' && (
             <div className="hidden md:flex items-center gap-4 pl-6 border-l border-slate-200 dark:border-slate-700 h-8">
               {/* Search */}
               <div className="relative">
@@ -126,7 +133,7 @@ export const TopBar: React.FC = () => {
           >
             {themeMode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          {activeProject && (
+          {activeProject && location.pathname === '/' && (
             <>
               {/* View Switcher */}
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg mr-2">
@@ -152,34 +159,35 @@ export const TopBar: React.FC = () => {
                   <Calendar size={16} />
                 </button>
               </div>
-
-              {/* Advanced Tools */}
-              <div className="flex items-center gap-1 mr-4 border-r border-slate-200 dark:border-slate-700 pr-4">
-                {activeProject.managerId === currentUser.id && (
-                  <button
-                    onClick={() => setIsReportsModalOpen(true)}
-                    className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
-                    title="Reports (Manager Only)"
-                  >
-                    <BarChart size={18} />
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsDataModalOpen(true)}
-                  className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
-                  title="Data & Archive"
-                >
-                  <Database size={18} />
-                </button>
-                <button
-                  onClick={() => setIsMembersModalOpen(true)}
-                  className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
-                  title="Team Members"
-                >
-                  <Users size={18} />
-                </button>
-              </div>
             </>
+          )}
+
+          {activeProject && (
+            <div className="flex items-center gap-1 mr-4 border-r border-slate-200 dark:border-slate-700 pr-4">
+              {activeProject.managerId === currentUser.id && (
+                <button
+                  onClick={() => setIsReportsModalOpen(true)}
+                  className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
+                  title="Reports (Manager Only)"
+                >
+                  <BarChart size={18} />
+                </button>
+              )}
+              <button
+                onClick={() => setIsDataModalOpen(true)}
+                className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
+                title="Data & Archive"
+              >
+                <Database size={18} />
+              </button>
+              <button
+                onClick={() => setIsMembersModalOpen(true)}
+                className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
+                title="Team Members"
+              >
+                <Users size={18} />
+              </button>
+            </div>
           )}
 
           {/* Notifications */}
@@ -275,7 +283,7 @@ export const TopBar: React.FC = () => {
             )}
           </div>
         </div>
-      </header>
+      </header >
 
       <ProjectMembersModal
         isOpen={isMembersModalOpen}
@@ -283,6 +291,11 @@ export const TopBar: React.FC = () => {
       />
       <ReportsModal isOpen={isReportsModalOpen} onClose={() => setIsReportsModalOpen(false)} />
       <DataManagementModal isOpen={isDataModalOpen} onClose={() => setIsDataModalOpen(false)} />
+      <PremiumModal
+        isOpen={isPremiumModalOpen}
+        onClose={() => setIsPremiumModalOpen(false)}
+        featureName={premiumFeature}
+      />
     </>
   );
 };

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, ShieldAlert, User, FolderKanban, Bell, Filter, LayoutList, Calendar, Archive, Settings, Crown, Clock, Download } from 'lucide-react';
+import { useStore } from '../store';
 
 export const Guide: React.FC = () => {
   return (
@@ -138,50 +139,52 @@ export const Guide: React.FC = () => {
         </section>
 
         {/* 4. Admin Panel (If applicable) */}
-        <section>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-            <Shield className="text-red-500" /> Admin Controls
-          </h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-              Super Admins have access to the <strong>Admin Panel</strong> to manage global settings and user limits.
-            </p>
+        {useStore.getState().currentUser?.email === 'manavss828@gmail.com' && (
+          <section>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
+              <Shield className="text-red-500" /> Admin Controls
+            </h2>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                Super Admins have access to the <strong>Admin Panel</strong> to manage global settings and user limits.
+              </p>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-bold text-sm uppercase text-gray-500 mb-3">User Management</h4>
-                <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                  <li className="flex items-center gap-2">
-                    <Crown size={16} className="text-yellow-500" />
-                    <span><strong>Premium Status:</strong> Toggle premium features for users.</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <FolderKanban size={16} className="text-blue-500" />
-                    <span><strong>Limits:</strong> Set max projects, leads, and resources per user.</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Settings size={16} className="text-gray-500" />
-                    <span><strong>Features:</strong> Enable/disable notifications, time tracking, etc.</span>
-                  </li>
-                </ul>
-              </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-bold text-sm uppercase text-gray-500 mb-3">User Management</h4>
+                  <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                    <li className="flex items-center gap-2">
+                      <Crown size={16} className="text-yellow-500" />
+                      <span><strong>Premium Status:</strong> Toggle premium features for users.</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <FolderKanban size={16} className="text-blue-500" />
+                      <span><strong>Limits:</strong> Set max projects, leads, and resources per user.</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Settings size={16} className="text-gray-500" />
+                      <span><strong>Features:</strong> Enable/disable notifications, time tracking, etc.</span>
+                    </li>
+                  </ul>
+                </div>
 
-              <div>
-                <h4 className="font-bold text-sm uppercase text-gray-500 mb-3">Data Retention</h4>
-                <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                  <li className="flex items-center gap-2">
-                    <Clock size={16} className="text-purple-500" />
-                    <span><strong>History Retention:</strong> Set how long archived data is kept (e.g., 90 days).</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">∞</span>
-                    <span>Leave empty to keep history forever.</span>
-                  </li>
-                </ul>
+                <div>
+                  <h4 className="font-bold text-sm uppercase text-gray-500 mb-3">Data Retention</h4>
+                  <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                    <li className="flex items-center gap-2">
+                      <Clock size={16} className="text-purple-500" />
+                      <span><strong>History Retention:</strong> Set how long archived data is kept (e.g., 90 days).</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">∞</span>
+                      <span>Leave empty to keep history forever.</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
       </div>
     </div>

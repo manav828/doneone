@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store';
 import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2 } from 'lucide-react';
 import { Modal } from './Modal';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { TemplateSelector } from './TemplateSelector';
 import { BoardTemplate } from '../templates/templates';
 
@@ -23,6 +23,7 @@ export const Sidebar: React.FC = () => {
   } = useStore();
 
   const navigate = useNavigate();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -44,7 +45,17 @@ export const Sidebar: React.FC = () => {
   const [joinMessage, setJoinMessage] = useState({ type: '', text: '' });
 
   const visibleProjects = getVisibleProjects();
-  const isSuperAdmin = currentUser?.email === 'manavss828@gmail.com';
+
+  const isSuperAdmin = currentUser?.email?.toLowerCase() === 'manavss828@gmail.com';
+
+  // DEBUG ADMIN ACCESS
+  console.log('🔐 ADMIN ACCESS CHECK:', {
+    email: currentUser?.email,
+    emailLower: currentUser?.email?.toLowerCase(),
+    isSuperAdmin,
+    currentUserId: currentUser?.id,
+    currentUserName: currentUser?.name
+  });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,7 +233,7 @@ export const Sidebar: React.FC = () => {
             )}
             <button
               onClick={() => { navigate('/reports'); }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/reports' ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
               title={isCollapsed ? "Reports" : undefined}
             >
               <BarChart2 size={18} />
@@ -230,7 +241,7 @@ export const Sidebar: React.FC = () => {
             </button>
             <button
               onClick={() => { navigate('/history'); }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/history' ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
               title={isCollapsed ? "History" : undefined}
             >
               <Archive size={18} />

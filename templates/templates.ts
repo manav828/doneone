@@ -70,7 +70,7 @@ export const BUSINESS_TEMPLATES: BoardTemplate[] = [
             { name: 'Cold Lead', color: '#3b82f6', type: 'Priority' }
         ],
         roles: { manager: 'Sales Manager', lead: 'Sales Lead', resource: 'Sales Rep' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'business-marketing-campaign',
@@ -92,7 +92,7 @@ export const BUSINESS_TEMPLATES: BoardTemplate[] = [
             { name: 'Content', color: '#10b981', type: 'Type' }
         ],
         roles: { manager: 'Marketing Manager', lead: 'Campaign Lead', resource: 'Marketer' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'business-hiring-pipeline',
@@ -114,7 +114,7 @@ export const BUSINESS_TEMPLATES: BoardTemplate[] = [
             { name: 'Marketing', color: '#f59e0b', type: 'Type' }
         ],
         roles: { manager: 'HR Manager', lead: 'Recruiter', resource: 'Interviewer' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'business-customer-support',
@@ -135,7 +135,7 @@ export const BUSINESS_TEMPLATES: BoardTemplate[] = [
             { name: 'Feature Request', color: '#3b82f6', type: 'Type' }
         ],
         roles: { manager: 'Support Manager', lead: 'Support Lead', resource: 'Support Agent' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     }
 ];
 
@@ -184,7 +184,7 @@ export const CREATIVE_TEMPLATES: BoardTemplate[] = [
             { name: 'Print', color: '#f59e0b', type: 'Type' }
         ],
         roles: { manager: 'Design Lead', lead: 'Senior Designer', resource: 'Designer' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'creative-video-production',
@@ -205,7 +205,7 @@ export const CREATIVE_TEMPLATES: BoardTemplate[] = [
             { name: 'Vlog', color: '#8b5cf6', type: 'Type' }
         ],
         roles: { manager: 'Producer', lead: 'Director', resource: 'Editor' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'creative-social-media',
@@ -226,7 +226,7 @@ export const CREATIVE_TEMPLATES: BoardTemplate[] = [
             { name: 'LinkedIn', color: '#0ea5e9', type: 'Type' }
         ],
         roles: { manager: 'Social Media Manager', lead: 'Content Lead', resource: 'Creator' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'creative-music-production',
@@ -248,7 +248,7 @@ export const CREATIVE_TEMPLATES: BoardTemplate[] = [
             { name: 'Collaboration', color: '#3b82f6', type: 'Type' }
         ],
         roles: { manager: 'Producer', lead: 'Engineer', resource: 'Artist' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     }
 ];
 
@@ -294,7 +294,7 @@ export const PERSONAL_TEMPLATES: BoardTemplate[] = [
             { name: 'Living Room', color: '#8b5cf6', type: 'Type' }
         ],
         roles: { manager: 'Homeowner', lead: 'Homeowner', resource: 'Helper' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'personal-event-planning',
@@ -316,7 +316,7 @@ export const PERSONAL_TEMPLATES: BoardTemplate[] = [
             { name: 'Guests', color: '#3b82f6', type: 'Type' }
         ],
         roles: { manager: 'Organizer', lead: 'Organizer', resource: 'Helper' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'personal-fitness-goals',
@@ -336,7 +336,7 @@ export const PERSONAL_TEMPLATES: BoardTemplate[] = [
             { name: 'Nutrition', color: '#10b981', type: 'Type' }
         ],
         roles: { manager: 'Self', lead: 'Self', resource: 'Workout Buddy' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'personal-meal-planning',
@@ -356,7 +356,7 @@ export const PERSONAL_TEMPLATES: BoardTemplate[] = [
             { name: 'Dinner', color: '#8b5cf6', type: 'Type' }
         ],
         roles: { manager: 'Chef', lead: 'Chef', resource: 'Helper' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     }
 ];
 
@@ -405,7 +405,7 @@ export const EDUCATION_TEMPLATES: BoardTemplate[] = [
             { name: 'Analysis', color: '#8b5cf6', type: 'Type' }
         ],
         roles: { manager: 'Advisor', lead: 'Research Lead', resource: 'Researcher' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'education-thesis',
@@ -427,7 +427,7 @@ export const EDUCATION_TEMPLATES: BoardTemplate[] = [
             { name: 'Revision', color: '#ef4444', type: 'Type' }
         ],
         roles: { manager: 'Advisor', lead: 'Committee Member', resource: 'Student' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'education-online-course',
@@ -448,7 +448,7 @@ export const EDUCATION_TEMPLATES: BoardTemplate[] = [
             { name: 'Resource', color: '#10b981', type: 'Type' }
         ],
         roles: { manager: 'Course Creator', lead: 'Instructor', resource: 'Assistant' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'education-student-assignments',
@@ -468,7 +468,7 @@ export const EDUCATION_TEMPLATES: BoardTemplate[] = [
             { name: 'Project', color: '#f59e0b', type: 'Type' }
         ],
         roles: { manager: 'Teacher', lead: 'TA', resource: 'Student' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     }
 ];
 
@@ -518,7 +518,7 @@ export const TECH_TEMPLATES: BoardTemplate[] = [
             { name: 'Low', color: '#10b981', type: 'Priority' }
         ],
         roles: { manager: 'QA Manager', lead: 'QA Lead', resource: 'Developer' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'tech-devops-pipeline',
@@ -539,7 +539,7 @@ export const TECH_TEMPLATES: BoardTemplate[] = [
             { name: 'Monitoring', color: '#f59e0b', type: 'Type' }
         ],
         roles: { manager: 'DevOps Manager', lead: 'DevOps Lead', resource: 'DevOps Engineer' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'tech-product-roadmap',
@@ -560,7 +560,7 @@ export const TECH_TEMPLATES: BoardTemplate[] = [
             { name: 'Q3', color: '#f59e0b', type: 'Custom' }
         ],
         roles: { manager: 'Product Manager', lead: 'Product Lead', resource: 'Product Owner' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     },
     {
         id: 'tech-api-development',
@@ -581,7 +581,7 @@ export const TECH_TEMPLATES: BoardTemplate[] = [
             { name: 'WebSocket', color: '#f59e0b', type: 'Type' }
         ],
         roles: { manager: 'API Lead', lead: 'Backend Lead', resource: 'Developer' },
-        isPremium: true // PREMIUM
+        isPremium: false // FREE
     }
 ];
 

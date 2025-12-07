@@ -3,9 +3,9 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
 import { useStore } from '../store';
-import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive } from 'lucide-react';
+import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare } from 'lucide-react';
 import { Modal } from './Modal';
-
+import { ConfirmModal } from './ConfirmModal';
 import { TaskEditModal } from './TaskEditModal';
 
 interface Props {
@@ -44,6 +44,19 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+  });
 
   // Timer Local State
   const [elapsedTime, setElapsedTime] = useState(task.timeTracked || 0);
@@ -82,8 +95,8 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
   // Animation classes
   const animationClass = task.isHighlighted ? 'task-highlighted' :
-    isOverdue ? 'task-overdue' :
-      isDueSoon ? 'task-reminder-soon' : '';
+    (isOverdue && !isDoneColumn) ? 'task-overdue' :
+      (isDueSoon && !isDoneColumn) ? 'task-reminder-soon' : '';
 
   if (isDragging) {
     return (
@@ -105,6 +118,20 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
     await toggleTaskTimer(task.id);
   };
 
+  const containerClasses = `
+    group relative flex flex-col gap-2 p-3 rounded-lg border shadow-sm transition-all duration-200 select-none
+    ${isDragging ? 'opacity-50 scale-105 z-50 cursor-grabbing' : 'opacity-100 hover:border-primary/50 cursor-grab hover:shadow-md'}
+    bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700
+    ${animationClass}
+    ${canMove ? 'cursor-grab active:cursor-grabbing hover:shadow-card-hover hover:-translate-y-0.5' : 'cursor-default opacity-90'}
+    ${isOverdue && !isDoneColumn
+      ? 'border-red-400 dark:border-red-600 bg-red-50/30 dark:bg-red-900/10'
+      : isCreatedByMe
+        ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5 hover:border-blue-400'
+        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 shadow-card'
+    }
+  `;
+
   return (
     <>
       <div
@@ -113,15 +140,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
         {...attributes}
         {...listeners}
         onClick={handleCardClick}
-        className={`group cursor-pointer bg-white dark:bg-slate-700 p-3.5 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm hover:shadow-md hover:border-primary dark:hover:border-primary transition-all duration-200 relative ${animationClass}
-          ${canMove ? 'cursor-grab active:cursor-grabbing hover:shadow-card-hover hover:-translate-y-0.5' : 'cursor-default opacity-90'}
-          ${isOverdue
-            ? 'border-red-400 dark:border-red-600 bg-red-50/30 dark:bg-red-900/10'
-            : isCreatedByMe
-              ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5 hover:border-blue-400'
-              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 shadow-card'
-          }
-        `}
+        className={containerClasses}
       >
         {/* Toggle Collapse Button */}
         <button
@@ -229,9 +248,13 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm('Archive this task?')) {
-                        archiveTaskManually(task.id);
-                      }
+                      setConfirmModal({
+                        isOpen: true,
+                        title: 'Archive Task',
+                        message: 'Are you sure you want to archive this task? It will be moved to History.',
+                        confirmText: 'Archive',
+                        onConfirm: () => archiveTaskManually(task.id)
+                      });
                     }}
                     className="p-1 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
                     title="Archive Task"
@@ -241,9 +264,9 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                 )}
 
                 {(task.reminderAt || task.updatedAt) && (
-                  <span className={`text-[10px] font-medium flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
-                    {task.reminderAt && remindersEnabled && <Clock size={10} />}
-                    {task.reminderAt && remindersEnabled
+                  <span className={`text-[10px] font-medium flex items-center gap-1 ${isOverdue && !isDoneColumn ? 'text-red-500' : 'text-slate-400'}`}>
+                    {task.reminderAt && remindersEnabled && !isDoneColumn && <Clock size={10} />}
+                    {task.reminderAt && remindersEnabled && !isDoneColumn
                       ? new Date(task.reminderAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       : new Date(task.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
@@ -257,21 +280,29 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
       <TaskEditModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} task={task} />
 
       {/* Image Preview Modal */}
-      {
-        previewImage && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImage(null)}>
-            <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
-              <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-sm transition-all"
-              >
-                <X size={24} />
-              </button>
-            </div>
+      {previewImage && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
+            <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-sm transition-all"
+            >
+              <X size={24} />
+            </button>
           </div>
-        )
-      }
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        isDestructive={confirmModal.isDestructive}
+        confirmText={confirmModal.confirmText || 'Confirm'}
+      />
     </>
   );
 };

@@ -12,37 +12,43 @@ interface ListViewProps {
 
 const ListGroup: React.FC<{ column: Column; tasks: Task[]; users: User[] }> = ({ column, tasks, users }) => {
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const { addTask, activeProjectId, tags } = useStore();
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const { activeProjectId } = useStore();
 
-    const handleAddTask = async () => {
-        if (!activeProjectId) return;
-        const title = prompt("Enter task title:");
-        if (title) {
-            await addTask(activeProjectId, column.id, title);
-        }
+    // Dummy task for creation
+    const dummyTask: Task = {
+        id: '',
+        projectId: activeProjectId || '',
+        columnId: column.id,
+        title: '',
+        creatorId: '', // store will handle
+        tagIds: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        orderIndex: 0
     };
 
     return (
         <div className="mb-6">
             {/* Group Header */}
-            <div className="flex items-center justify-between mb-2 group">
+            <div className="flex items-center justify-between mb-2 group bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
                 <div
-                    className="flex items-center gap-2 cursor-pointer"
+                    className="flex items-center gap-3 cursor-pointer flex-1"
                     onClick={() => setIsCollapsed(!isCollapsed)}
                 >
-                    <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500">
+                    <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-500 transition-colors">
                         {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                     </button>
                     <div className="flex items-center gap-2">
-                        <div className="w-1 h-4 rounded-full" style={{ backgroundColor: column.color || '#cbd5e1' }}></div>
-                        <h3 className="font-semibold text-slate-700 dark:text-slate-200">{column.title}</h3>
-                        <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs px-2 py-0.5 rounded-full font-medium">
+                        <div className="w-2 h-2 rounded-full ring-2 ring-offset-2 dark:ring-offset-slate-800" style={{ backgroundColor: column.color || '#cbd5e1' }}></div>
+                        <h3 className="font-bold text-slate-800 dark:text-white text-sm uppercase tracking-wide">{column.title}</h3>
+                        <span className="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs px-2 py-0.5 rounded-full font-medium">
                             {tasks.length}
                         </span>
                     </div>
                 </div>
                 <button
-                    onClick={handleAddTask}
+                    onClick={() => setIsCreateModalOpen(true)}
                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 hover:text-primary"
                 >
                     <Plus size={16} />
@@ -53,12 +59,9 @@ const ListGroup: React.FC<{ column: Column; tasks: Task[]; users: User[] }> = ({
             {!isCollapsed && (
                 <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 uppercase font-medium border-b border-slate-100 dark:border-slate-700">
+                        <thead className="bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-slate-300 uppercase font-bold border-b border-slate-200 dark:border-slate-600">
                             <tr>
-                                <th className="py-3 pl-4 pr-2 w-8">
-                                    <input type="checkbox" className="rounded border-slate-300" />
-                                </th>
-                                <th className="py-3 px-2 w-1/4">Task Name</th>
+                                <th className="py-3 px-4 w-1/4">Task Name</th>
                                 <th className="py-3 px-2 w-1/4">Description</th>
                                 <th className="py-3 px-2">Estimation</th>
                                 <th className="py-3 px-2">Type</th>
@@ -69,11 +72,11 @@ const ListGroup: React.FC<{ column: Column; tasks: Task[]; users: User[] }> = ({
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                             {tasks.map(task => (
-                                <ListRow key={task.id} task={task} users={users} tags={tags} />
+                                <ListRow key={task.id} task={task} users={users} tags={useStore.getState().tags} />
                             ))}
                             {tasks.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="py-8 text-center text-slate-400 text-sm italic">
+                                    <td colSpan={7} className="py-8 text-center text-slate-400 text-sm italic">
                                         No tasks in this stage
                                     </td>
                                 </tr>
@@ -81,6 +84,25 @@ const ListGroup: React.FC<{ column: Column; tasks: Task[]; users: User[] }> = ({
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {activeProjectId && (
+                <TaskEditModal
+                    isOpen={isCreateModalOpen}
+                    onClose={() => setIsCreateModalOpen(false)}
+                    task={dummyTask}
+                    isCreating={true}
+                    onSaveNew={async (data) => {
+                        const { addTask } = useStore.getState();
+                        const newTask = await addTask(activeProjectId, column.id, data.title || 'Untitled');
+                        if (newTask && data.description) {
+                            // We might need an update call if addTask only takes title
+                            // But addTask implementation in store is: addTask(projectId, columnId, title)
+                            // So we need to update it afterwards if we have more data
+                            await useStore.getState().updateTask(newTask.id, data);
+                        }
+                    }}
+                />
             )}
         </div>
     );
@@ -105,10 +127,7 @@ const ListRow: React.FC<{ task: Task; users: User[]; tags: any[] }> = ({ task, u
                 className="group hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer text-sm"
                 onClick={() => setIsModalOpen(true)}
             >
-                <td className="py-3 pl-4 pr-2" onClick={e => e.stopPropagation()}>
-                    <input type="checkbox" className="rounded border-slate-300" />
-                </td>
-                <td className="py-3 px-2 font-medium text-slate-700 dark:text-slate-200">
+                <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-200">
                     <div className="flex items-center gap-2">
                         <div className="p-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-400">
                             <Tag size={12} />

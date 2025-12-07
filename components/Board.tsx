@@ -19,8 +19,11 @@ export const Board: React.FC = () => {
     setStatusFilter,
     getVisibleUsers,
     currentUser,
+    projects,
     currentView
   } = useStore();
+
+  const project = projects.find(p => p.id === activeProjectId);
 
   const visibleTasks = activeProjectId ? getFilteredTasks(activeProjectId) : [];
   const visibleUsers = getVisibleUsers();
@@ -47,23 +50,37 @@ export const Board: React.FC = () => {
       {/* Filter Toolbar */}
       <div className="px-6 pt-4 pb-2 flex flex-wrap items-center gap-3 shrink-0">
         {/* Member Filter */}
+        {/* Member Filter */}
         {usersToFilter.length > 0 && (
           <div className="relative group">
             <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
               <User size={12} />
             </div>
             <select
-              value={activeMemberFilter || ''}
-              onChange={(e) => setMemberFilter(e.target.value || null)}
+              value={activeMemberFilter || 'ALL'}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'ALL') setMemberFilter(null);
+                else setMemberFilter(val);
+              }}
               className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
             >
-              <option value="">All Members</option>
-              {usersToFilter.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
+              <option value="ME">My Workspace</option>
+              {(currentUser?.email === 'manavss828@gmail.com' || project?.managerId === currentUser?.id || project?.leadIds.includes(currentUser?.id || '')) && (
+                <option value="ALL">All Team</option>
+              )}
+              <optgroup label="Team Members">
+                {usersToFilter.map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </optgroup>
             </select>
-            {activeMemberFilter && (
-              <button onClick={() => setMemberFilter(null)} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
+            {(activeMemberFilter && activeMemberFilter !== 'ME') && (
+              <button
+                onClick={() => setMemberFilter('ME')}
+                className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500"
+                title="Reset to My Workspace"
+              >
                 <X size={10} />
               </button>
             )}

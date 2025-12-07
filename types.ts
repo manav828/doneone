@@ -41,19 +41,18 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
   orderIndex: number;
-  reminderAt?: number; // Timestamp
-  timeTracked?: number; // Total seconds tracked
-  estimatedTime?: number; // Estimated time in seconds
-  timerStartedAt?: number; // Timestamp when timer started, or null if stopped
-  startedAt?: number; // When task moved to In Progress
-  completedAt?: number; // When task moved to Done
-  attachments?: string[]; // Array of image URLs
-  // Browser capture features (Phase 1)
-  capturedUrl?: string; // URL of webpage where task was created
-  capturedText?: string; // Selected text from webpage
-  capturedScreenshot?: string; // Screenshot URL (Phase 3)
-  // Auto-move features
-  isHighlighted?: boolean; // Visual highlight for auto-moved tasks
+  reminderAt?: number;
+  reminderUserIds?: string[]; // Array of user IDs for multi-user reminders
+  timeTracked?: number;
+  estimatedTime?: number;
+  timerStartedAt?: number;
+  startedAt?: number;
+  completedAt?: number;
+  attachments?: string[];
+  capturedUrl?: string;
+  capturedText?: string;
+  capturedScreenshot?: string;
+  isHighlighted?: boolean;
 }
 
 export interface Column {
@@ -62,6 +61,7 @@ export interface Column {
   title: string;
   orderIndex: number;
   color?: string;
+  isArchiveEnabled?: boolean;
 }
 
 export interface Project {
@@ -77,6 +77,7 @@ export interface Project {
   themeColor: string; // Hex for primary color
   autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
   viewAllReportsEnabled?: boolean; // If true, all members can see all reports (default: false)
+  manager?: User; // Full manager details including premium status
 }
 
 export interface Activity {
@@ -145,6 +146,12 @@ export interface ArchiveSettings {
   historyRetentionDays?: number | null;
   createdAt?: number;
   updatedAt: number;
+}
+
+export interface StorageStats {
+  totalBytes: number;
+  fileCount: number;
+  databaseBytes?: number; // Optional for backward compatibility
 }
 
 export interface AdminRetentionSettings {

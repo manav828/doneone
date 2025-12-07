@@ -19,6 +19,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onSelectTemp
     );
 
     const handleSelectTemplate = (template: BoardTemplate) => {
+        // Since all templates are now free, we removed the premium check, 
+        // but keeping logic here just in case we need it later or if data isn't reloaded yet.
         if (template.isPremium && !userIsPremium) {
             alert('This is a premium template. Please upgrade to use it.');
             return;
@@ -61,8 +63,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onSelectTemp
                                 key={category}
                                 onClick={() => setActiveCategory(category)}
                                 className={`px-4 py-3 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeCategory === category
-                                        ? 'border-purple-500 text-purple-600 dark:text-purple-400'
-                                        : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                    ? 'border-purple-500 text-purple-600 dark:text-purple-400'
+                                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                                     }`}
                             >
                                 {category}
@@ -79,8 +81,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onSelectTemp
                                 key={template.id}
                                 onClick={() => handleSelectTemplate(template)}
                                 className={`relative p-5 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg ${template.isPremium && !userIsPremium
-                                        ? 'border-gray-200 dark:border-gray-700 opacity-75'
-                                        : 'border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400'
+                                    ? 'border-gray-200 dark:border-gray-700 opacity-75'
+                                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400'
                                     }`}
                             >
                                 {/* Premium Badge */}

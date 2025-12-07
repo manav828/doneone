@@ -15,12 +15,12 @@ export const Login: React.FC = () => {
   const [regOpen, setRegOpen] = useState(true);
 
   useEffect(() => {
-      checkRegStatus();
+    checkRegStatus();
   }, []);
 
   const checkRegStatus = async () => {
-      const { data } = await supabase.from('system_settings').select('value').eq('key', 'registration_open').single();
-      if (data) setRegOpen(data.value);
+    const { data } = await supabase.from('system_settings').select('value').eq('key', 'registration_open').single();
+    if (data) setRegOpen(data.value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,9 +42,9 @@ export const Login: React.FC = () => {
         user = data.user;
       } else {
         if (!regOpen) {
-            setError("Registration is currently closed by Admin.");
-            setLoading(false);
-            return;
+          setError("Registration is currently closed by Admin.");
+          setLoading(false);
+          return;
         }
         // Sign Up
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -63,9 +63,9 @@ export const Login: React.FC = () => {
             email,
             password,
           });
-          
+
           if (!signInError && signInData.session) {
-             session = signInData.session;
+            session = signInData.session;
           }
         }
 
@@ -77,18 +77,18 @@ export const Login: React.FC = () => {
             role: 'Resource', // FIXED: Default role is now Resource
             avatar_url: ''
           });
-          
+
           if (profileError) {
             console.error("Profile creation failed (ignoring, self-healing will catch it):", profileError);
           }
         } else if (user && !session) {
-             // If we still don't have a session, we can't write to DB.
-             setError("Account created! Please check your email to confirm, or try logging in.");
-             setLoading(false);
-             return;
+          // If we still don't have a session, we can't write to DB.
+          setError("Account created! Please check your email to confirm, or try logging in.");
+          setLoading(false);
+          return;
         }
       }
-      
+
       // Initialize store after successful auth
       if (session) {
         await init();
@@ -127,7 +127,7 @@ export const Login: React.FC = () => {
               />
             </div>
           )}
-          
+
           <div>
             <label className="block text-sm font-medium mb-1">Email</label>
             <input
@@ -158,11 +158,11 @@ export const Login: React.FC = () => {
               {error}
             </div>
           )}
-          
+
           {!isLogin && !regOpen && (
-              <div className="p-3 rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 text-xs font-medium flex items-center gap-2">
-                  <Lock size={14}/> New registration is currently closed by Admin.
-              </div>
+            <div className="p-3 rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 text-xs font-medium flex items-center gap-2">
+              <Lock size={14} /> New registration is currently closed by Admin.
+            </div>
           )}
 
           <button
@@ -177,7 +177,7 @@ export const Login: React.FC = () => {
 
         <div className="mt-6 text-center text-sm text-gray-500">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button 
+          <button
             onClick={() => setIsLogin(!isLogin)}
             className="text-primary font-semibold hover:underline"
           >

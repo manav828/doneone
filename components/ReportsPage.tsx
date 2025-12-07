@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../store';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Download, Filter, Calendar, User as UserIcon, CheckCircle } from 'lucide-react';
+import { Download, Filter, Calendar, User as UserIcon, CheckCircle, Search } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
     const {
         activeProjectId,
+        setActiveProject,
         projects,
         tasks,
         users,
@@ -16,7 +17,53 @@ export const ReportsPage: React.FC = () => {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
 
+    // Project Dropdown State
+    const [isProjectOpen, setIsProjectOpen] = useState(false);
+    const [projectSearch, setProjectSearch] = useState('');
+
     const activeProject = projects.find(p => p.id === activeProjectId);
+    const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()));
+
+    const projectMembers = useMemo(() => {
+        if (!activeProject || !currentUser) return [];
+
+        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        const isLead = activeProject.leadIds?.includes(currentUser.id);
+        const viewAllEnabled = activeProject.viewAllReportsEnabled;
+
+        // Base members list (Manager + Leads + Resources)
+        let members = users.filter(u =>
+            u.id === activeProject.managerId ||
+            activeProject.leadIds?.includes(u.id) ||
+            Object.keys(activeProject.reportsTo || {}).includes(u.id)
+        );
+
+        if (viewAllEnabled || isManager) {
+            return members;
+        }
+
+        if (isLead) {
+            // Lead: See Self + Their Resources
+            // They should NOT see Manager or Other Leads (unless they are also a resource?)
+            // "Upper level name" implies seeing Manager. We filter that out.
+            const myTeamIds = Object.entries(activeProject.reportsTo || {})
+                .filter(([_, leadId]) => leadId === currentUser.id)
+                .map(([resourceId]) => resourceId);
+
+            return members.filter(u => u.id === currentUser.id || myTeamIds.includes(u.id));
+        }
+
+        // Resource: See Self Only
+        return members.filter(u => u.id === currentUser.id);
+
+    }, [activeProject, users, currentUser]);
+
+    // Default Selection Logic
+    useEffect(() => {
+        if (!activeProjectId && projects.length > 0) {
+            setActiveProject(projects[0].id);
+        }
+    }, [activeProjectId, projects, setActiveProject]);
 
     const filteredTasks = useMemo(() => {
         if (!activeProjectId || !activeProject || !currentUser) return [];
@@ -25,14 +72,13 @@ export const ReportsPage: React.FC = () => {
         let filtered = tasks.filter(t => t.projectId === activeProjectId);
 
         // 2. Visibility Logic (Role-Based)
-        const isManager = activeProject.managerId === currentUser.id;
+        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
         const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
         if (!isManager && !viewAllEnabled) {
             if (isLead) {
                 // Lead sees self + team members (resources reporting to them)
-                // Assuming reportsTo map: { resourceId: leadId }
                 const teamMemberIds = Object.entries(activeProject.reportsTo || {})
                     .filter(([_, leadId]) => leadId === currentUser.id)
                     .map(([resourceId]) => resourceId);
@@ -42,7 +88,7 @@ export const ReportsPage: React.FC = () => {
 
                 filtered = filtered.filter(t =>
                     (t.assigneeId && teamMemberIds.includes(t.assigneeId)) ||
-                    t.creatorId === currentUser.id // Can always see tasks created by self? Maybe. Sticking to assignee for reports.
+                    t.creatorId === currentUser.id
                 );
             } else {
                 // Resource sees only self
@@ -70,18 +116,23 @@ export const ReportsPage: React.FC = () => {
     // Chart Data Preparation
     const statusData = useMemo(() => {
         const counts: Record<string, number> = {};
-        columns.filter(c => c.projectId === activeProjectId).forEach(c => {
-            counts[c.title] = 0;
+        const projectColumns = columns.filter(c => c.projectId === activeProjectId);
+
+        // Initialize all columns with 0
+        projectColumns.forEach(c => {
+            counts[c.id] = 0;
         });
 
         filteredTasks.forEach(t => {
-            const col = columns.find(c => c.id === t.columnId);
-            if (col) {
-                counts[col.title] = (counts[col.title] || 0) + 1;
+            if (counts[t.columnId] !== undefined) {
+                counts[t.columnId]++;
             }
         });
 
-        return Object.entries(counts).map(([name, value]) => ({ name, value }));
+        return projectColumns.map(c => ({
+            name: c.title,
+            value: counts[c.id] || 0
+        })).filter(d => d.value > 0); // Only show statuses with tasks in Pie Chart to avoid clutter
     }, [filteredTasks, columns, activeProjectId]);
 
     const assigneeData = useMemo(() => {
@@ -106,12 +157,12 @@ export const ReportsPage: React.FC = () => {
 
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
-    if (!activeProjectId) {
+    if (projects.length === 0) {
         return (
             <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-900">
                 <div className="text-center p-8">
-                    <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">Select a Project</h2>
-                    <p className="text-slate-500 dark:text-slate-400">Choose a project to view reports</p>
+                    <h2 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">No Projects</h2>
+                    <p className="text-slate-500 dark:text-slate-400">Create a project to view reports</p>
                 </div>
             </div>
         );
@@ -119,49 +170,97 @@ export const ReportsPage: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-            {/* Header */}
-            <div className="px-6 py-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Project Reports</h1>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{activeProject?.name}</p>
+            {/* Header / Toolbar */}
+            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between gap-4">
+
+                {/* Project Selector - Matched HistoryPage */}
+                <div className="relative mr-4 border-r border-slate-200 dark:border-slate-700 pr-4">
+                    <button
+                        onClick={() => setIsProjectOpen(!isProjectOpen)}
+                        className="flex items-center gap-2 font-bold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                        <span>{activeProject?.name || 'Select Project'}</span>
+                        <svg className={`w-4 h-4 transition-transform ${isProjectOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+
+                    {isProjectOpen && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setIsProjectOpen(false)}></div>
+                            <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                                <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search projects..."
+                                            className="w-full pl-8 pr-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 dark:text-white"
+                                            value={projectSearch}
+                                            onChange={(e) => setProjectSearch(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
+                                <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                                    {filteredProjects.map(p => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { setActiveProject(p.id); setIsProjectOpen(false); }}
+                                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeProjectId === p.id
+                                                ? 'bg-primary/5 text-primary font-medium'
+                                                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                        >
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.themeColor }}></span>
+                                            <span className="truncate">{p.name}</span>
+                                            {activeProjectId === p.id && <CheckCircle size={14} className="ml-auto opacity-50" />}
+                                        </button>
+                                    ))}
+                                    {filteredProjects.length === 0 && (
+                                        <div className="px-3 py-4 text-center text-xs text-slate-400">
+                                            No projects found
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-4 flex-1">
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                        <input
+                            type="date"
+                            className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
+                            onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                        />
+                        <span className="text-slate-400">-</span>
+                        <input
+                            type="date"
+                            className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
+                            onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                        />
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-1 shadow-sm">
-                            <input
-                                type="date"
-                                className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
-                                onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                            />
-                            <span className="text-slate-400">-</span>
-                            <input
-                                type="date"
-                                className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
-                                onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                            />
-                        </div>
-
-                        <div className="relative">
-                            <select
-                                className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-3 pr-8 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 shadow-sm cursor-pointer"
-                                value={selectedAssignee}
-                                onChange={e => setSelectedAssignee(e.target.value)}
-                            >
-                                <option value="all">All Assignees</option>
-                                {users.map(u => (
-                                    <option key={u.id} value={u.id}>{u.name}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m1 1 4 4 4-4" /></svg>
-                            </div>
+                    {/* Assignee Filter */}
+                    <div className="relative">
+                        <select
+                            className="appearance-none bg-slate-100 dark:bg-slate-700 border-none rounded-lg pl-3 pr-8 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer dark:text-white"
+                            value={selectedAssignee}
+                            onChange={e => setSelectedAssignee(e.target.value)}
+                        >
+                            <option value="all">All Assignees</option>
+                            {projectMembers.map(u => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg width="8" height="5" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m1 1 4 4 4-4" /></svg>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="px-6 pb-6 space-y-6">
+            <div className="px-6 pb-6 space-y-6 mt-4">
                 {/* Metrics Row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">

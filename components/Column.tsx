@@ -1,12 +1,12 @@
-
 import React, { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Column as ColumnType, Task as TaskType } from '../types';
 import { TaskCard } from './TaskCard';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Timer, ChevronsUp, ChevronsDown } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Timer, ChevronsUp, ChevronsDown, Archive } from 'lucide-react';
 import { useStore } from '../store';
 import { sortTasksByPriority } from '../utils/taskPriority';
+import { ConfirmModal } from './ConfirmModal';
 
 interface Props {
   column: ColumnType;
@@ -16,9 +16,22 @@ interface Props {
 }
 
 export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) => {
-  const { addTask, deleteColumn, can, moveColumn, currentUser, tags } = useStore();
+  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags } = useStore();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+  });
 
   // Sort tasks by priority if this is the Pending column
   const displayTasks = column.title === 'Pending' ? sortTasksByPriority(tasks, tags) : tasks;
@@ -55,6 +68,11 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
               <svg className="w-3 h-3 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
+            )}
+            {column.isArchiveEnabled && (
+              <div title="Auto-archiving enabled (Managed in Archive Settings)" className="cursor-help flex items-center">
+                <Archive size={12} className="text-purple-500 ml-1" />
+              </div>
             )}
           </h3>
           <span className="px-2 py-0.5 bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] rounded-full font-bold shadow-sm border border-slate-100 dark:border-slate-600">
@@ -101,19 +119,35 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
               )}
             </button>
             <div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+            {/* Auto Archive Toggle */}
+
             <button
               onClick={() => {
                 const isFixed = column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done';
                 if (isFixed) {
-                  alert('This is a fixed column and cannot be deleted.');
+                  setConfirmModal({
+                    isOpen: true,
+                    title: 'Cannot Delete Column',
+                    message: 'This is a fixed column and cannot be deleted.',
+                    confirmText: 'OK',
+                    onConfirm: () => { },
+                    isDestructive: false
+                  });
                   return;
                 }
-                if (confirm('Delete column?')) deleteColumn(column.id);
+                setConfirmModal({
+                  isOpen: true,
+                  title: 'Delete Column',
+                  message: 'Are you sure you want to delete this column? All tasks within it will be deleted.',
+                  confirmText: 'Delete',
+                  isDestructive: true,
+                  onConfirm: () => deleteColumn(column.id)
+                });
               }}
               disabled={column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done'}
               className={`p-1 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-all ${(column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done')
-                  ? 'opacity-30 cursor-not-allowed'
-                  : ''
+                ? 'opacity-30 cursor-not-allowed'
+                : ''
                 }`}
               title={column.title === 'Pending' || column.title === 'In Progress' || column.title === 'Done' ? 'Fixed column cannot be deleted' : 'Delete Column'}
             >
@@ -183,6 +217,16 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
           )
         ) : null}
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        isDestructive={confirmModal.isDestructive}
+        confirmText={confirmModal.confirmText || 'Confirm'}
+      />
     </div>
   );
 };

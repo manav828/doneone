@@ -1,11 +1,12 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter } from './types';
+import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
+import imageCompression from 'browser-image-compression';
 
 declare var chrome: any;
 
@@ -77,6 +78,7 @@ interface AppState {
   removeMember: (projectId: string, userId: string) => Promise<void>;
 
   addColumn: (projectId: string, title: string) => Promise<void>;
+  updateColumn: (columnId: string, updates: Partial<Column>) => Promise<void>;
   deleteColumn: (id: string) => Promise<void>;
   moveColumn: (columnId: string, direction: 'left' | 'right') => Promise<void>;
 
@@ -97,6 +99,7 @@ interface AppState {
   toggleRegistration: (isOpen: boolean) => Promise<void>;
   getImageUploadStatus: () => Promise<boolean>;
   toggleImageUpload: (isOpen: boolean) => Promise<void>;
+  fetchStorageStats: () => Promise<StorageStats | null>;
   uploadFile: (file: File) => Promise<string | null>;
 
 
@@ -128,6 +131,8 @@ interface AppState {
   setHistoryFilters: (filters: HistoryFilter) => void;
   toggleHistorySelection: (historyId: string) => void;
   clearHistorySelection: () => void;
+  checkAutoArchive: () => Promise<void>;
+  canAccessPremium: () => boolean;
 }
 
 const ADMIN_EMAIL = 'manavss828@gmail.com';
@@ -442,7 +447,10 @@ export const useStore = create<AppState>((set, get) => ({
       set({
         currentUser:
           {
-            ...profile,
+            id: profile.id,
+            name: profile.name,
+            email: profile.email, // Now stored in profiles table
+            role: profile.role,
             isPremium: profile.is_premium,
             maxProjects: profile.max_projects,
             maxLeads: profile.max_leads,
@@ -471,6 +479,9 @@ export const useStore = create<AppState>((set, get) => ({
       // Process any pending tasks from content script
       await get().processPendingTasks();
 
+      // Run Auto-archive check
+      await get().checkAutoArchive();
+
       // Poll for pending tasks periodically
       setInterval(() => {
         get().processPendingTasks();
@@ -483,6 +494,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  // Data Fetching
   fetchUsers: async () => {
     const { data: allProfiles } = await supabase.from('profiles').select('*');
     const mappedUsers: User[] = (allProfiles || []).map((p: any) => ({
@@ -490,6 +502,7 @@ export const useStore = create<AppState>((set, get) => ({
       name: p.name,
       email: p.email,
       role: p.role,
+      avatar: p.avatar,
       isPremium: p.is_premium,
       maxProjects: p.max_projects,
       maxLeads: p.max_leads,
@@ -498,17 +511,30 @@ export const useStore = create<AppState>((set, get) => ({
       remindersEnabled: p.reminders_enabled,
       timeTrackingEnabled: p.time_tracking_enabled,
       imageUploadEnabled: p.image_upload_enabled,
-      maxAttachmentsPerTask: p.max_attachments_per_task || 3
+      maxAttachmentsPerTask: p.max_attachments_per_task || 3,
+      autoArchiveDays: p.auto_archive_days,
+      historyRetentionDays: p.history_retention_days
     }));
+
+    // Sync currentUser if compatible
+    const { currentUser } = get();
+    if (currentUser) {
+      const freshMe = mappedUsers.find(u => u.id === currentUser.id);
+      if (freshMe) set({ currentUser: freshMe });
+    }
+
     set({ users: mappedUsers });
     return mappedUsers;
   },
-
   fetchProjects: async () => {
     const { currentUser } = get();
     if (!currentUser) return;
     const { data: projects } = await supabase.from('projects').select('*');
     const { data: members } = await supabase.from('project_members').select('*');
+
+    // Fetch managers settings (for premium inheritance)
+    const managerIds = [...new Set((projects || []).map((p: any) => p.manager_id))];
+    const { data: managers } = await supabase.from('profiles').select('*').in('id', managerIds);
 
     const processedProjects: Project[] = (projects || []).map((p: any) => {
       const pMembers = (members || []).filter((m: any) => m.project_id === p.id);
@@ -518,6 +544,9 @@ export const useStore = create<AppState>((set, get) => ({
           reportsToMap[m.user_id] = m.lead_id;
         }
       });
+
+      const managerUser = (managers || []).find((u: any) => u.id === p.manager_id);
+
       return {
         id: p.id,
         name: p.name,
@@ -529,7 +558,19 @@ export const useStore = create<AppState>((set, get) => ({
         leadIds: pMembers.filter((m: any) => m.role === 'Lead' && m.status === 'active').map((m: any) => m.user_id),
         resourceIds: pMembers.filter((m: any) => m.role === 'Resource' && m.status === 'active').map((m: any) => m.user_id),
         pendingJoinRequests: pMembers.filter((m: any) => m.status === 'pending').map((m: any) => m.user_id),
-        reportsTo: reportsToMap
+        reportsTo: reportsToMap,
+        viewAllReportsEnabled: p.view_all_reports_enabled,
+        manager: managerUser ? {
+          id: managerUser.id,
+          name: managerUser.name,
+          role: 'Manager',
+          email: managerUser.email,
+          isPremium: managerUser.is_premium,
+          remindersEnabled: managerUser.reminders_enabled,
+          imageUploadEnabled: managerUser.image_upload_enabled,
+          timeTrackingEnabled: managerUser.time_tracking_enabled,
+          maxAttachmentsPerTask: managerUser.max_attachments_per_task || 3
+        } as User : undefined
       };
     });
 
@@ -546,11 +587,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchColumns: async () => {
     const { data: columns } = await supabase.from('columns').select('*').order('order_index');
+    const localSettings = JSON.parse(localStorage.getItem('flowboard_column_settings') || '{}');
+
     const processedColumns: Column[] = (columns || []).map((c: any) => ({
       id: c.id,
       projectId: c.project_id,
       title: c.title,
-      orderIndex: c.order_index
+      orderIndex: c.order_index,
+      // Use local setting if exists, otherwise default 'Done' to true
+      isArchiveEnabled: localSettings[c.id]?.isArchiveEnabled !== undefined
+        ? localSettings[c.id].isArchiveEnabled
+        : (c.title === 'Done')
     }));
     set({ columns: processedColumns });
     return processedColumns;
@@ -572,9 +619,12 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: new Date(t.created_at).getTime(),
       updatedAt: new Date(t.updated_at).getTime(),
       reminderAt: t.reminder_at ? new Date(t.reminder_at).getTime() : undefined,
+      reminderUserIds: t.reminder_user_ids || [],
       timeTracked: t.time_tracked || 0,
       estimatedTime: t.estimated_time || 0,
       timerStartedAt: t.timer_started_at ? new Date(t.timer_started_at).getTime() : undefined,
+      startedAt: t.started_at ? new Date(t.started_at).getTime() : undefined,
+      completedAt: t.completed_at ? new Date(t.completed_at).getTime() : undefined,
       attachments: t.attachments || [],
       capturedUrl: t.captured_url,
       capturedText: t.captured_text,
@@ -600,6 +650,11 @@ export const useStore = create<AppState>((set, get) => ({
   fetchNotifications: async () => {
     const { currentUser } = get();
     if (!currentUser) return;
+
+    // Auto-cleanup: Delete notifications older than 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('notifications').delete().eq('recipient_id', currentUser.id).lt('created_at', oneDayAgo);
+
     const { data: notifs } = await supabase.from('notifications').select('*').eq('recipient_id', currentUser.id).order('created_at', { ascending: false });
     const processedNotifs = (notifs || []).map((n: any) => ({
       id: n.id,
@@ -676,10 +731,25 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setActiveProject: (id) => {
-    set({ activeProjectId: id, activeMemberFilter: null, activeTagFilter: null, activeStatusFilter: null });
+    // 1. Clear tasks immediately to prevent "flash" of old/unfiltered content
+    // However, if we clear tasks, we trigger a fetch? 
+    // Usually we just want to reset filters.
+    // If we want to prevent FOUC for visibility, we can temporarily set a loading flag for the VIEW?
+    // Let's rely on fast filtering. But to be safe, reset filters.
+    set({
+      activeProjectId: id,
+      activeMemberFilter: null,
+      activeTagFilter: null,
+      activeStatusFilter: null,
+      taskHistory: [] // Clear history to prevent flash
+    });
     // Ensure fixed columns exist for this project
     if (id) {
       get().ensureFixedColumns(id);
+      // Trigger a refresh to ensure we have fresh tasks/permissions
+      get().fetchTasks();
+      get().fetchProjects(); // To get fresh manager permission
+      get().loadTaskHistory(id); // Pre-load history
     }
   },
 
@@ -703,10 +773,29 @@ export const useStore = create<AppState>((set, get) => ({
       auto_move_enabled: true  // Enable auto-move by default
     }).select().single();
     if (data) {
-      await get().fetchProjects();
+      // Instant Update State
+      const newProject: Project = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        code: data.code,
+        managerId: data.manager_id,
+        themeColor: data.theme_color,
+        autoMoveEnabled: data.auto_move_enabled,
+        leadIds: [],
+        resourceIds: [],
+        pendingJoinRequests: [],
+        reportsTo: {},
+        viewAllReportsEnabled: data.view_all_reports_enabled,
+        manager: user
+      };
+
+      set(state => ({ projects: [...state.projects, newProject], activeProjectId: data.id }));
+
+      // Background sync
       await get().fetchColumns();
-      set({ activeProjectId: data.id });
       ['Pending', 'In Progress', 'Done'].forEach(title => get().addColumn(data.id, title));
+      get().fetchProjects(); // Consolidate later
     }
   },
 
@@ -730,6 +819,24 @@ export const useStore = create<AppState>((set, get) => ({
     }).select().single();
 
     if (data) {
+      // Instant Update State
+      const newProject: Project = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        code: data.code,
+        managerId: data.manager_id,
+        themeColor: data.theme_color,
+        autoMoveEnabled: true,
+        leadIds: [],
+        resourceIds: [],
+        pendingJoinRequests: [],
+        reportsTo: {},
+        viewAllReportsEnabled: false,
+        manager: user
+      };
+      set(state => ({ projects: [...state.projects, newProject], activeProjectId: data.id }));
+
       // Create columns from template
       for (const col of template.columns) {
         await supabase.from('columns').insert({
@@ -748,10 +855,9 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
-      await get().fetchProjects();
       await get().fetchColumns();
       await get().fetchTags();
-      set({ activeProjectId: data.id });
+      get().fetchProjects(); // Background sync
     }
   },
 
@@ -842,6 +948,26 @@ export const useStore = create<AppState>((set, get) => ({
     const currentCols = get().columns.filter(c => c.projectId === projectId);
     await supabase.from('columns').insert({ project_id: projectId, title, order_index: currentCols.length });
     get().fetchColumns();
+  },
+
+  updateColumn: async (columnId, updates) => {
+    // 1. Optimistic update
+    set(state => ({
+      columns: state.columns.map(c => c.id === columnId ? { ...c, ...updates } : c)
+    }));
+
+    // 2. Persist standard fields to DB
+    if (updates.title) {
+      await supabase.from('columns').update({ title: updates.title }).eq('id', columnId);
+    }
+
+    // 3. Persist extra fields (isArchiveEnabled) to LocalStorage (Schema Fallback)
+    // We do this because we aren't sure if the DB has 'is_archive_enabled' column
+    if (updates.isArchiveEnabled !== undefined) {
+      const settings = JSON.parse(localStorage.getItem('flowboard_column_settings') || '{}');
+      settings[columnId] = { ...(settings[columnId] || {}), isArchiveEnabled: updates.isArchiveEnabled };
+      localStorage.setItem('flowboard_column_settings', JSON.stringify(settings));
+    }
   },
 
   deleteColumn: async (id) => {
@@ -944,6 +1070,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.assigneeId !== undefined) dbUpdates.assignee_id = updates.assigneeId;
     if (updates.tagIds !== undefined) dbUpdates.tag_ids = updates.tagIds;
     if (updates.reminderAt !== undefined) dbUpdates.reminder_at = updates.reminderAt ? new Date(updates.reminderAt).toISOString() : null;
+    if (updates.reminderUserIds !== undefined) dbUpdates.reminder_user_ids = updates.reminderUserIds;
     if (updates.timeTracked !== undefined) dbUpdates.time_tracked = updates.timeTracked;
     if (updates.estimatedTime !== undefined) dbUpdates.estimated_time = updates.estimatedTime;
     if (updates.timerStartedAt !== undefined) dbUpdates.timer_started_at = updates.timerStartedAt ? new Date(updates.timerStartedAt).toISOString() : null;
@@ -1202,40 +1329,100 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Registration Control
   getRegistrationStatus: async () => {
-    const { data } = await supabase.from('system_settings').select('value').eq('key', 'registration_open').single();
-    return data ? data.value : true;
+    const { data } = await supabase.from('app_settings').select('registration_open').eq('id', 1).single();
+    return data?.registration_open ?? true;
   },
 
   toggleRegistration: async (isOpen) => {
-    const { error } = await supabase.from('system_settings').upsert({ key: 'registration_open', value: isOpen });
-    if (error) console.error("Toggle Reg Error:", error);
+    const { error } = await supabase.from('app_settings').upsert({ id: 1, registration_open: isOpen });
+    if (error) console.error("Error toggling registration:", error);
   },
 
   getImageUploadStatus: async () => {
-    // Deprecated: Per-user permission now
-    return false;
+    const { data } = await supabase.from('app_settings').select('image_upload_enabled').eq('id', 1).single();
+    return data?.image_upload_enabled ?? false;
   },
 
   toggleImageUpload: async (isOpen) => {
-    // Deprecated
+    const { error } = await supabase.from('app_settings').upsert({ id: 1, image_upload_enabled: isOpen });
+    if (error) console.error("Error toggling image upload:", error);
+  },
+
+  fetchStorageStats: async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_storage_stats');
+      if (error) throw error;
+      return data as StorageStats;
+    } catch (err) {
+      console.error("Error fetching storage stats:", err);
+      return null;
+    }
   },
 
   uploadFile: async (file) => {
+    // 1. Check if Image Upload is Enabled Globally (if not admin)
+    // 2. Check if Image Upload is Enabled for this PROJECT (Strict Mode)
+    const { currentUser, projects, activeProjectId } = get();
+    if (!currentUser) return null;
+
+    // Admin bypass
+    if (currentUser.email === ADMIN_EMAIL) {
+      // Admin can always upload
+    } else {
+      // Strict Mode: Check Project Manager Settings
+      if (activeProjectId) {
+        const project = projects.find(p => p.id === activeProjectId);
+        if (project && project.manager) {
+          if (!project.manager.imageUploadEnabled) {
+            alert("Image uploads are disabled by the project manager.");
+            return null;
+          }
+        }
+      }
+      // Fallback: Check user's own setting (though Strict Mode usually overrides this for projects)
+      else if (!currentUser.imageUploadEnabled) {
+        alert("Image uploads are disabled for your account.");
+        return null;
+      }
+    }
     if (get().isOffline) return null;
-    if (!get().currentUser?.imageUploadEnabled) return null;
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `${fileName}`;
+    try {
+      let fileToUpload = file;
 
-    const { error: uploadError } = await supabase.storage.from('task-attachments').upload(filePath, file);
-    if (uploadError) {
-      console.error("Upload failed:", uploadError);
+      // Compress if it's an image
+      if (file.type.startsWith('image/')) {
+        try {
+          const options = {
+            maxSizeMB: 1, // Target ~1MB
+            maxWidthOrHeight: undefined, // Keep original resolution
+            useWebWorker: true,
+            initialQuality: 0.8
+          };
+          fileToUpload = await imageCompression(file, options);
+          console.log(`Original: ${(file.size / 1024 / 1024).toFixed(2)}MB, Compressed: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+        } catch (cErr) {
+          console.warn("Compression failed, uploading original:", cErr);
+        }
+      }
+
+      const fileExt = fileToUpload.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from('task-attachments').upload(filePath, fileToUpload);
+      if (uploadError) {
+        console.error("Upload failed:", uploadError);
+        return null;
+      }
+
+      const { data } = supabase.storage.from('task-attachments').getPublicUrl(filePath);
+      return data.publicUrl;
+
+    } catch (err) {
+      console.error("Upload error:", err);
       return null;
     }
-
-    const { data } = supabase.storage.from('task-attachments').getPublicUrl(filePath);
-    return data.publicUrl;
   },
 
   // ... (Helpers remain same)
@@ -1281,6 +1468,12 @@ export const useStore = create<AppState>((set, get) => ({
       console.error("Update Profile Error:", error);
     } else {
       await get().fetchUsers();
+      // Force refresh current user if self-update
+      const { currentUser } = get();
+      if (currentUser && currentUser.id === userId) {
+        // fetchUsers already syncs currentUser now, but purely to be safe:
+        // (Handled by fetchUsers change above)
+      }
     }
   },
 
@@ -1361,26 +1554,43 @@ export const useStore = create<AppState>((set, get) => ({
     const project = projects.find(p => p.id === projectId);
     if (!project) return [];
     const projectTasks = tasks.filter(t => t.projectId === projectId);
+
+    // 1. Determine Base Visibility (What is *possible* to see)
     let allowedTasks = [];
     const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
     const isManager = project.managerId === currentUser.id;
     const isLead = project.leadIds.includes(currentUser.id);
+
     if (isSuperAdmin || isManager) {
       allowedTasks = projectTasks;
     } else if (isLead) {
+      // Lead sees: Assigned to self OR Assigned to their team members
       allowedTasks = projectTasks.filter(t => {
-        const assignee = t.assigneeId;
-        if (!assignee) return true;
-        if (assignee === currentUser.id) return true;
-        return project.reportsTo[assignee] === currentUser.id;
+        if (t.assigneeId === currentUser.id) return true;
+        if (t.creatorId === currentUser.id) return true; // See tasks I created
+        if (t.assigneeId && project.reportsTo[t.assigneeId] === currentUser.id) return true;
+        return false;
       });
     } else {
-      allowedTasks = projectTasks.filter(t => t.assigneeId === currentUser.id);
+      // Resource sees: Assigned to self OR Created by self
+      allowedTasks = projectTasks.filter(t => t.assigneeId === currentUser.id || t.creatorId === currentUser.id);
     }
+
+
     let filtered = allowedTasks;
 
-    if (activeMemberFilter) {
+    // 2. apply View Filters
+    if (activeMemberFilter === 'ME') {
+      filtered = filtered.filter(t => t.assigneeId === currentUser.id || t.creatorId === currentUser.id);
+    } else if (activeMemberFilter) {
       filtered = filtered.filter(t => t.assigneeId === activeMemberFilter);
+    } else {
+      // If NO filter is selected (and user is Manager), what is default?
+      // User requested: "manager... who is created by of task they can see task to their kanban board"
+      // This implies default view should be "My Tasks".
+      // BUT, usually "No Filter" means "Show All Allowed".
+      // We will implement explicit "My Workspace" behavior in the Board UI by setting activeMemberFilter to 'ME' by default or on toggle.
+      // So here, 'null' means 'Show All Allowed'.
     }
 
     if (activeTagFilter) {
@@ -1405,24 +1615,52 @@ export const useStore = create<AppState>((set, get) => ({
   getVisibleUsers: () => {
     const { users, currentUser, activeProjectId, projects } = get();
     if (!currentUser || !activeProjectId) return [];
+
     const project = projects.find(p => p.id === activeProjectId);
     if (!project) return [];
-    if (currentUser.email === ADMIN_EMAIL) return users;
-    const isManager = project.managerId === currentUser.id;
-    const isLead = project.leadIds.includes(currentUser.id);
+
+    // Strictly strictly project members only
     const projectMembers = users.filter(u =>
       u.id === project.managerId ||
       project.leadIds.includes(u.id) ||
       project.resourceIds.includes(u.id)
     );
-    if (isManager) return projectMembers;
+
+    const isManager = project.managerId === currentUser.id;
+    const isLead = project.leadIds.includes(currentUser.id);
+    const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
+
+    // Admin/Manager sees all project members
+    if (isSuperAdmin || isManager) return projectMembers;
+
+    // Lead sees: Self + Resources reporting to them
     if (isLead) {
       return projectMembers.filter(u =>
         u.id === currentUser.id ||
         (project.resourceIds.includes(u.id) && project.reportsTo[u.id] === currentUser.id)
       );
     }
+
+    // Resource sees: Only self
     return projectMembers.filter(u => u.id === currentUser.id);
+  },
+
+  canAccessPremium: () => {
+    const { currentUser, activeProjectId, projects, users } = get();
+    if (!currentUser) return false;
+    if (currentUser.isPremium) return true;
+
+    if (activeProjectId) {
+      const project = projects.find(p => p.id === activeProjectId);
+      if (project?.manager?.isPremium) return true;
+
+      // Fallback
+      if (project) {
+        const owner = users.find(u => u.id === project.managerId);
+        if (owner?.isPremium) return true;
+      }
+    }
+    return false;
   },
 
   getVisibleProjects: () => {
@@ -1468,16 +1706,45 @@ export const useStore = create<AppState>((set, get) => ({
       return;
     }
 
-    const mappedHistory: TaskHistory[] = (data || []).map((h: any) => ({
-      id: h.id,
-      taskId: h.task_id,
-      projectId: h.project_id,
-      taskData: h.task_data,
-      statusAtArchive: h.status_at_archive,
-      timeTaken: h.time_taken,
-      archivedAt: new Date(h.archived_at).getTime(),
-      archivedBy: h.archived_by
-    }));
+    const mappedHistory: TaskHistory[] = (data || []).map((h: any) => {
+      const rawTask = h.task_data || {};
+      // Manually map snake_case from JSON to camelCase for Task interface
+      const mappedTaskData: Task = {
+        id: rawTask.id,
+        projectId: rawTask.project_id,
+        columnId: rawTask.column_id,
+        title: rawTask.title,
+        description: rawTask.description,
+        assigneeId: rawTask.assignee_id,
+        creatorId: rawTask.creator_id,
+        tagIds: rawTask.tag_ids || [],
+        orderIndex: rawTask.order_index,
+        createdAt: rawTask.created_at ? new Date(rawTask.created_at).getTime() : 0,
+        updatedAt: rawTask.updated_at ? new Date(rawTask.updated_at).getTime() : 0,
+        reminderAt: rawTask.reminder_at ? new Date(rawTask.reminder_at).getTime() : undefined,
+        timeTracked: rawTask.time_tracked || 0,
+        estimatedTime: rawTask.estimated_time || 0,
+        timerStartedAt: rawTask.timer_started_at ? new Date(rawTask.timer_started_at).getTime() : undefined,
+        startedAt: rawTask.started_at ? new Date(rawTask.started_at).getTime() : undefined,
+        completedAt: rawTask.completed_at ? new Date(rawTask.completed_at).getTime() : undefined,
+        attachments: rawTask.attachments || [],
+        capturedUrl: rawTask.captured_url,
+        capturedText: rawTask.captured_text,
+        capturedScreenshot: rawTask.captured_screenshot,
+        isHighlighted: rawTask.isHighlighted
+      };
+
+      return {
+        id: h.id,
+        taskId: h.task_id,
+        projectId: h.project_id,
+        taskData: mappedTaskData,
+        statusAtArchive: h.status_at_archive,
+        timeTaken: h.time_taken,
+        archivedAt: new Date(h.archived_at).getTime(),
+        archivedBy: h.archived_by
+      };
+    });
 
     set({ taskHistory: mappedHistory });
   },
@@ -1579,7 +1846,31 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   exportHistoryToCSV: (mode, selectedIds = []) => {
-    const { taskHistory, selectedHistoryIds, users, tags } = get();
+    const { taskHistory, selectedHistoryIds, users, tags, activeProjectId, projects, currentUser } = get();
+    const activeProject = projects.find(p => p.id === activeProjectId);
+
+    // Filter by Visibility Rules (Hierarchy)
+    let visibleHistory = taskHistory;
+    if (activeProject && currentUser) {
+      const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+      const viewAllEnabled = activeProject.viewAllReportsEnabled;
+      const isLead = activeProject.leadIds?.includes(currentUser.id);
+
+      if (!isManager && !viewAllEnabled) {
+        if (isLead) {
+          const teamMemberIds = Object.entries(activeProject.reportsTo || {})
+            .filter(([_, leadId]) => leadId === currentUser.id)
+            .map(([resourceId]) => resourceId);
+          teamMemberIds.push(currentUser.id);
+          visibleHistory = taskHistory.filter(h =>
+            (h.taskData.assigneeId && teamMemberIds.includes(h.taskData.assigneeId)) ||
+            h.taskData.creatorId === currentUser.id
+          );
+        } else {
+          visibleHistory = taskHistory.filter(h => h.taskData.assigneeId === currentUser.id || h.taskData.creatorId === currentUser.id);
+        }
+      }
+    }
 
     let dataToExport: TaskHistory[] = [];
 
@@ -1671,6 +1962,30 @@ export const useStore = create<AppState>((set, get) => ({
 
   clearHistorySelection: () => {
     set({ selectedHistoryIds: [] });
+  },
+
+  checkAutoArchive: async () => {
+    const { currentUser, tasks, columns, archiveTaskManually } = get();
+    if (!currentUser || !currentUser.autoArchiveDays || currentUser.autoArchiveDays <= 0) return;
+
+    const cutoff = Date.now() - (currentUser.autoArchiveDays * 24 * 60 * 60 * 1000);
+
+    const tasksToArchive = tasks.filter(task => {
+      const column = columns.find(c => c.id === task.columnId);
+      if (!column || !column.isArchiveEnabled) return false;
+
+      // Use completedAt if available, else updatedAt (for non-Done columns)
+      const effectiveDate = task.completedAt || task.updatedAt;
+      return effectiveDate < cutoff;
+    });
+
+    if (tasksToArchive.length > 0) {
+      console.log(`Auto-archiving ${tasksToArchive.length} tasks...`);
+      for (const task of tasksToArchive) {
+        await archiveTaskManually(task.id);
+      }
+      get().refreshData();
+    }
   },
 
 }));
