@@ -8,17 +8,20 @@ export interface User {
   email?: string;
   avatar?: string;
   // Admin/Premium Settings
-  isPremium?: boolean;
+  createdAt?: number; // Timestamp
+  premiumUntil?: number; // Timestamp or null
+  // isPremium computed in store
+
   maxProjects?: number;
   maxLeads?: number;
   maxResources?: number;
-  notificationsEnabled?: boolean; // notificationsEnabled: boolean;
+  notificationsEnabled?: boolean;
   remindersEnabled: boolean;
   timeTrackingEnabled: boolean;
   imageUploadEnabled: boolean;
   maxAttachmentsPerTask: number;
-  autoArchiveDays?: number; // Auto-archive tasks after X days (0 = disabled)
-  historyRetentionDays?: number | null; // Delete history after X days (NULL = keep forever)
+  autoArchiveDays?: number;
+  historyRetentionDays?: number | null;
 }
 
 export interface Tag {
@@ -77,7 +80,7 @@ export interface Project {
   themeColor: string; // Hex for primary color
   autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
   viewAllReportsEnabled?: boolean; // If true, all members can see all reports (default: false)
-  manager?: User; // Full manager details including premium status
+  manager?: User & { hasPremiumAccess?: boolean }; // Full manager details including premium status
 }
 
 export interface Activity {

@@ -19,7 +19,8 @@ export const Sidebar: React.FC = () => {
     getVisibleProjects,
     projects,
     updateProject,
-    currentUser
+    currentUser,
+    canAccessPremium
   } = useStore();
 
   const navigate = useNavigate();
@@ -476,12 +477,11 @@ export const Sidebar: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Template Selector Modal */}
       {isTemplateSelectorOpen && (
         <TemplateSelector
           onSelectTemplate={handleTemplateSelect}
           onClose={() => { setIsTemplateSelectorOpen(false); setIsModalOpen(true); }}
-          userIsPremium={currentUser?.isPremium || false}
+          userIsPremium={canAccessPremium()}
         />
       )}
     </aside>

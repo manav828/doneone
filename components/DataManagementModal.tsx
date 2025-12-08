@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store';
 import { Modal } from './Modal';
 import { Download, Archive, FileJson, FileSpreadsheet } from 'lucide-react';
@@ -18,7 +18,8 @@ export const DataManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
         activeProjectId,
         users,
         archiveProject,
-        currentUser
+        currentUser,
+        canAccessPremium
     } = useStore();
 
     const activeProject = projects.find(p => p.id === activeProjectId);
@@ -30,8 +31,9 @@ export const DataManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
         let archivedTasks: any[] = [];
         let reportStats: any = {};
 
-        // Check Premium Validation (Mock or Real)
-        const isPremium = currentUser?.isPremium;
+        // Feature Gating
+        const hasPremium = canAccessPremium();
+        const isPremium = hasPremium; // Local alias for existing code compatibility
 
         if (isPremium) {
             // Fetch Archived Tasks
@@ -80,7 +82,7 @@ export const DataManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
     };
 
     const handleExportCSV = async () => {
-        const isPremium = currentUser?.isPremium;
+        const isPremium = canAccessPremium();
         let allTasks = tasks.filter(t => t.projectId === activeProjectId).map(t => ({
             ...t,
             status: columns.find(c => c.id === t.columnId)?.title || 'Unknown',
@@ -151,7 +153,7 @@ export const DataManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const handleExportExcel = async () => {
         // 1. Prepare Data
-        const isPremium = currentUser?.isPremium;
+        const isPremium = canAccessPremium();
 
         // Sheet 1: Active Tasks
         let activeTasksData = tasks.filter(t => t.projectId === activeProjectId).map(t => ({

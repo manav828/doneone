@@ -20,7 +20,8 @@ export const AdminPanel: React.FC = () => {
         maxProjects: 3,
         maxLeads: 2,
         maxResources: 5,
-        historyRetentionDays: null as number | null
+        historyRetentionDays: null as number | null,
+        addPremiumDays: 0 // New field for temp premium
     });
 
     useEffect(() => {
@@ -47,7 +48,10 @@ export const AdminPanel: React.FC = () => {
                 name: p.name,
                 email: p.email,
                 role: p.role,
-                isPremium: p.is_premium,
+                // isPremium: p.is_premium, // Removed
+                createdAt: new Date(p.created_at).getTime(),
+                premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
+
                 maxProjects: p.max_projects,
                 maxLeads: p.max_leads,
                 maxResources: p.max_resources,
@@ -80,8 +84,10 @@ export const AdminPanel: React.FC = () => {
         setRegOpen(!regOpen);
     };
 
-    const handleTogglePremium = async (userId: string, currentVal: boolean) => {
-        await updateUserProfile(userId, { isPremium: !currentVal });
+    const handleAddPremium = async (userId: string, days: number) => {
+        const until = new Date();
+        until.setDate(until.getDate() + days);
+        await updateUserProfile(userId, { premiumUntil: days > 0 ? until.getTime() : null }); // 0 days = reset/remove
         fetchData();
     };
 
@@ -116,7 +122,8 @@ export const AdminPanel: React.FC = () => {
             maxProjects: user.maxProjects || 3,
             maxLeads: user.maxLeads || 2,
             maxResources: user.maxResources || 5,
-            historyRetentionDays: user.historyRetentionDays || null
+            historyRetentionDays: user.historyRetentionDays || null,
+            addPremiumDays: 0
         });
     };
 
@@ -125,8 +132,23 @@ export const AdminPanel: React.FC = () => {
         await updateUserProfile(userId, {
             maxProjects: editLimits.maxProjects,
             maxLeads: editLimits.maxLeads,
-            maxResources: editLimits.maxResources
+            maxResources: editLimits.maxResources,
         });
+
+        // Handle Premium Extension if set
+        if (editLimits.addPremiumDays !== 0) {
+            const until = new Date();
+            if (editLimits.addPremiumDays > 0) {
+                until.setDate(until.getDate() + editLimits.addPremiumDays);
+                await updateUserProfile(userId, { premiumUntil: until.getTime() });
+            } else {
+                // Negative implies remove? checking use case. Let's stick to 0=ignore for now in edit mode, 
+                // and handle removal separately or support negative for 'remove access'. 
+                // Better: If user inputs 0 in edit mode, we do nothing. 
+                // To remove, passing a special flag or separate button is better.
+                // Let's implement specific "Grant/Revoke" logic in the loop below.
+            }
+        }
 
         // 2. Update History Retention
         // First check if settings exist
@@ -286,13 +308,47 @@ export const AdminPanel: React.FC = () => {
                                         <p className="text-xs text-gray-500">{u.email}</p>
                                     </td>
                                     <td className="px-4 py-4 text-center">
-                                        <button
-                                            onClick={() => handleTogglePremium(u.id, !!u.isPremium)}
-                                            className={`p-2 rounded-full ${u.isPremium ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400'}`}
-                                            title="Toggle Premium Status"
-                                        >
-                                            <Crown size={16} />
-                                        </button>
+                                        <div className="flex flex-col items-center gap-1">
+                                            {u.premiumUntil && u.premiumUntil > Date.now() ? (
+                                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                    Manual ({Math.ceil((u.premiumUntil - Date.now()) / (1000 * 60 * 60 * 24))}d)
+                                                </span>
+                                            ) : (u.createdAt && (Date.now() - u.createdAt < 30 * 24 * 60 * 60 * 1000)) ? (
+                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                    Trial ({Math.ceil((30 - (Date.now() - u.createdAt) / (1000 * 60 * 60 * 24)))}d)
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-gray-400 font-mono">Basic</span>
+                                            )}
+
+                                            {editingUser === u.id ? (
+                                                <div className="flex items-center gap-1 mt-1">
+                                                    <input
+                                                        type="number"
+                                                        className="w-12 text-xs p-1 border rounded text-center"
+                                                        placeholder="+Days"
+                                                        value={editLimits.addPremiumDays || ''}
+                                                        onChange={(e) => setEditLimits({ ...editLimits, addPremiumDays: parseInt(e.target.value) })}
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            if (editLimits.addPremiumDays) handleAddPremium(u.id, editLimits.addPremiumDays);
+                                                        }}
+                                                        className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"
+                                                        title="Add/Set Premium Days (Overwrite)"
+                                                    >
+                                                        <Check size={12} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    className="opacity-0 group-hover:opacity-100 text-xs text-blue-500 hover:underline"
+                                                    onClick={() => startEdit(u)}
+                                                >
+                                                    Edit
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-4 text-center flex justify-center gap-2">
                                         <button

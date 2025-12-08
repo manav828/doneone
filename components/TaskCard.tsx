@@ -17,7 +17,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
     tags, toggleTaskTimer,
     currentUser, users, projects, activeProjectId,
     collapsedTaskIds, toggleTaskCollapse,
-    columns, archiveTaskManually
+    columns, archiveTaskManually, canAccessPremium
   } = useStore();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -27,9 +27,11 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   const canMove = isManager || isLead || isAssignee;
 
   // Feature Flag Check
+  // Feature Flag Check
   const projectManager = users.find(u => u.id === activeProject?.managerId);
-  const remindersEnabled = projectManager?.remindersEnabled || false;
-  const timeTrackingEnabled = projectManager?.timeTrackingEnabled || false;
+  const hasPremium = canAccessPremium();
+  const remindersEnabled = hasPremium && (projectManager?.remindersEnabled || false);
+  const timeTrackingEnabled = hasPremium && (projectManager?.timeTrackingEnabled || false);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,

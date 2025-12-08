@@ -9,6 +9,9 @@ import { Guide } from './components/Guide';
 import { Login } from './Login';
 import { useStore } from './store';
 import { Loader2 } from 'lucide-react';
+import { CustomAlert } from './components/CustomAlert';
+import { WelcomeModal } from './components/WelcomeModal';
+import { PricingModal } from './components/PricingModal';
 
 const App: React.FC = () => {
   const { init, currentUser, isLoading, tasks, projects } = useStore();
@@ -20,7 +23,22 @@ const App: React.FC = () => {
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
-  }, []);
+
+    // Check for Welcome Modal (First Time Trial)
+    const hasSeenWelcome = localStorage.getItem('flowboard_welcome_seen');
+    if (!hasSeenWelcome && currentUser && currentUser.createdAt) {
+      // Only show if account is created recently (e.g. within last 24 hours) OR just trust the flag?
+      // Let's check if they are in trial.
+      const isTrial = (Date.now() - currentUser.createdAt < 30 * 24 * 60 * 60 * 1000) && !currentUser.premiumUntil;
+      if (isTrial) {
+        setShowWelcome(true);
+        localStorage.setItem('flowboard_welcome_seen', 'true');
+      }
+    }
+  }, [currentUser]); // Add currentUser dependency to check when loaded
+
+  const [showWelcome, setShowWelcome] = React.useState(false);
+  const { isPricingModalOpen, setPricingModalOpen } = useStore();
 
   // Poll for Reminders
   useEffect(() => {
@@ -60,6 +78,18 @@ const App: React.FC = () => {
 
   return (
     <Router>
+      <CustomAlert />
+      <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
+      {/* PricingModal is also in TopBar, but having it here handles global store state triggers better if TopBar unmounts? TopBar is always mounted in Layout. 
+          However, TopBar has the local import. UseStore state is global.
+          TopBar renders it. Only ONE instance should render. 
+          I added it to TopBar in previous step. 
+          If I add it here, I might duplicate it?
+          Wait, TopBar IS inside Layout.
+          Let's NOT add PricingModal here if TopBar has it.
+          Check Logic: I edited TopBar to render PricingModal based on isPricingModalOpen.
+          So I don't need it here.
+      */}
       <Layout>
         <Routes>
           <Route path="/" element={<Board />} />

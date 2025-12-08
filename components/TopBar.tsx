@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown } from 'lucide-react';
+import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
 import { DataManagementModal } from './DataManagementModal';
 import { PremiumModal } from './PremiumModal';
+import { PricingModal } from './PricingModal';
 
 export const TopBar: React.FC = () => {
   const {
@@ -26,7 +28,9 @@ export const TopBar: React.FC = () => {
     setView,
     searchQuery,
     setSearchQuery,
-    canAccessPremium
+    canAccessPremium,
+    isPricingModalOpen,
+    setPricingModalOpen
   } = useStore();
 
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
@@ -35,6 +39,7 @@ export const TopBar: React.FC = () => {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState('');
 
   const notifRef = useRef<HTMLDivElement>(null);
@@ -125,6 +130,15 @@ export const TopBar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Help & Support */}
+          <button
+            onClick={() => setIsHelpModalOpen(true)}
+            className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 rounded-full transition-colors"
+            title="Help & Support"
+          >
+            <HelpCircle size={20} />
+          </button>
+
           {/* Theme Toggle */}
           <button
             onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
@@ -242,8 +256,13 @@ export const TopBar: React.FC = () => {
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="flex items-center gap-2 group outline-none"
             >
-              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 ring-white dark:ring-slate-800 transition-all group-hover:ring-primary/30">
+              <div className={`relative h-9 w-9 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 transition-all group-hover:ring-primary/30 ${canAccessPremium() ? 'ring-yellow-400 dark:ring-yellow-500' : 'ring-white dark:ring-slate-800'}`}>
                 {currentUser.name.charAt(0)}
+                {canAccessPremium() && (
+                  <div className="absolute -top-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border border-white dark:border-slate-900">
+                    <Crown size={8} fill="currentColor" />
+                  </div>
+                )}
               </div>
             </button>
 
@@ -252,12 +271,51 @@ export const TopBar: React.FC = () => {
                 <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
                   <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{currentUser.email}</p>
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex gap-2 flex-wrap">
                     <span className="inline-flex items-center px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-[10px] rounded-md uppercase font-bold tracking-wider shadow-sm">
                       {currentUser.role}
                     </span>
+                    {canAccessPremium() ? (
+                      <span className="inline-flex items-center px-2 py-1 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400 text-[10px] rounded-md uppercase font-bold tracking-wider shadow-sm gap-1">
+                        <Crown size={10} /> Premium
+                        {currentUser.createdAt && (Date.now() - currentUser.createdAt < 30 * 24 * 60 * 60 * 1000) && !currentUser.premiumUntil && (
+                          <span className="opacity-75 normal-case ml-1">
+                            (Trial: {Math.ceil((30 - (Date.now() - currentUser.createdAt) / (1000 * 60 * 60 * 24)))}d left)
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 text-[10px] rounded-md uppercase font-bold tracking-wider shadow-sm">
+                        Basic Plan
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                {!canAccessPremium() && (
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      setPricingModalOpen(true);
+                    }}
+                    className="w-full text-left px-5 py-3 text-sm text-yellow-600 dark:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/10 flex items-center gap-2 transition-colors font-bold border-b border-slate-100 dark:border-slate-700"
+                  >
+                    <Crown size={16} />
+                    Upgrade to Premium
+                  </button>
+                )}
+                {canAccessPremium() && (
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      setPricingModalOpen(true);
+                    }}
+                    className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                  >
+                    <Crown size={16} className="text-yellow-500" />
+                    View Plan & Billing
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);
@@ -291,11 +349,13 @@ export const TopBar: React.FC = () => {
       />
       <ReportsModal isOpen={isReportsModalOpen} onClose={() => setIsReportsModalOpen(false)} />
       <DataManagementModal isOpen={isDataModalOpen} onClose={() => setIsDataModalOpen(false)} />
+      <PricingModal isOpen={isPricingModalOpen} onClose={() => setPricingModalOpen(false)} />
       <PremiumModal
         isOpen={isPremiumModalOpen}
         onClose={() => setIsPremiumModalOpen(false)}
         featureName={premiumFeature}
       />
+      <HelpSupportModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />
     </>
   );
 };
