@@ -4,10 +4,10 @@ import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
 import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { User, StorageStats } from '../types';
+import { User, StorageStats, Plan } from '../types';
 
 export const AdminPanel: React.FC = () => {
-    const { currentUser, updateUserProfile, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats } = useStore();
+    const { currentUser, updateUserProfile, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, plans, updatePlan } = useStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
@@ -15,6 +15,24 @@ export const AdminPanel: React.FC = () => {
     const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
     const [editingUser, setEditingUser] = useState<string | null>(null);
     const [regOpen, setRegOpen] = useState(true);
+    const [localPlans, setLocalPlans] = useState<Plan[]>([]);
+
+    useEffect(() => {
+        // Enforce sorted order locally to prevent jumping
+        const sorted = [...plans].sort((a, b) => a.id.localeCompare(b.id));
+        setLocalPlans(sorted);
+    }, [plans]);
+
+    const handlePlanChange = (planId: string, field: keyof Plan, value: any) => {
+        setLocalPlans(prev => prev.map(p => p.id === planId ? { ...p, [field]: value } : p));
+    };
+
+    const savePlan = async (planId: string) => {
+        const plan = localPlans.find(p => p.id === planId);
+        if (!plan) return;
+        await updatePlan(planId, plan);
+        // alert('Plan updated successfully!'); // Removed alert to be less intrusive
+    };
 
     const [editLimits, setEditLimits] = useState({
         maxProjects: 3,
@@ -65,6 +83,7 @@ export const AdminPanel: React.FC = () => {
             };
         });
 
+        mappedUsers.sort((a, b) => b.createdAt - a.createdAt); // Sort newest first
         setUsers(mappedUsers);
         setProjects(projectData || []);
 
@@ -281,6 +300,120 @@ export const AdminPanel: React.FC = () => {
                             <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
                         </div>
                     )}
+                </div>
+            </div>
+
+            {/* Plan Management Section */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
+                    <Crown size={20} className="text-yellow-500" /> Manage Plans & Pricing
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {localPlans.map(plan => (
+                        <div key={plan.id} className={`border rounded-xl p-5 ${plan.id === 'premium' ? 'border-yellow-400 bg-yellow-50/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="text-xl font-bold capitalize text-gray-800 dark:text-white">{plan.name}</h4>
+                                <button onClick={() => savePlan(plan.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-bold flex items-center gap-1">
+                                    <Check size={14} /> Save Changes
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Pricing */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Monthly ($)</label>
+                                        <input
+                                            type="number"
+                                            value={plan.priceMonthly}
+                                            onChange={e => handlePlanChange(plan.id, 'priceMonthly', parseInt(e.target.value))}
+                                            className="w-full border rounded p-2"
+                                            disabled={plan.id === 'free'}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Yearly ($)</label>
+                                        <input
+                                            type="number"
+                                            value={plan.priceYearly}
+                                            onChange={e => handlePlanChange(plan.id, 'priceYearly', parseInt(e.target.value))}
+                                            className="w-full border rounded p-2"
+                                            disabled={plan.id === 'free'}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Limits */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Max Projects</label>
+                                        <input
+                                            type="number"
+                                            value={plan.maxProjects}
+                                            onChange={e => handlePlanChange(plan.id, 'maxProjects', parseInt(e.target.value))}
+                                            className="w-full border rounded p-2"
+                                        />
+                                        <p className="text-[10px] text-gray-400">999999 = Unlimited</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Members/Proj</label>
+                                        <input
+                                            type="number"
+                                            value={plan.maxMembersPerProject}
+                                            onChange={e => handlePlanChange(plan.id, 'maxMembersPerProject', parseInt(e.target.value))}
+                                            className="w-full border rounded p-2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Upload Limit (Count)</label>
+                                        <input
+                                            type="number"
+                                            value={plan.maxUploadsPerTaskLimit}
+                                            onChange={e => handlePlanChange(plan.id, 'maxUploadsPerTaskLimit', parseInt(e.target.value))}
+                                            className="w-full border rounded p-2"
+                                        />
+                                        <p className="text-[10px] text-gray-400">0 = Use Toggle</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Retention (Days)</label>
+                                        <input
+                                            type="number"
+                                            value={plan.historyRetentionDays || ''}
+                                            placeholder="Unlimited"
+                                            onChange={e => handlePlanChange(plan.id, 'historyRetentionDays', e.target.value ? parseInt(e.target.value) : null)}
+                                            className="w-full border rounded p-2"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Toggles */}
+                                <div className="space-y-2 pt-2 border-t">
+                                    <h5 className="text-xs font-bold text-gray-500 uppercase">Features Enabled</h5>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { key: 'canInviteMembers', label: 'Invite Members' },
+                                            { key: 'canUploadImages', label: 'Image Uploads' },
+                                            { key: 'canSetReminders', label: 'Reminders' },
+                                            { key: 'canUseNotifications', label: 'Notifications' },
+                                            { key: 'canExportData', label: 'CSV Export' },
+                                            { key: 'canViewHistory', label: 'View History' }
+                                        ].map(feature => (
+                                            <label key={feature.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={plan[feature.key as keyof Plan] as boolean}
+                                                    onChange={e => handlePlanChange(plan.id, feature.key as keyof Plan, e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 rounded"
+                                                />
+                                                {feature.label}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {localPlans.length === 0 && <p className="text-gray-500 italic p-4">Loading plans...</p>}
                 </div>
             </div>
 

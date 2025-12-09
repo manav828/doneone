@@ -1,6 +1,25 @@
 
 export type Role = 'Manager' | 'Lead' | 'Resource';
 
+export interface Plan {
+  id: string;
+  name: string;
+  priceMonthly: number;
+  priceYearly: number;
+  description: string;
+  maxProjects: number;
+  maxMembersPerProject: number;
+  maxUploadSizeMb: number;
+  maxUploadsPerTaskLimit: number;
+  canInviteMembers: boolean;
+  canUploadImages: boolean;
+  canSetReminders: boolean;
+  canUseNotifications: boolean;
+  canExportData: boolean;
+  canViewHistory: boolean;
+  historyRetentionDays: number | null;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -22,6 +41,8 @@ export interface User {
   maxAttachmentsPerTask: number;
   autoArchiveDays?: number;
   historyRetentionDays?: number | null;
+  canInvite?: boolean;
+  canExport?: boolean;
 }
 
 export interface Tag {

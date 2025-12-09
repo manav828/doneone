@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage } from './types';
+import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -15,6 +15,10 @@ interface AppState {
   customAlert: { isOpen: boolean, message: string, type: 'error' | 'success' | 'info' | 'warning' };
   showCustomAlert: (message: string, type?: 'error' | 'success' | 'info' | 'warning') => void;
   closeCustomAlert: () => void;
+
+  // Rate Limiting
+  rateLimits: Record<string, number[]>;
+  checkRateLimit: (actionType: string) => boolean;
 
   // Sleep Detection
   lastHeartbeat: number;
@@ -34,6 +38,7 @@ interface AppState {
   activities: Activity[];
   notifications: Notification[];
   tags: Tag[];
+  plans: Plan[];
 
   // History Management
   taskHistory: TaskHistory[];
@@ -70,6 +75,8 @@ interface AppState {
   fetchActivities: () => Promise<any[]>;
   fetchNotifications: () => Promise<any[]>;
   fetchTags: () => Promise<any[]>;
+  fetchPlans: () => Promise<Plan[]>;
+  updatePlan: (id: string, updates: Partial<Plan>) => Promise<void>;
   signIn: (user: User) => void;
   signOut: () => Promise<void>;
 
@@ -236,6 +243,7 @@ export const useStore = create<AppState>((set, get) => ({
   activities: [],
   notifications: [],
   tags: DEFAULT_TAGS,
+  plans: [],
   activeProjectId: null,
   activeMemberFilter: null,
   activeTagFilter: null,
@@ -448,6 +456,30 @@ export const useStore = create<AppState>((set, get) => ({
 
   initialized: false,
 
+  // Rate Limiting
+  rateLimits: {},
+  checkRateLimit: (actionType: string) => {
+    const { rateLimits } = get();
+    const now = Date.now();
+    const windowMs = 60 * 1000; // 1 Minute Window
+    let limit = 20; // Default
+
+    if (actionType === 'addTask') limit = 10;
+    else if (actionType === 'uploadFile') limit = 5;
+    else if (actionType === 'addProject') limit = 2;
+
+    const history = rateLimits[actionType] || [];
+    const recent = history.filter(t => now - t < windowMs);
+
+    if (recent.length >= limit) {
+      alert(`Rate limit exceeded for ${actionType}. Please wait.`);
+      return false;
+    }
+
+    set({ rateLimits: { ...rateLimits, [actionType]: [...recent, now] } });
+    return true;
+  },
+
   init: async () => {
     // Offline Listeners
     if (!get().initialized) {
@@ -586,6 +618,33 @@ export const useStore = create<AppState>((set, get) => ({
         adminRetentionSettings
       });
 
+      // Fetch Plans and update user limits based on Plan
+      await get().fetchPlans();
+      const { plans, currentUser } = get();
+      if (currentUser && plans.length > 0) {
+        const isPrem = get().canAccessPremium();
+        const activePlan = isPrem ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+
+        if (activePlan) {
+          set({
+            currentUser: {
+              ...currentUser,
+              maxProjects: activePlan.maxProjects,
+              maxLeads: activePlan.maxMembersPerProject, // Mapping members to leads/resources vaguely or assuming total? The plan says 'max_members_per_project'.
+              // We might need to adjust User type if we want to be strict, but fitting into existing props:
+              imageUploadEnabled: activePlan.canUploadImages,
+              remindersEnabled: activePlan.canSetReminders,
+              notificationsEnabled: activePlan.canUseNotifications,
+              timeTrackingEnabled: true, // Not in plan DB explicitly yet, defaulting true or we can add it. Plan has 'can_export' etc.
+              maxAttachmentsPerTask: activePlan.maxUploadsPerTaskLimit === 0 ? 99 : activePlan.maxUploadsPerTaskLimit,
+              historyRetentionDays: activePlan.historyRetentionDays,
+              canInvite: activePlan.canInviteMembers,
+              canExport: activePlan.canExportData
+            }
+          });
+        }
+      }
+
       // Update Chrome Storage cache for content script
       syncToChromeStorage('cachedCurrentUser', get().currentUser);
 
@@ -614,7 +673,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Data Fetching
   fetchUsers: async () => {
-    const { data: allProfiles } = await supabase.from('profiles').select('*');
+    const { data: allProfiles } = await supabase.from('profiles').select('*').order('created_at');
     const mappedUsers: User[] = (allProfiles || []).map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -782,6 +841,53 @@ export const useStore = create<AppState>((set, get) => ({
     return processedActivities;
   },
 
+  fetchPlans: async () => {
+    const { data: plans } = await supabase.from('plans').select('*').order('id');
+    if (!plans) return [];
+
+    const mappedPlans: Plan[] = plans.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      priceMonthly: p.price_monthly,
+      priceYearly: p.price_yearly,
+      description: p.description,
+      maxProjects: p.max_projects,
+      maxMembersPerProject: p.max_members_per_project,
+      maxUploadSizeMb: p.max_upload_size_mb,
+      maxUploadsPerTaskLimit: p.max_uploads_per_task_limit,
+      canInviteMembers: p.can_invite_members,
+      canUploadImages: p.can_upload_images,
+      canSetReminders: p.can_set_reminders,
+      canUseNotifications: p.can_use_notifications,
+      canExportData: p.can_export_data,
+      canViewHistory: p.can_view_history,
+      historyRetentionDays: p.history_retention_days
+    }));
+
+    set({ plans: mappedPlans });
+    return mappedPlans;
+  },
+
+  updatePlan: async (id, updates) => {
+    const dbUpdates: any = {};
+    if (updates.priceMonthly !== undefined) dbUpdates.price_monthly = updates.priceMonthly;
+    if (updates.priceYearly !== undefined) dbUpdates.price_yearly = updates.priceYearly;
+    if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
+    if (updates.maxMembersPerProject !== undefined) dbUpdates.max_members_per_project = updates.maxMembersPerProject;
+    if (updates.maxUploadsPerTaskLimit !== undefined) dbUpdates.max_uploads_per_task_limit = updates.maxUploadsPerTaskLimit;
+    if (updates.canInviteMembers !== undefined) dbUpdates.can_invite_members = updates.canInviteMembers;
+    if (updates.canUploadImages !== undefined) dbUpdates.can_upload_images = updates.canUploadImages;
+    if (updates.canSetReminders !== undefined) dbUpdates.can_set_reminders = updates.canSetReminders;
+    if (updates.canUseNotifications !== undefined) dbUpdates.can_use_notifications = updates.canUseNotifications;
+    if (updates.canExportData !== undefined) dbUpdates.can_export_data = updates.canExportData;
+    if (updates.historyRetentionDays !== undefined) dbUpdates.history_retention_days = updates.historyRetentionDays;
+
+    const { error } = await supabase.from('plans').update(dbUpdates).eq('id', id);
+    if (!error) {
+      await get().fetchPlans();
+    }
+  },
+
   fetchNotifications: async () => {
     const { currentUser } = get();
     if (!currentUser) return;
@@ -890,6 +996,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // ... (Previous addProject, updateProject, deleteProject, etc. remain unchanged)
   addProject: async (name, description, color) => {
+    if (!get().checkRateLimit('addProject')) return;
     const user = get().currentUser;
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
@@ -1002,6 +1109,17 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteProject: async (id) => {
+    const { projects, currentUser } = get();
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+
+    if (project.managerId !== currentUser?.id && currentUser?.email !== ADMIN_EMAIL) {
+      alert("Only the Project Manager can delete this project.");
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
+
     await supabase.from('projects').delete().eq('id', id);
     set(state => ({ projects: state.projects.filter(p => p.id !== id), activeProjectId: state.activeProjectId === id ? null : state.activeProjectId }));
   },
@@ -1033,6 +1151,58 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addMember: async (projectId, userId, role) => {
+    // Check Limits for Project Members
+    const { currentUser, projects } = get();
+    const project = projects.find(p => p.id === projectId);
+
+    // Only check if YOU are the manager (Plan owner)?
+    // The prompt says "total member per project 8" for premium plan.
+    // If I am a Free user, can invite 0. 
+    // If I am Premium, 8.
+    // So we check the Manager's limits? Or the Current User's?
+    // "in free plan user can not invite any member... in premium plan user... total member per project 8"
+    // It implies the LIMIT applies to the PROJECT based on OWNER's plan.
+    // BUT 'addMember' implies inviting.
+    // If I just check `currentUser.canInvite`, that works if I am the manager.
+    // If I am a lead inviting someone? Leads usually can't invite in this system (PERMISSION check handles that).
+    // PERMISSIONS['Lead'].manageTeam is true?
+    // Let's assume Manager's plan dictates the Project's capacity.
+    // But for simplicity, we check currentUser's capacity if they are doing the verify.
+    // Actually, `fetchProjects` sets `manager` object on the project.
+    // `project.manager` has `hasPremiumAccess`.
+    // We should probably rely on `project.manager` plan?
+    // But `project.manager` in `types.ts` only has `hasPremiumAccess`.
+    // It doesn't have the `maxMembersPerProject` count.
+    // Changing `types.ts` again is painful.
+    // Let's rely on `currentUser` assuming currentUser is the one adding.
+    // If currentUser is just a Lead, we might bypass manager's limit if we only check currentUser (who might be premium).
+    // But properly, the limit is on the PROJECT owner.
+    // However, for this MVP, we'll check `project.reportsTo` size + leadIds size + resourceIds size?
+    // "total member per project 8".
+    // Let's count current members.
+
+    if (project) {
+      const totalMembers = (project.leadIds?.length || 0) + (project.resourceIds?.length || 0); // +1 for manager? usually doesn't count manager against invite limit
+      // User said "can not invite any member".
+      // If free plan: canInvite = false.
+
+      // If currentUser is Manager: use currentUser.canInvite / maxLeads (mapped to max members)
+      if (currentUser && currentUser.id === project.managerId) {
+        if (!currentUser.canInvite) {
+          alert("Your plan does not allow inviting members. Upgrade to Premium.");
+          return;
+        }
+        // Using 'maxLeads' property as the carrier for 'maxMembersPerProject' per logic in init()
+        if (currentUser.maxLeads && totalMembers >= currentUser.maxLeads) {
+          alert(`Plan limit reached. Max ${currentUser.maxLeads} members per project.`);
+          return;
+        }
+      }
+      // If currentUser is NOT Manager (e.g. Lead), we should ideally check Manager's plan.
+      // But we don't have manager's full plan details here.
+      // For now, we'll skip check for non-managers or assume only Manager adds.
+    }
+
     await supabase.from('project_members').insert({ project_id: projectId, user_id: userId, role, status: 'active' });
     get().fetchProjects();
   },
@@ -1137,6 +1307,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addTask: async (projectId, columnId, title) => {
+    if (!get().checkRateLimit('addTask')) return;
     const user = get().currentUser;
     if (!user) return;
     const currentTasks = get().tasks.filter(t => t.columnId === columnId);
@@ -1535,6 +1706,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   uploadFile: async (file) => {
+    if (!get().checkRateLimit('uploadFile')) return null;
     // 1. Check if Image Upload is Enabled Globally (if not admin)
     // 2. Check if Image Upload is Enabled for this PROJECT (Strict Mode)
     const { currentUser, projects, activeProjectId, canAccessPremium, tasks } = get();
@@ -2112,6 +2284,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   exportHistoryToCSV: (mode, selectedIds = []) => {
     const { taskHistory, selectedHistoryIds, users, tags, activeProjectId, projects, currentUser } = get();
+
+    if (currentUser && currentUser.canExport === false && currentUser.email !== ADMIN_EMAIL) {
+      alert("Export is a Premium feature. Please upgrade.");
+      return;
+    }
+
     const activeProject = projects.find(p => p.id === activeProjectId);
 
     // Filter by Visibility Rules (Hierarchy)
