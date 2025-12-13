@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { Filter, Tag as TagIcon, X, User, Columns } from 'lucide-react';
+import { Filter, Tag as TagIcon, X, User, Columns, ArrowLeftRight } from 'lucide-react';
 import { KanbanView } from './views/KanbanView';
 import { ListView } from './views/ListView';
 import { CalendarView } from './views/CalendarView';
+import { TimelineView } from './views/TimelineView';
+import { ColumnReorderModal } from './ColumnReorderModal';
 
 export const Board: React.FC = () => {
   const {
@@ -20,8 +22,11 @@ export const Board: React.FC = () => {
     getVisibleUsers,
     currentUser,
     projects,
-    currentView
+    currentView,
+    can
   } = useStore();
+
+  const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
 
   const project = projects.find(p => p.id === activeProjectId);
 
@@ -49,7 +54,6 @@ export const Board: React.FC = () => {
     <div className="h-full flex flex-col">
       {/* Filter Toolbar */}
       <div className="px-6 pt-4 pb-2 flex flex-wrap items-center gap-3 shrink-0">
-        {/* Member Filter */}
         {/* Member Filter */}
         {usersToFilter.length > 0 && (
           <div className="relative group">
@@ -130,6 +134,18 @@ export const Board: React.FC = () => {
             </button>
           )}
         </div>
+
+        {/* Arrange Columns Button */}
+        {can('manageColumns') && currentView === 'board' && (
+          <button
+            onClick={() => setIsReorderModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full hover:border-primary hover:text-primary transition-all shadow-sm"
+            title="Arrange Columns"
+          >
+            <ArrowLeftRight size={12} />
+            <span>Arrange</span>
+          </button>
+        )}
       </div>
 
       {/* View Content */}
@@ -142,6 +158,16 @@ export const Board: React.FC = () => {
       {currentView === 'calendar' && (
         <CalendarView tasks={visibleTasks} columns={projectColumns} />
       )}
+      {currentView === 'timeline' && (
+        <TimelineView tasks={visibleTasks} users={visibleUsers} />
+      )}
+
+      {/* Modals */}
+      <ColumnReorderModal
+        isOpen={isReorderModalOpen}
+        onClose={() => setIsReorderModalOpen(false)}
+        projectId={activeProjectId}
+      />
     </div>
   );
 };

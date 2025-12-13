@@ -1,16 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "FlowBoard - Project Management",
+  "name": "DoneOne - Project Management",
   "version": "1.0.0",
   "description": "Role-based Kanban project management tool.",
   "action": {
-    "default_title": "Open FlowBoard"
+    "default_title": "Open DoneOne"
   },
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "tabs"],
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",

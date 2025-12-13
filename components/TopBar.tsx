@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera } from 'lucide-react';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
@@ -30,7 +30,9 @@ export const TopBar: React.FC = () => {
     setSearchQuery,
     canAccessPremium,
     isPricingModalOpen,
-    setPricingModalOpen
+    setPricingModalOpen,
+    uploadFile,
+    updateUserProfile
   } = useStore();
 
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
@@ -41,9 +43,11 @@ export const TopBar: React.FC = () => {
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -77,7 +81,7 @@ export const TopBar: React.FC = () => {
     root.style.setProperty('--color-primary-hover', color);
   }, [activeProject]);
 
-  const handleViewChange = (view: 'board' | 'list' | 'calendar') => {
+  const handleViewChange = (view: 'board' | 'list' | 'calendar' | 'timeline') => {
     if (view !== 'board' && !canAccessPremium()) {
       setPremiumFeature(view === 'list' ? 'List View' : 'Calendar View');
       setIsPremiumModalOpen(true);
@@ -86,10 +90,39 @@ export const TopBar: React.FC = () => {
     setView(view);
   };
 
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) {
+        await updateUserProfile(currentUser.id, { avatar: url });
+      }
+    } catch (err) {
+      console.error("Avatar upload failed", err);
+      alert("Failed to upload avatar");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (!currentUser) return null;
 
   return (
     <>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/*"
+      />
       <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 transition-colors duration-300 relative">
         <div className="flex items-center gap-6">
           {activeProject ? (
@@ -171,6 +204,13 @@ export const TopBar: React.FC = () => {
                   title="Calendar View (Premium)"
                 >
                   <Calendar size={16} />
+                </button>
+                <button
+                  onClick={() => handleViewChange('timeline')}
+                  className={`p-1.5 rounded-md transition-all ${currentView === 'timeline' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
+                  title="Timeline View (Premium)"
+                >
+                  <List size={16} className="rotate-90" />
                 </button>
               </div>
             </>
@@ -256,10 +296,14 @@ export const TopBar: React.FC = () => {
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="flex items-center gap-2 group outline-none"
             >
-              <div className={`relative h-9 w-9 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 transition-all group-hover:ring-primary/30 ${canAccessPremium() ? 'ring-yellow-400 dark:ring-yellow-500' : 'ring-white dark:ring-slate-800'}`}>
-                {currentUser.name.charAt(0)}
+              <div className={`relative h-9 w-9 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 transition-all group-hover:ring-primary/30 ${canAccessPremium() ? 'ring-yellow-400 dark:ring-yellow-500' : 'ring-white dark:ring-slate-800'} overflow-hidden`}>
+                {currentUser.avatar ? (
+                  <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{currentUser.name.charAt(0)}</span>
+                )}
                 {canAccessPremium() && (
-                  <div className="absolute -top-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border border-white dark:border-slate-900">
+                  <div className="absolute top-0 right-0 bg-yellow-400 text-white p-0.5 rounded-full border border-white dark:border-slate-900 z-10 w-3 h-3 flex items-center justify-center">
                     <Crown size={8} fill="currentColor" />
                   </div>
                 )}
@@ -268,9 +312,36 @@ export const TopBar: React.FC = () => {
 
             {isProfileOpen && (
               <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-modal border border-slate-100 dark:border-slate-700 overflow-hidden z-50 origin-top-right animate-in fade-in zoom-in-95 duration-100">
-                <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
-                  <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{currentUser.email}</p>
+                <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 relative">
+
+                  {/* Large Avatar in Dropdown */}
+                  <div className="flex justify-center mb-3">
+                    <div
+                      className="relative w-16 h-16 rounded-full group cursor-pointer ring-4 ring-white dark:ring-slate-700 shadow-md"
+                      onClick={handleAvatarClick}
+                    >
+                      {currentUser.avatar ? (
+                        <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                          {currentUser.name.charAt(0)}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Camera size={20} className="text-white" />
+                      </div>
+                      {isUploading && (
+                        <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center">
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{currentUser.email}</p>
+                  </div>
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <span className="inline-flex items-center px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-[10px] rounded-md uppercase font-bold tracking-wider shadow-sm">
                       {currentUser.role}

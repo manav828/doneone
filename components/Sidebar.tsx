@@ -49,14 +49,7 @@ export const Sidebar: React.FC = () => {
 
   const isSuperAdmin = currentUser?.email?.toLowerCase() === 'manavss828@gmail.com';
 
-  // DEBUG ADMIN ACCESS
-  console.log('🔐 ADMIN ACCESS CHECK:', {
-    email: currentUser?.email,
-    emailLower: currentUser?.email?.toLowerCase(),
-    isSuperAdmin,
-    currentUserId: currentUser?.id,
-    currentUserName: currentUser?.name
-  });
+
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +138,7 @@ export const Sidebar: React.FC = () => {
           <div className="p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl text-white shadow-sm shrink-0">
             <FolderKanban size={20} />
           </div>
-          {!isCollapsed && <h1 className="font-bold text-lg tracking-tight">FlowBoard</h1>}
+          {!isCollapsed && <h1 className="font-bold text-lg tracking-tight">DoneOne</h1>}
         </div>
 
         <button

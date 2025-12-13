@@ -109,7 +109,7 @@ export const Login: React.FC = () => {
           <div className="p-3 bg-primary rounded-xl text-white mb-3">
             <FolderKanban size={32} />
           </div>
-          <h1 className="text-2xl font-bold">FlowBoard</h1>
+          <h1 className="text-2xl font-bold">DoneOne</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Project Management Extension</p>
         </div>
 

@@ -209,3 +209,15 @@ export interface HistoryFilter {
   limit?: number;
   offset?: number;
 }
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  description: string;
+  status: string; // 'open' | 'resolved'
+  createdAt: number;
+  userName?: string; // Computed
+  userEmail?: string; // Computed
+}

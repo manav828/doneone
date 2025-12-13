@@ -81,7 +81,11 @@ export const KanbanView: React.FC<KanbanViewProps> = ({ tasks, columns }) => {
             const overTask = tasks.find(t => t.id === overId);
             if (overTask) {
                 newColumnId = overTask.columnId;
-                newIndex = overTask.orderIndex;
+                // Calculate index based on current visual position in the column
+                const tasksInColumn = tasks
+                    .filter(t => t.columnId === newColumnId)
+                    .sort((a, b) => a.orderIndex - b.orderIndex);
+                newIndex = tasksInColumn.findIndex(t => t.id === overId);
             }
         }
 

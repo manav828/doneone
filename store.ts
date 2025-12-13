@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage } from './types';
+import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression';
 declare var chrome: any;
 
 interface AppState {
+  supportTickets: SupportTicket[];
   // Custom Alert
   customAlert: { isOpen: boolean, message: string, type: 'error' | 'success' | 'info' | 'warning' };
   showCustomAlert: (message: string, type?: 'error' | 'success' | 'info' | 'warning') => void;
@@ -55,11 +56,11 @@ interface AppState {
   activeMemberFilter: string | null;
   activeTagFilter: string | null;
   activeStatusFilter: string | null; // Column ID
-  currentView: 'board' | 'list' | 'calendar';
+  currentView: 'board' | 'list' | 'calendar' | 'timeline';
   setMemberFilter: (userId: string | null) => void;
   setTagFilter: (tagId: string | null) => void;
   setStatusFilter: (columnId: string | null) => void;
-  setView: (view: 'board' | 'list' | 'calendar') => void;
+  setView: (view: 'board' | 'list' | 'calendar' | 'timeline') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   archiveProject: (projectId: string) => Promise<void>;
@@ -97,6 +98,8 @@ interface AppState {
   updateColumn: (columnId: string, updates: Partial<Column>) => Promise<void>;
   deleteColumn: (id: string) => Promise<void>;
   moveColumn: (columnId: string, direction: 'left' | 'right') => Promise<void>;
+  reorderColumns: (projectId: string, newOrderIds: string[]) => Promise<void>;
+
 
   addTask: (projectId: string, columnId: string, title: string) => Promise<Task | undefined>;
   updateTask: (taskId: string, updates: Partial<Task> & { timerStartedAt?: number | null }) => Promise<void>;
@@ -121,6 +124,8 @@ interface AppState {
 
   // Support
   submitSupportTicket: (ticket: { type: 'Bug' | 'Enhancement', title: string, description: string }) => Promise<void>;
+  fetchSupportTickets: () => Promise<void>;
+  resolveSupportTicket: (ticketId: string, status: 'open' | 'resolved' | 'dismissed') => Promise<void>;
 
 
   // Helpers
@@ -243,6 +248,7 @@ export const useStore = create<AppState>((set, get) => ({
   activities: [],
   notifications: [],
   tags: DEFAULT_TAGS,
+  supportTickets: [],
   plans: [],
   activeProjectId: null,
   activeMemberFilter: null,
@@ -673,26 +679,29 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Data Fetching
   fetchUsers: async () => {
-    const { data: allProfiles } = await supabase.from('profiles').select('*').order('created_at');
-    const mappedUsers: User[] = (allProfiles || []).map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      role: p.role,
-      avatar: p.avatar,
-      createdAt: new Date(p.created_at).getTime(),
-      premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
-      maxProjects: p.max_projects,
-      maxLeads: p.max_leads,
-      maxResources: p.max_resources,
-      notificationsEnabled: p.notifications_enabled,
-      remindersEnabled: p.reminders_enabled,
-      timeTrackingEnabled: p.time_tracking_enabled,
-      imageUploadEnabled: p.image_upload_enabled,
-      maxAttachmentsPerTask: p.max_attachments_per_task || 3,
-      autoArchiveDays: p.auto_archive_days,
-      historyRetentionDays: p.history_retention_days
-    }));
+    const { data: allProfiles } = await supabase.from('profiles').select('*, user_archive_settings(*)').order('created_at');
+    const mappedUsers: User[] = (allProfiles || []).map((p: any) => {
+      const settings = Array.isArray(p.user_archive_settings) ? p.user_archive_settings[0] : p.user_archive_settings;
+      return {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        role: p.role,
+        avatar: p.avatar_url || p.avatar,
+        createdAt: new Date(p.created_at).getTime(),
+        premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
+        maxProjects: p.max_projects,
+        maxLeads: p.max_leads,
+        maxResources: p.max_resources,
+        notificationsEnabled: p.notifications_enabled,
+        remindersEnabled: p.reminders_enabled,
+        timeTrackingEnabled: p.time_tracking_enabled,
+        imageUploadEnabled: p.image_upload_enabled,
+        maxAttachmentsPerTask: p.max_attachments_per_task || 3,
+        autoArchiveDays: settings?.auto_archive_days || 0,
+        historyRetentionDays: settings?.history_retention_days || null
+      };
+    });
 
     // Sync currentUser if compatible
     const { currentUser } = get();
@@ -1306,6 +1315,30 @@ export const useStore = create<AppState>((set, get) => ({
     await supabase.from('columns').update({ order_index: col.orderIndex }).eq('id', swapCol.id);
   },
 
+  reorderColumns: async (projectId: string, newOrderIds: string[]) => {
+    const { columns } = get();
+    // 1. Optimistic Update
+    const projectCols = columns.filter(c => c.projectId === projectId);
+    const otherCols = columns.filter(c => c.projectId !== projectId);
+
+    const reorderedProjectCols = projectCols.map(c => {
+      const newIndex = newOrderIds.indexOf(c.id);
+      if (newIndex !== -1) {
+        return { ...c, orderIndex: newIndex };
+      }
+      return c;
+    });
+
+    set({ columns: [...otherCols, ...reorderedProjectCols] });
+
+    // 2. Persist to DB
+    // We update each column's order_index
+    // Ideally use an RPC or batch update, but Promise.all is okay for small number of columns
+    await Promise.all(newOrderIds.map((id, index) =>
+      supabase.from('columns').update({ order_index: index }).eq('id', id)
+    ));
+  },
+
   addTask: async (projectId, columnId, title) => {
     if (!get().checkRateLimit('addTask')) return;
     const user = get().currentUser;
@@ -1470,15 +1503,31 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     if (oldColumnId === newColumnId) {
-      let colTasks = allTasks.filter(t => t.columnId === newColumnId).sort((a, b) => a.orderIndex - b.orderIndex);
+      // Create a shallow copy of tasks in this column for manipulation
+      let colTasks = allTasks
+        .filter(t => t.columnId === newColumnId)
+        .sort((a, b) => a.orderIndex - b.orderIndex);
+
       const currentIndex = colTasks.findIndex(t => t.id === taskId);
       if (currentIndex === -1) return;
 
+      // Logic: Move item in the array
       const [movedItem] = colTasks.splice(currentIndex, 1);
       colTasks.splice(newIndex, 0, movedItem);
-      colTasks.forEach((t, i) => { t.orderIndex = i; });
 
-      set({ tasks: allTasks.map(t => colTasks.find(ct => ct.id === t.id) || t) });
+      // Create NEW objects with updated orderIndex to ensure state change detection
+      const updatedColTasks = colTasks.map((t, index) => ({
+        ...t,
+        orderIndex: index
+      }));
+
+      // Update the main tasks array with the new objects
+      const newTasks = allTasks.map(t => {
+        const updated = updatedColTasks.find(ut => ut.id === t.id);
+        return updated || t;
+      });
+
+      set({ tasks: newTasks });
     } else {
       let oldColTasks = allTasks.filter(t => t.columnId === oldColumnId).sort((a, b) => a.orderIndex - b.orderIndex);
       oldColTasks = oldColTasks.filter(t => t.id !== taskId);
@@ -1843,6 +1892,50 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchSupportTickets: async () => {
+    const { users } = get();
+    const { data: tickets, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Fetch Tickets Error:", error);
+      return;
+    }
+
+    const mapped: SupportTicket[] = (tickets || []).map((t: any) => {
+      const user = users.find(u => u.id === t.user_id);
+      return {
+        id: t.id,
+        userId: t.user_id,
+        type: t.type,
+        title: t.title,
+        description: t.description,
+        status: (t.status || 'open').trim().toLowerCase(),
+        createdAt: new Date(t.created_at).getTime(),
+        userName: user ? user.name : 'Unknown',
+        userEmail: user ? user.email : 'Unknown'
+      };
+    });
+
+    set({ supportTickets: mapped });
+  },
+
+  resolveSupportTicket: async (ticketId, status) => {
+    // Capitalize for DB constraint
+    const dbStatus = status.charAt(0).toUpperCase() + status.slice(1);
+    console.log(`[Store] Updating ticket ${ticketId} status to: ${dbStatus} (Original: ${status})`);
+    const { error } = await supabase.from('support_tickets').update({ status: dbStatus }).eq('id', ticketId);
+    if (!error) {
+      // Local state we keep using the normalized lowercase or whatever passed
+      const tickets = get().supportTickets.map(t => t.id === ticketId ? { ...t, status } : t);
+      set({ supportTickets: tickets });
+    } else {
+      console.error("Resolve Error:", error);
+    }
+  },
+
   // ... (Helpers remain same)
   createTag: async (projectId, name, color) => {
     const { data } = await supabase.from('tags').insert({ project_id: projectId, name, color, type: 'Custom' }).select().single();
@@ -1882,6 +1975,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.timeTrackingEnabled !== undefined) dbUpdates.time_tracking_enabled = updates.timeTrackingEnabled;
     if (updates.imageUploadEnabled !== undefined) dbUpdates.image_upload_enabled = updates.imageUploadEnabled;
     if (updates.maxAttachmentsPerTask !== undefined) dbUpdates.max_attachments_per_task = updates.maxAttachmentsPerTask;
+    if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
 
     const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
     if (error) {
