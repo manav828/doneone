@@ -44,6 +44,21 @@ export const TopBar: React.FC = () => {
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+
+  useEffect(() => {
+    if (currentUser) setNameInput(currentUser.name);
+  }, [currentUser]);
+
+  const handleNameSave = async () => {
+    if (!currentUser || !nameInput.trim() || nameInput === currentUser.name) return;
+    await updateUserProfile(currentUser.id, { name: nameInput });
+  };
+
+  const toggleMultipleInProgress = async () => {
+    if (!currentUser) return;
+    await updateUserProfile(currentUser.id, { allowMultipleInProgress: !currentUser.allowMultipleInProgress });
+  };
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -338,11 +353,22 @@ export const TopBar: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-center">
-                    <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{currentUser.email}</p>
+                  <div className="text-center px-4">
+                    <input
+                      className="font-bold text-slate-900 dark:text-white text-base text-center bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none transition-colors w-full mb-0.5"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      onBlur={handleNameSave}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      title="Click to edit name"
+                    />
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser.email}</p>
                   </div>
-                  <div className="mt-3 flex gap-2 flex-wrap">
+                  <div className="mt-3 flex gap-2 flex-wrap justify-center">
                     <span className="inline-flex items-center px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-[10px] rounded-md uppercase font-bold tracking-wider shadow-sm">
                       {currentUser.role}
                     </span>
@@ -361,6 +387,20 @@ export const TopBar: React.FC = () => {
                       </span>
                     )}
                   </div>
+
+                  {/* Allow Multiple In Progress Toggle */}
+                  <div className="mt-3 px-1 py-1 flex items-center justify-between group" title="Allow more than one task in 'In Progress' column">
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Multiple In Progress</span>
+                    <button
+                      onClick={toggleMultipleInProgress}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${currentUser.allowMultipleInProgress ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    >
+                      <span
+                        className={`${currentUser.allowMultipleInProgress ? 'translate-x-5' : 'translate-x-1'} inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm`}
+                      />
+                    </button>
+                  </div>
+
                 </div>
 
                 {!canAccessPremium() && (

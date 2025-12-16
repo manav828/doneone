@@ -1,6 +1,6 @@
 declare var chrome: any;
 
-// When extension icon is clicked -> Open FlowBoard in new tab
+// When extension icon is clicked -> Open DoneOne in new tab
 chrome.action.onClicked.addListener((tab: any) => {
   chrome.tabs.create({ url: "index.html", pinned: true });
 });
@@ -8,8 +8,8 @@ chrome.action.onClicked.addListener((tab: any) => {
 // Create context menu on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: "add-to-flowboard",
-    title: "📋 Add to FlowBoard",
+    id: "add-to-doneone",
+    title: "📋 Add to DoneOne",
     contexts: ["page", "selection", "link", "image"]
   });
 
@@ -46,7 +46,7 @@ const injectAndShowModal = (tabId: number, data: any) => {
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info: any, tab: any) => {
-  if (info.menuItemId === "add-to-flowboard") {
+  if (info.menuItemId === "add-to-doneone") {
     injectAndShowModal(tab.id, {
       url: info.pageUrl,
       selectedText: info.selectionText || "",

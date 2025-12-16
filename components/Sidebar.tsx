@@ -135,10 +135,24 @@ export const Sidebar: React.FC = () => {
       {/* Header */}
       <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-4'} border-b border-transparent`}>
         <div className="flex items-center gap-3 text-slate-800 dark:text-slate-100">
-          <div className="p-2 bg-gradient-to-br from-primary to-blue-600 rounded-xl text-white shadow-sm shrink-0">
-            <FolderKanban size={20} />
-          </div>
-          {!isCollapsed && <h1 className="font-bold text-lg tracking-tight">DoneOne</h1>}
+          {!isCollapsed ? (
+            <div className="flex flex-col pl-3">
+              <img
+                src={localStorage.getItem('logo_version') === '2' ? "/logo_2.png" : "/logo_1.png"}
+                alt="DoneOne"
+                className="h-8 w-auto object-contain cursor-pointer"
+                title="Click to switch logo version"
+                onClick={() => {
+                  const current = localStorage.getItem('logo_version') || '1';
+                  const next = current === '1' ? '2' : '1';
+                  localStorage.setItem('logo_version', next);
+                  window.location.reload();
+                }}
+              />
+            </div>
+          ) : (
+            <img src={localStorage.getItem('logo_version') === '2' ? "/logo_2.png" : "/logo_1.png"} alt="DoneOne" className="h-8 w-8 object-contain" />
+          )}
         </div>
 
         <button

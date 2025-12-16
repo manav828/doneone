@@ -10,7 +10,7 @@ const Footer = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                 </svg>
                             </div>
-                            <span className="text-xl font-bold">FlowBoard</span>
+                            <span className="text-xl font-bold">DoneOne</span>
                         </div>
                         <p className="text-gray-400 text-sm">
                             The ultimate Chrome extension for seamless task management.
@@ -49,7 +49,7 @@ const Footer = () => {
 
                 <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
                     <p className="text-gray-400 text-sm">
-                        © 2025 FlowBoard. All rights reserved.
+                        © 2025 DoneOne. All rights reserved.
                     </p>
                     <div className="flex gap-6 mt-4 md:mt-0">
                         <a href="#" className="text-gray-400 hover:text-white transition-colors">

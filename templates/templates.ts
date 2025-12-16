@@ -1,4 +1,4 @@
-// Universal Board Templates for FlowBoard
+// Universal Board Templates for DoneOne
 // Templates for all professions, not just IT
 
 export interface BoardTemplate {

@@ -45,7 +45,7 @@ const Hero = () => {
                         className="text-6xl md:text-7xl font-bold mb-6 leading-tight"
                     >
                         Manage Projects{' '}
-                        <span className="gradient-text">with Flow</span>
+                        <span className="gradient-text">with DoneOne</span>
                     </motion.h1>
 
                     <motion.p
@@ -132,7 +132,7 @@ const Hero = () => {
                                 <div className="bg-white rounded-lg overflow-hidden">
                                     <img
                                         src="/screenshots/kanban.png"
-                                        alt="FlowBoard Kanban View"
+                                        alt="DoneOne Kanban View"
                                         className="w-full h-auto"
                                     />
                                 </div>

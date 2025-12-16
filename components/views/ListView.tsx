@@ -166,9 +166,13 @@ const ListRow: React.FC<{ task: Task; users: User[]; tags: any[] }> = ({ task, u
                 <td className="py-3 px-2">
                     {assignee ? (
                         <div className="flex items-center gap-1.5">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[10px] font-bold">
-                                {assignee.name.charAt(0)}
-                            </div>
+                            {assignee.avatar ? (
+                                <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+                            ) : (
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[10px] font-bold">
+                                    {assignee.name.charAt(0)}
+                                </div>
+                            )}
                             <span className="text-slate-600 dark:text-slate-300">{assignee.name.split(' ')[0]}</span>
                         </div>
                     ) : (

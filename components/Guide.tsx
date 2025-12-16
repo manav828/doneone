@@ -6,7 +6,7 @@ export const Guide: React.FC = () => {
   return (
     <div className="p-8 max-w-5xl mx-auto overflow-y-auto h-full pb-20">
       <div className="mb-8 border-b border-gray-200 dark:border-gray-700 pb-6">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">FlowBoard User Guide</h1>
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">DoneOne User Guide</h1>
         <p className="text-gray-500 text-lg">Master your workflow with this comprehensive guide.</p>
       </div>
 

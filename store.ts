@@ -258,7 +258,7 @@ export const useStore = create<AppState>((set, get) => ({
   searchQuery: '',
   isOffline: !navigator.onLine,
 
-  syncQueue: JSON.parse(localStorage.getItem('flowboard_sync_queue') || '[]'),
+  syncQueue: JSON.parse(localStorage.getItem('doneone_sync_queue') || '[]'),
 
   // UI State
   isPricingModalOpen: false,
@@ -286,7 +286,7 @@ export const useStore = create<AppState>((set, get) => ({
   setStatusFilter: (colId) => set({ activeStatusFilter: colId }),
   setView: (view) => {
     set({ currentView: view });
-    localStorage.setItem('flowboard_view_pref', view);
+    localStorage.setItem('doneone_view_pref', view);
   },
   setSearchQuery: (query) => set({ searchQuery: query }),
 
@@ -356,7 +356,7 @@ export const useStore = create<AppState>((set, get) => ({
     // The current implementation seems to just queue them.
     const queue = [...syncQueue];
     set({ syncQueue: [] });
-    localStorage.setItem('flowboard_sync_queue', '[]');
+    localStorage.setItem('doneone_sync_queue', '[]');
 
     for (const action of queue) {
       try {
@@ -389,7 +389,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   initSleepDetection: () => {
     // 1. Check for Shutdown Gap immediately
-    const lastHeartbeatStr = localStorage.getItem('flowboard_heartbeat');
+    const lastHeartbeatStr = localStorage.getItem('doneone_heartbeat');
     const { tasks, currentUser } = get();
 
     // Helper to stop timer
@@ -412,7 +412,7 @@ export const useStore = create<AppState>((set, get) => ({
       await get().updateTask(task.id, { timeTracked: newTotal, timerStartedAt: null });
 
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('FlowBoard', {
+        new Notification('DoneOne', {
           body: `Timer for "${task.title}" stopped (System Sleep/Shutdown).`,
           icon: 'icon128.png'
         });
@@ -445,7 +445,7 @@ export const useStore = create<AppState>((set, get) => ({
       const GAP_THRESHOLD = 2 * 60 * 1000; // 2 minutes (Sleep threshold)
 
       // Persist heartbeat
-      localStorage.setItem('flowboard_heartbeat', String(now));
+      localStorage.setItem('doneone_heartbeat', String(now));
 
       // Update state heartbeat
       set({ lastHeartbeat: now });
@@ -523,7 +523,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Load from LocalStorage if available (only on first load)
     if (!get().currentUser) {
-      const cached = localStorage.getItem('flowboard_state');
+      const cached = localStorage.getItem('doneone_state');
       if (cached) {
         const parsed = JSON.parse(cached);
         set({
@@ -699,7 +699,9 @@ export const useStore = create<AppState>((set, get) => ({
         imageUploadEnabled: p.image_upload_enabled,
         maxAttachmentsPerTask: p.max_attachments_per_task || 3,
         autoArchiveDays: settings?.auto_archive_days || 0,
-        historyRetentionDays: settings?.history_retention_days || null
+
+        historyRetentionDays: settings?.history_retention_days || null,
+        allowMultipleInProgress: p.allow_multiple_in_progress,
       };
     });
 
@@ -707,7 +709,36 @@ export const useStore = create<AppState>((set, get) => ({
     const { currentUser } = get();
     if (currentUser) {
       const freshMe = mappedUsers.find(u => u.id === currentUser.id);
-      if (freshMe) set({ currentUser: freshMe });
+      if (freshMe) {
+        // Re-apply Plan Limits if Premium (Fixes overwrite issue)
+        const isPrem = get().canAccessPremium();
+        const { plans } = get();
+        const activePlan = isPrem ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+
+        let effectiveUser = { ...freshMe };
+        if (activePlan) {
+          effectiveUser = {
+            ...effectiveUser,
+            maxProjects: Math.max(freshMe.maxProjects || 0, activePlan.maxProjects),
+            // Use maxLeads as proxy for Members Per Project
+            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.maxMembersPerProject),
+
+            // Boolean Features: OR logic (If Plan says YES or User says YES -> YES)
+            imageUploadEnabled: freshMe.imageUploadEnabled || activePlan.canUploadImages,
+            remindersEnabled: freshMe.remindersEnabled || activePlan.canSetReminders,
+            notificationsEnabled: freshMe.notificationsEnabled || activePlan.canUseNotifications,
+            canInvite: activePlan.canInviteMembers, // This is usually plan-only
+            canExport: activePlan.canExportData,
+
+            // Max Attachments
+            maxAttachmentsPerTask: Math.max(freshMe.maxAttachmentsPerTask || 0, activePlan.maxUploadsPerTaskLimit === 0 ? 99 : activePlan.maxUploadsPerTaskLimit),
+
+            // History (Take max retention)
+            historyRetentionDays: Math.max(freshMe.historyRetentionDays || 0, activePlan.historyRetentionDays || 0)
+          };
+        }
+        set({ currentUser: effectiveUser });
+      }
     }
 
     set({ users: mappedUsers });
@@ -790,7 +821,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchColumns: async () => {
     const { data: columns } = await supabase.from('columns').select('*').order('order_index');
-    const localSettings = JSON.parse(localStorage.getItem('flowboard_column_settings') || '{}');
+    const localSettings = JSON.parse(localStorage.getItem('doneone_column_settings') || '{}');
 
     const processedColumns: Column[] = (columns || []).map((c: any) => ({
       id: c.id,
@@ -1009,9 +1040,18 @@ export const useStore = create<AppState>((set, get) => ({
     const user = get().currentUser;
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
-    const limit = user.maxProjects || 3;
+
+    // Determine Effective Limit
+    let limit = user.maxProjects || 3;
+    if (get().canAccessPremium()) {
+      const premiumPlan = get().plans.find(p => p.id === 'premium');
+      if (premiumPlan) {
+        limit = Math.max(limit, premiumPlan.maxProjects);
+      }
+    }
+
     if (myProjects.length >= limit && user.email !== ADMIN_EMAIL) {
-      alert(`Limit reached. Contact Admin.`);
+      alert(`Limit reached. You have ${myProjects.length}/${limit} projects.`);
       return;
     }
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -1054,9 +1094,17 @@ export const useStore = create<AppState>((set, get) => ({
     const user = get().currentUser;
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
-    const limit = user.maxProjects || 3;
+    // Determine Effective Limit
+    let limit = user.maxProjects || 3;
+    if (get().canAccessPremium()) {
+      const premiumPlan = get().plans.find(p => p.id === 'premium');
+      if (premiumPlan) {
+        limit = Math.max(limit, premiumPlan.maxProjects);
+      }
+    }
+
     if (myProjects.length >= limit && user.email !== ADMIN_EMAIL) {
-      alert(`Limit reached. Contact Admin.`);
+      alert(`Limit reached. You have ${myProjects.length}/${limit} projects.`);
       return;
     }
 
@@ -1146,7 +1194,20 @@ export const useStore = create<AppState>((set, get) => ({
       const manager = get().users.find(u => u.id === project?.managerId);
       if (manager) {
         const currentResources = project?.resourceIds.length || 0;
-        const limit = manager.maxResources || 5;
+        let limit = manager.maxResources || 5;
+
+        // Check Manager's Premium Status for Limit Override
+        // We can check if managerHasPremium (calculated in fetchProjects)
+        if (project.manager?.hasPremiumAccess) {
+          const premiumPlan = get().plans.find(p => p.id === 'premium');
+          if (premiumPlan) {
+            // Using maxMembersPerProject as the resource limit proxy if undefined?
+            // Or sticking to maxResources default? 
+            // Plan says 'max_members_per_project'.
+            limit = Math.max(limit, premiumPlan.maxMembersPerProject);
+          }
+        }
+
         if (currentResources >= limit && manager.email !== ADMIN_EMAIL) {
           alert(`Manager limit reached!`);
           return;
@@ -1202,8 +1263,16 @@ export const useStore = create<AppState>((set, get) => ({
           return;
         }
         // Using 'maxLeads' property as the carrier for 'maxMembersPerProject' per logic in init()
-        if (currentUser.maxLeads && totalMembers >= currentUser.maxLeads) {
-          alert(`Plan limit reached. Max ${currentUser.maxLeads} members per project.`);
+        let limit = currentUser.maxLeads || 0;
+        if (get().canAccessPremium()) {
+          const premiumPlan = get().plans.find(p => p.id === 'premium');
+          if (premiumPlan) {
+            limit = Math.max(limit, premiumPlan.maxMembersPerProject);
+          }
+        }
+
+        if (totalMembers >= limit) {
+          alert(`Plan limit reached. Max ${limit} members per project.`);
           return;
         }
       }
@@ -1222,7 +1291,19 @@ export const useStore = create<AppState>((set, get) => ({
       const manager = get().users.find(u => u.id === project?.managerId);
       if (manager) {
         const currentLeads = project?.leadIds.length || 0;
-        const limit = manager.maxLeads || 2;
+        let limit = manager.maxLeads || 2;
+
+        if (project.manager?.hasPremiumAccess) {
+          const premiumPlan = get().plans.find(p => p.id === 'premium');
+          if (premiumPlan) {
+            // Assuming separate limit for leads? Plan doesn't specify 'maxLeads'.
+            // We will assume 1/3 of maxMembers or just standard 5?
+            // Let's use 5 for Premium logic or just keep 2 if not strict?
+            // Actually, if premium, let's allow more Leads.
+            limit = Math.max(limit, 5);
+          }
+        }
+
         if (currentLeads >= limit && manager.email !== ADMIN_EMAIL) {
           alert(`Limit reached!`);
           return;
@@ -1461,15 +1542,18 @@ export const useStore = create<AppState>((set, get) => ({
     const newColumnTitle = state.columns.find(c => c.id === newColumnId)?.title;
 
     if (newColumnTitle === 'In Progress') {
-      const existingInProgress = state.tasks.filter(t =>
-        t.columnId === newColumnId &&
-        t.projectId === project.id &&
-        t.id !== taskId // Exclude self if already there (though move implies change)
-      );
+      // Check for multiple tasks allowance
+      if (!user.allowMultipleInProgress) {
+        const existingInProgress = state.tasks.filter(t =>
+          t.columnId === newColumnId &&
+          t.projectId === project.id &&
+          t.id !== taskId // Exclude self if already there (though move implies change)
+        );
 
-      if (existingInProgress.length > 0) {
-        get().showCustomAlert("Only one task can be In Progress at a time! Please move the existing task out first.", 'warning');
-        return;
+        if (existingInProgress.length > 0) {
+          get().showCustomAlert("Only one task can be In Progress at a time! Enable 'Multiple In Progress' in Profile to change this.", 'warning');
+          return;
+        }
       }
 
       // Auto-Start Timer
@@ -1975,7 +2059,10 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.timeTrackingEnabled !== undefined) dbUpdates.time_tracking_enabled = updates.timeTrackingEnabled;
     if (updates.imageUploadEnabled !== undefined) dbUpdates.image_upload_enabled = updates.imageUploadEnabled;
     if (updates.maxAttachmentsPerTask !== undefined) dbUpdates.max_attachments_per_task = updates.maxAttachmentsPerTask;
+
     if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
+    if (updates.allowMultipleInProgress !== undefined) dbUpdates.allow_multiple_in_progress = updates.allowMultipleInProgress;
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
 
     const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
     if (error) {

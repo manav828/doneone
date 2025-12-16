@@ -33,8 +33,8 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
     onConfirm: () => { },
   });
 
-  // Sort tasks by priority if this is the Pending column
-  const displayTasks = column.title === 'Pending' ? sortTasksByPriority(tasks, tags) : tasks;
+  // Use tasks directly to respect manual ordering (order_index)
+  const displayTasks = tasks;
 
   // Identify if any task in this column has a running timer for the current user
   const activeTimerTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser?.id);

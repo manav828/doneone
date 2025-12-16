@@ -27,7 +27,7 @@ export const PremiumModal: React.FC<PremiumModalProps> = ({ isOpen, onClose, fea
 
                 <div className="space-y-3 pt-2">
                     <button
-                        onClick={() => window.open('https://flowboard.app/pricing', '_blank')}
+                        onClick={() => window.open('https://doneone.app/pricing', '_blank')}
                         className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-amber-500/20 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
                     >
                         <Crown size={18} />

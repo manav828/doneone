@@ -25,14 +25,14 @@ const App: React.FC = () => {
     }
 
     // Check for Welcome Modal (First Time Trial)
-    const hasSeenWelcome = localStorage.getItem('flowboard_welcome_seen');
+    const hasSeenWelcome = localStorage.getItem('doneone_welcome_seen');
     if (!hasSeenWelcome && currentUser && currentUser.createdAt) {
       // Only show if account is created recently (e.g. within last 24 hours) OR just trust the flag?
       // Let's check if they are in trial.
       const isTrial = (Date.now() - currentUser.createdAt < 30 * 24 * 60 * 60 * 1000) && !currentUser.premiumUntil;
       if (isTrial) {
         setShowWelcome(true);
-        localStorage.setItem('flowboard_welcome_seen', 'true');
+        localStorage.setItem('doneone_welcome_seen', 'true');
       }
     }
   }, [currentUser]); // Add currentUser dependency to check when loaded

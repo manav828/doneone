@@ -12,7 +12,7 @@ const Screenshots = () => {
                     className="text-center mb-16"
                 >
                     <h2 className="text-5xl font-bold mb-4">
-                        See <span className="gradient-text">FlowBoard</span> in Action
+                        See <span className="gradient-text">DoneOne</span> in Action
                     </h2>
                     <p className="text-xl text-gray-600 max-w-2xl mx-auto">
                         Experience three powerful views designed for maximum productivity

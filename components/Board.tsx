@@ -44,7 +44,7 @@ export const Board: React.FC = () => {
         <div className="w-40 h-40 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
           <span className="text-6xl grayscale opacity-50">👋</span>
         </div>
-        <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200">Welcome to FlowBoard</h2>
+        <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200">Welcome to DoneOne</h2>
         <p className="mt-2 text-slate-500 max-w-xs text-center">Select a project from the sidebar or create a new one to get started.</p>
       </div>
     );

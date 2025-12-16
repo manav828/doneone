@@ -30,7 +30,7 @@ const Navigation = () => {
                             </svg>
                         </div>
                         <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                            FlowBoard
+                            DoneOne
                         </span>
                     </div>
 

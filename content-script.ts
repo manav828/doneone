@@ -1,4 +1,4 @@
-// Content script injected into all webpages for FlowBoard quick-add functionality
+// Content script injected into all webpages for DoneOne quick-add functionality
 
 declare var chrome: any;
 
@@ -20,7 +20,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
 
   // Create modal container
   modalContainer = document.createElement("div");
-  modalContainer.id = "flowboard-quick-add-modal";
+  modalContainer.id = "doneone-quick-add-modal";
   modalContainer.style.cssText = `
     position: fixed;
     top: 0;
@@ -56,7 +56,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
 
   // Title
   const title = document.createElement("h2");
-  title.textContent = "📋 Add Task to FlowBoard";
+  title.textContent = "📋 Add Task to DoneOne";
   title.style.cssText = `
     margin: 0 0 20px 0;
     font-size: 20px;
@@ -114,7 +114,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
 
   // Project Select
   const projectSelect = document.createElement("select");
-  projectSelect.id = "flowboard-project-select";
+  projectSelect.id = "doneone-project-select";
   projectSelect.style.cssText = `
     flex: 1;
     padding: 10px 12px;
@@ -132,7 +132,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
 
   // Assignee Select
   const assigneeSelect = document.createElement("select");
-  assigneeSelect.id = "flowboard-assignee-select";
+  assigneeSelect.id = "doneone-assignee-select";
   assigneeSelect.disabled = true; // Disabled by default
   assigneeSelect.style.cssText = `
     flex: 1;
@@ -382,7 +382,7 @@ function removeModal() {
 // Show success message
 function showSuccessMessage() {
   const toast = document.createElement("div");
-  toast.textContent = "✅ Task added to FlowBoard!";
+  toast.textContent = "✅ Task added to DoneOne!";
   toast.style.cssText = `
     position: fixed;
     bottom: 24px;
@@ -436,5 +436,5 @@ function showSuccessMessage() {
 
 // Prevent content script from running in extension pages
 if (!window.location.href.startsWith("chrome-extension://")) {
-  console.log("FlowBoard content script loaded");
+  console.log("DoneOne content script loaded");
 }

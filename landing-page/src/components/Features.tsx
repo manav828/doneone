@@ -73,7 +73,7 @@ const Features = () => {
                         <span className="gradient-text">Stay Organized</span>
                     </h2>
                     <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                        FlowBoard brings powerful project management features right into your browser
+                        DoneOne brings powerful project management features right into your browser
                     </p>
                 </motion.div>
 

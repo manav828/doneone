@@ -45,6 +45,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [premiumModalFeature, setPremiumModalFeature] = useState<string | null>(null);
     const [localPriority, setLocalPriority] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
 
     // Time Tracking
     const [localEstimatedMinutes, setLocalEstimatedMinutes] = useState(Math.floor((task.estimatedTime || 0) / 60));
@@ -251,18 +252,73 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assignee</label>
-                            <select value={localAssignee} onChange={e => setLocalAssignee(e.target.value)} className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none">
-                                <option value="">Unassigned</option>
-                                {users
-                                    .filter(u =>
-                                        !activeProject ? false :
-                                            u.id === activeProject.managerId ||
-                                            activeProject.leadIds.includes(u.id) ||
-                                            activeProject.resourceIds.includes(u.id)
-                                    )
-                                    .map(u => <option key={u.id} value={u.id}>{u.name}</option>)
-                                }
-                            </select>
+                            <div className="relative">
+                                <div
+                                    onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
+                                    className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-primary transition-colors"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {localAssignee ? (
+                                            (() => {
+                                                const u = users.find(u => u.id === localAssignee);
+                                                return u ? (
+                                                    <>
+                                                        {u.avatar ? (
+                                                            <img src={u.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                                                                {u.name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                        <span className="text-sm dark:text-white">{u.name}</span>
+                                                    </>
+                                                ) : <span className="text-slate-400 text-sm">Unknown User</span>;
+                                            })()
+                                        ) : (
+                                            <span className="text-slate-400 text-sm">Unassigned</span>
+                                        )}
+                                    </div>
+                                    <Users size={14} className="text-slate-400" />
+                                </div>
+
+                                {isAssigneeDropdownOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setIsAssigneeDropdownOpen(false)}></div>
+                                        <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto">
+                                            <div
+                                                onClick={() => { setLocalAssignee(''); setIsAssigneeDropdownOpen(false); }}
+                                                className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm text-slate-500"
+                                            >
+                                                Unassigned
+                                            </div>
+                                            {users
+                                                .filter(u =>
+                                                    !activeProject ? false :
+                                                        u.id === activeProject.managerId ||
+                                                        activeProject.leadIds.includes(u.id) ||
+                                                        activeProject.resourceIds.includes(u.id)
+                                                )
+                                                .map(u => (
+                                                    <div
+                                                        key={u.id}
+                                                        onClick={() => { setLocalAssignee(u.id); setIsAssigneeDropdownOpen(false); }}
+                                                        className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer flex items-center gap-2"
+                                                    >
+                                                        {u.avatar ? (
+                                                            <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                                                                {u.name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                        <span className="text-sm text-slate-700 dark:text-slate-200">{u.name}</span>
+                                                    </div>
+                                                ))
+                                            }
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Priority</label>

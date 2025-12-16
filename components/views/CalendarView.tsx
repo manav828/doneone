@@ -12,6 +12,7 @@ interface CalendarViewProps {
 }
 
 const DraggableTask: React.FC<{ task: Task; columns: Column[]; onClick: () => void }> = ({ task, columns, onClick }) => {
+    const { users } = useStore();
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
         id: task.id,
         data: { task }
@@ -40,12 +41,23 @@ const DraggableTask: React.FC<{ task: Task; columns: Column[]; onClick: () => vo
                 {timeString && <span className="text-[9px] text-primary font-bold bg-primary/10 px-1 rounded">{timeString}</span>}
                 <div className="font-medium truncate text-slate-800 dark:text-slate-200 flex-1">{task.title}</div>
             </div>
-            {column && (
-                <div className="text-[9px] text-slate-400 flex items-center gap-1">
+            <div className="text-[9px] text-slate-400 flex items-center gap-1 justify-between">
+                <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: column.color }} />
                     {column.title}
                 </div>
-            )}
+                {users.find(u => u.id === task.assigneeId) && (
+                    <div className="w-4 h-4 rounded-full overflow-hidden border border-slate-200 dark:border-slate-600">
+                        {users.find(u => u.id === task.assigneeId)?.avatar ? (
+                            <img src={users.find(u => u.id === task.assigneeId)?.avatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">
+                                {users.find(u => u.id === task.assigneeId)?.name.charAt(0)}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

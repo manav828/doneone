@@ -215,9 +215,13 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
               <div className="flex items-center gap-2">
                 {assignedUser ? (
                   <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700/50 pr-2 pl-0.5 py-0.5 rounded-full border border-slate-100 dark:border-slate-700">
-                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[8px] font-bold shadow-sm">
-                      {assignedUser.name.charAt(0)}
-                    </div>
+                    {assignedUser.avatar ? (
+                      <img src={assignedUser.avatar} alt={assignedUser.name} className="w-4 h-4 rounded-full object-cover shadow-sm border border-white dark:border-slate-700" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[8px] font-bold shadow-sm">
+                        {assignedUser.name.charAt(0)}
+                      </div>
+                    )}
                     <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{assignedUser.name.split(' ')[0]}</span>
                   </div>
                 ) : (

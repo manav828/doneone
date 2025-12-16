@@ -43,6 +43,7 @@ export interface User {
   historyRetentionDays?: number | null;
   canInvite?: boolean;
   canExport?: boolean;
+  allowMultipleInProgress?: boolean;
 }
 
 export interface Tag {
