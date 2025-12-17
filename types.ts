@@ -29,7 +29,7 @@ export interface User {
   // Admin/Premium Settings
   createdAt?: number; // Timestamp
   premiumUntil?: number; // Timestamp or null
-  // isPremium computed in store
+  isPremium?: boolean; // Explicit premium flag from database
 
   maxProjects?: number;
   maxLeads?: number;

@@ -114,6 +114,7 @@ interface AppState {
 
   // Admin Actions
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
   getRegistrationStatus: () => Promise<boolean>;
   toggleRegistration: (isOpen: boolean) => Promise<void>;
   getImageUploadStatus: () => Promise<boolean>;
@@ -129,7 +130,7 @@ interface AppState {
 
 
   // Helpers
-  can: (action: keyof typeof PERMISSIONS['Manager']) => boolean;
+  can: (action: keyof typeof PERMISSIONS['Manager'], projectId?: string) => boolean;
   getVisibleProjects: () => Project[];
   processPendingTasks: () => Promise<void>;
   getFilteredTasks: (projectId: string) => Task[];
@@ -537,33 +538,78 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }
 
-    let { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+    const profileResponse = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+
+    console.log('🗄️ RAW Database Response:', {
+      error: profileResponse.error,
+      data: profileResponse.data,
+      is_premium_value: profileResponse.data?.is_premium,
+      is_premium_type: typeof profileResponse.data?.is_premium
+    });
+
+    let { data: profile } = profileResponse;
 
     if (!profile) {
-      const { data: newProfile } = await supabase.from('profiles').upsert({
+      const { data: newProfile, error: upsertError } = await supabase.from('profiles').upsert({
         id: session.user.id,
         name: session.user.email?.split('@')[0] || 'User',
         role: 'Resource',
         email: session.user.email,
         avatar_url: '',
-        max_projects: 3,
-        max_leads: 2,
-        max_resources: 5,
-        is_premium: false,
-        notifications_enabled: false,
-        reminders_enabled: false,
-
-        time_tracking_enabled: false,
-
-        image_upload_enabled: false,
-        max_attachments_per_task: 3
+        max_projects: 10000, // Trial limit
+        max_leads: 10,
+        max_resources: 20,
+        is_premium: true, // Enable Trial
+        premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days
+        notifications_enabled: true,
+        reminders_enabled: true,
+        time_tracking_enabled: true,
+        image_upload_enabled: true,
+        max_attachments_per_task: 10
       }).select().single();
-      if (newProfile) profile = newProfile;
+
+      console.log('📝 Profile Creation Result:', {
+        success: !!newProfile,
+        error: upsertError,
+        profileData: newProfile,
+        emailInPayload: session.user.email,
+        emailInResult: newProfile?.email
+      });
+
+      if (newProfile) {
+        profile = newProfile;
+
+        // If email wasn't saved (RLS blocking it), try to update it separately
+        if (!profile.email && session.user.email) {
+          console.log('⚠️ Email was not saved during insert. Attempting separate update...');
+          const { error: emailUpdateError } = await supabase
+            .from('profiles')
+            .update({ email: session.user.email })
+            .eq('id', session.user.id);
+
+          if (emailUpdateError) {
+            console.error('❌ Email update failed:', emailUpdateError);
+          } else {
+            console.log('✅ Email updated successfully');
+            profile.email = session.user.email;
+          }
+        }
+      }
     } else {
       profile.email = session.user.email;
     }
 
     if (profile) {
+      console.log('📄 Profile loaded from DB:', {
+        id: profile.id,
+        name: profile.name,
+        is_premium: profile.is_premium,
+        premium_until: profile.premium_until,
+        created_at: profile.created_at
+      });
+      // REMOVED: Retroactive Trial code that was automatically setting is_premium=true
+      // The database is_premium value is now the ONLY source of truth
+
       // Load Archive Settings
       const { data: archiveSettings } = await supabase
         .from('user_archive_settings')
@@ -600,6 +646,7 @@ export const useStore = create<AppState>((set, get) => ({
 
             createdAt: new Date(profile.created_at).getTime(),
             premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
+            isPremium: profile.is_premium, // Load from database
 
             maxProjects: profile.max_projects,
             maxLeads: profile.max_leads,
@@ -690,6 +737,7 @@ export const useStore = create<AppState>((set, get) => ({
         avatar: p.avatar_url || p.avatar,
         createdAt: new Date(p.created_at).getTime(),
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
+        isPremium: p.is_premium, // IMPORTANT: Include premium flag
         maxProjects: p.max_projects,
         maxLeads: p.max_leads,
         maxResources: p.max_resources,
@@ -974,7 +1022,9 @@ export const useStore = create<AppState>((set, get) => ({
       get().fetchTasks(),
       get().fetchActivities(),
       get().fetchNotifications(),
-      get().fetchTags()
+      get().fetchNotifications(),
+      get().fetchTags(),
+      get().fetchPlans()
     ]);
 
     set({ isLoading: false });
@@ -1041,13 +1091,19 @@ export const useStore = create<AppState>((set, get) => ({
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
 
-    // Determine Effective Limit
-    let limit = user.maxProjects || 3;
-    if (get().canAccessPremium()) {
-      const premiumPlan = get().plans.find(p => p.id === 'premium');
-      if (premiumPlan) {
-        limit = Math.max(limit, premiumPlan.maxProjects);
-      }
+    // Determine Effective Limit from PLANS table
+    const isPremium = get().canAccessPremium();
+    const plans = get().plans;
+    // Find relevant plan: if premium, look for 'premium', else 'free'
+    const planId = isPremium ? 'premium' : 'free';
+    const activePlan = plans.find(p => p.id === planId);
+
+    // Default fallback: 3 for free, 10000 for premium if plan missing
+    let limit = 3;
+    if (activePlan) {
+      limit = activePlan.maxProjects;
+    } else if (isPremium) {
+      limit = 10000;
     }
 
     if (myProjects.length >= limit && user.email !== ADMIN_EMAIL) {
@@ -1094,13 +1150,17 @@ export const useStore = create<AppState>((set, get) => ({
     const user = get().currentUser;
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
-    // Determine Effective Limit
-    let limit = user.maxProjects || 3;
-    if (get().canAccessPremium()) {
-      const premiumPlan = get().plans.find(p => p.id === 'premium');
-      if (premiumPlan) {
-        limit = Math.max(limit, premiumPlan.maxProjects);
-      }
+    // Determine Effective Limit from PLANS table
+    const isPremium = get().canAccessPremium();
+    const plans = get().plans;
+    const planId = isPremium ? 'premium' : 'free';
+    const activePlan = plans.find(p => p.id === planId);
+
+    let limit = 3;
+    if (activePlan) {
+      limit = activePlan.maxProjects;
+    } else if (isPremium) {
+      limit = 10000;
     }
 
     if (myProjects.length >= limit && user.email !== ADMIN_EMAIL) {
@@ -1175,7 +1235,7 @@ export const useStore = create<AppState>((set, get) => ({
       return;
     }
 
-    if (!confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
+    // if (!confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
 
     await supabase.from('projects').delete().eq('id', id);
     set(state => ({ projects: state.projects.filter(p => p.id !== id), activeProjectId: state.activeProjectId === id ? null : state.activeProjectId }));
@@ -1256,25 +1316,29 @@ export const useStore = create<AppState>((set, get) => ({
       // User said "can not invite any member".
       // If free plan: canInvite = false.
 
-      // If currentUser is Manager: use currentUser.canInvite / maxLeads (mapped to max members)
-      if (currentUser && currentUser.id === project.managerId) {
-        if (!currentUser.canInvite) {
-          alert("Your plan does not allow inviting members. Upgrade to Premium.");
-          return;
-        }
-        // Using 'maxLeads' property as the carrier for 'maxMembersPerProject' per logic in init()
-        let limit = currentUser.maxLeads || 0;
-        if (get().canAccessPremium()) {
-          const premiumPlan = get().plans.find(p => p.id === 'premium');
-          if (premiumPlan) {
-            limit = Math.max(limit, premiumPlan.maxMembersPerProject);
-          }
-        }
+      // Determine Permissions from PLANS table
+      const isPremium = get().canAccessPremium();
+      const plans = get().plans;
+      const planId = isPremium ? 'premium' : 'free';
+      const activePlan = plans.find(p => p.id === planId);
 
-        if (totalMembers >= limit) {
-          alert(`Plan limit reached. Max ${limit} members per project.`);
-          return;
-        }
+      if (!activePlan) {
+        // Safety Fallback
+        console.error("Plan not found for id:", planId);
+        return;
+      }
+
+      // 1. Check if inviting is allowed
+      if (!activePlan.canInviteMembers && currentUser?.email !== 'manavss828@gmail.com') { // Assuming ADMIN_EMAIL
+        alert("Your current plan does not allow inviting members.");
+        return;
+      }
+
+      // 2. Check Member Limits
+      const limit = activePlan.maxMembersPerProject;
+      if (totalMembers >= limit && currentUser?.email !== 'manavss828@gmail.com') {
+        alert(`Plan limit reached. Max ${limit} members per project.`);
+        return;
       }
       // If currentUser is NOT Manager (e.g. Lead), we should ideally check Manager's plan.
       // But we don't have manager's full plan details here.
@@ -2078,6 +2142,80 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  // Admin: Delete User with Cascading Cleanup
+  deleteUser: async (userId) => {
+    const { currentUser } = get();
+
+    // Only admin can delete users
+    if (!currentUser || currentUser.email !== ADMIN_EMAIL) {
+      alert('Only admin can delete users.');
+      return;
+    }
+
+    // Prevent admin from deleting themselves
+    if (userId === currentUser.id) {
+      alert('You cannot delete your own account.');
+      return;
+    }
+
+    try {
+      // 1. Delete all tasks created by or assigned to this user
+      await supabase.from('tasks').delete().eq('creator_id', userId);
+      await supabase.from('tasks').delete().eq('assignee_id', userId);
+
+      // 2. Delete all projects owned by this user
+      const { data: userProjects } = await supabase.from('projects').select('id').eq('manager_id', userId);
+      if (userProjects && userProjects.length > 0) {
+        const projectIds = userProjects.map(p => p.id);
+        // Delete all data related to these projects
+        await supabase.from('tasks').delete().in('project_id', projectIds);
+        await supabase.from('columns').delete().in('project_id', projectIds);
+        await supabase.from('project_members').delete().in('project_id', projectIds);
+        await supabase.from('activities').delete().in('project_id', projectIds);
+        await supabase.from('tags').delete().in('project_id', projectIds);
+        await supabase.from('task_history').delete().in('project_id', projectIds);
+        await supabase.from('projects').delete().in('id', projectIds);
+      }
+
+      // 3. Remove user from all project memberships
+      await supabase.from('project_members').delete().eq('user_id', userId);
+
+      // 4. Delete user's notifications
+      await supabase.from('notifications').delete().eq('recipient_id', userId);
+
+      // 5. Delete user's activities
+      await supabase.from('activities').delete().eq('user_id', userId);
+
+      // 6. Delete user's support tickets
+      await supabase.from('support_tickets').delete().eq('user_id', userId);
+
+      // 7. Delete user's archive settings
+      await supabase.from('user_archive_settings').delete().eq('user_id', userId);
+
+      // 8. Delete task history archived by this user
+      await supabase.from('task_history').delete().eq('archived_by', userId);
+
+      // 9. Finally, delete the profile
+      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+
+      if (error) {
+        console.error('Error deleting user profile:', error);
+        alert('Failed to delete user. ' + error.message);
+        return;
+      }
+
+      // Refresh data
+      await get().fetchUsers();
+      await get().fetchProjects();
+
+      console.log(`✅ User ${userId} and all associated data deleted successfully.`);
+
+    } catch (err: any) {
+      console.error('Delete user error:', err);
+      alert('Failed to delete user. ' + (err.message || 'Unknown error'));
+    }
+  },
+
   // Process pending tasks from content script
   processPendingTasks: async () => {
     const { currentUser, projects, columns } = get();
@@ -2250,29 +2388,13 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   canAccessPremium: () => {
-    const { currentUser, projects, activeProjectId } = get();
+    const { currentUser } = get();
     if (!currentUser) return false;
 
-    // 1. Manual Override (Admin set)
-    if (currentUser.premiumUntil && currentUser.premiumUntil > Date.now()) {
-      return true;
-    }
-
-    // 2. Trial Period (30 Days)
-    if (currentUser.createdAt) {
-      const trialEnd = currentUser.createdAt + (30 * 24 * 60 * 60 * 1000);
-      if (Date.now() < trialEnd) return true;
-    }
-
-    // 3. Project Inheritance
-    if (activeProjectId) {
-      const project = projects.find(p => p.id === activeProjectId);
-      if (project && project.manager) {
-        return !!project.manager.hasPremiumAccess;
-      }
-    }
-
-    return false;
+    // ONLY check the isPremium flag from database
+    // If undefined or false, return false
+    // Only return true if explicitly true
+    return currentUser.isPremium === true;
   },
 
   getVisibleProjects: () => {
@@ -2285,10 +2407,33 @@ export const useStore = create<AppState>((set, get) => ({
     );
   },
 
-  can: (action) => {
-    const { currentUser } = get();
+  can: (action, projectId) => {
+    const { currentUser, projects, activeProjectId } = get();
     if (!currentUser) return false;
-    return PERMISSIONS[currentUser.role as Role]?.[action] || false;
+
+    // 1. Global Actions (No Project Context)
+    if (action === 'createProject') return true;
+
+    // 2. Determine Context Project
+    const targetProjectId = projectId || activeProjectId;
+    if (!targetProjectId) return false;
+
+    const project = projects.find(p => p.id === targetProjectId);
+    if (!project) return false;
+
+    const ADMIN_EMAIL = 'manavss828@gmail.com';
+
+    // 2. Determine Dynamic Role for this Project
+    let computedRole: Role = 'Resource'; // Default
+
+    if (currentUser.email === ADMIN_EMAIL || project.managerId === currentUser.id) {
+      computedRole = 'Manager';
+    } else if (project.leadIds.includes(currentUser.id)) {
+      computedRole = 'Lead';
+    }
+
+    // 3. Check Permission
+    return PERMISSIONS[computedRole]?.[action] || false;
   },
 
   // =====================================================

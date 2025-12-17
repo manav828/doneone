@@ -2,14 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
-import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database } from 'lucide-react';
+import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { User, StorageStats, Plan } from '../types';
 import { AdminFeedback } from './admin/AdminFeedback';
 import { MessageSquare } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
-    const { currentUser, updateUserProfile, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, plans, updatePlan, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects } = useStore();
+    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, plans, updatePlan, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects } = useStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     // Use store data directly for rendering, or keep local state sync if needed (sorting).
@@ -115,6 +115,26 @@ export const AdminPanel: React.FC = () => {
     const handleUpdateMaxAttachments = async (userId: string, val: number) => {
         await updateUserProfile(userId, { maxAttachmentsPerTask: val });
         fetchUsers();
+    };
+
+    const handleDeleteUser = async (user: User) => {
+        if (user.email === 'manavss828@gmail.com') {
+            alert('Cannot delete admin account.');
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Are you sure you want to DELETE user "${user.name}" (${user.email})?\n\n` +
+            `This will permanently delete:\n` +
+            `• All their tasks\n` +
+            `• All their projects\n` +
+            `• All their data\n\n` +
+            `This action CANNOT be undone.`
+        );
+
+        if (confirmed) {
+            await deleteUser(user.id);
+        }
     };
 
     const startEdit = (user: User) => {
@@ -575,9 +595,20 @@ export const AdminPanel: React.FC = () => {
                                                         <button onClick={() => setEditingUser(null)} className="text-red-600 hover:bg-red-100 p-1 rounded"><X size={16} /></button>
                                                     </div>
                                                 ) : (
-                                                    <button onClick={() => startEdit(u)} className="text-gray-400 hover:text-blue-500 p-1 rounded">
-                                                        <Edit2 size={16} />
-                                                    </button>
+                                                    <div className="flex justify-end gap-2">
+                                                        <button onClick={() => startEdit(u)} className="text-gray-400 hover:text-blue-500 p-1 rounded" title="Edit User">
+                                                            <Edit2 size={16} />
+                                                        </button>
+                                                        {u.email !== 'manavss828@gmail.com' && (
+                                                            <button
+                                                                onClick={() => handleDeleteUser(u)}
+                                                                className="text-gray-400 hover:text-red-500 p-1 rounded"
+                                                                title="Delete User"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </td>
                                         </tr>

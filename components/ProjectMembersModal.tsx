@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { projects, activeProjectId, removeMember, resolveJoinRequest, changeMemberRole, assignMemberLead, currentUser, users } = useStore();
+  const { projects, activeProjectId, removeMember, resolveJoinRequest, changeMemberRole, assignMemberLead, currentUser, users, plans, canAccessPremium } = useStore();
   const project = projects.find(p => p.id === activeProjectId);
   const [copied, setCopied] = useState(false);
 
@@ -31,17 +31,36 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const canManage = currentUser.id === project.managerId;
 
   // Limits Display
-  const maxLeads = manager?.maxLeads || 2;
-  const maxRes = manager?.maxResources || 5;
-  const isPremium = manager?.isPremium;
+  // Limits Display
+  // Determine Plan Logic
+  const hasPremiumAccess = canAccessPremium(); // Checks currentUser (who is manager if canManage is true)
+  const planId = hasPremiumAccess ? 'premium' : 'free';
+  const activePlan = plans.find(p => p.id === planId);
+  const invitesAllowed = activePlan?.canInviteMembers ?? false; // Default false if plan missing
+
+  console.log('🎫 ProjectMembersModal INVITE CHECK:', {
+    hasPremiumAccess,
+    planId,
+    activePlan: activePlan?.name,
+    canInviteMembers: activePlan?.canInviteMembers,
+    invitesAllowed,
+    canManage,
+    allPlans: plans.map(p => ({ id: p.id, name: p.name, canInvite: p.canInviteMembers }))
+  });
+
+  // Use plan limits if available, else user fallback?
+  // User fallback might be stale.
+  const maxLeads = activePlan ? 5 : (manager?.maxLeads || 2); // Hardcoded '5' for premium leads if plan doesn't specify 'maxLeads' explicitly? Plan only has maxMembers.
+  // Actually, let's just stick to the Invite Logic for now.
+  const maxRes = activePlan ? activePlan.maxMembersPerProject : (manager?.maxResources || 5);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Members: ${project.name}`}>
       <div className="space-y-6">
 
         {/* Project Code - Locked if not premium? Or always open? Prompt says invite person depends on admin allow */}
-        <div className={`p-4 rounded-lg flex items-center justify-between border border-dashed ${!isPremium && canManage ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-300 dark:bg-gray-700/50 dark:border-gray-600'}`}>
-          {!isPremium && canManage ? (
+        <div className={`p-4 rounded-lg flex items-center justify-between border border-dashed ${!invitesAllowed && canManage ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-300 dark:bg-gray-700/50 dark:border-gray-600'}`}>
+          {!invitesAllowed && canManage ? (
             <div className="flex items-center gap-3 text-gray-500 w-full">
               <Lock size={20} />
               <p className="text-sm">Invites are disabled. Contact Admin to upgrade to Premium.</p>

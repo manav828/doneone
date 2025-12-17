@@ -42,6 +42,9 @@ export const Sidebar: React.FC = () => {
   const [editColor, setEditColor] = useState('');
   const [editViewAllReports, setEditViewAllReports] = useState(false);
 
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+
   const [joinCode, setJoinCode] = useState('');
   const [joinMessage, setJoinMessage] = useState({ type: '', text: '' });
 
@@ -102,8 +105,15 @@ export const Sidebar: React.FC = () => {
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this project?')) {
-      deleteProject(id);
+    setProjectToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (projectToDelete) {
+      deleteProject(projectToDelete);
+      setIsDeleteModalOpen(false);
+      setProjectToDelete(null);
     }
   };
 
@@ -195,7 +205,7 @@ export const Sidebar: React.FC = () => {
 
                 {!isCollapsed && (
                   <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                    {can('editSettings') && (
+                    {can('editSettings', project.id) && (
                       <button
                         onClick={(e) => openEditModal(e, project)}
                         className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded text-slate-400 hover:text-primary transition-colors shadow-sm"
@@ -204,7 +214,7 @@ export const Sidebar: React.FC = () => {
                         <Edit2 size={12} />
                       </button>
                     )}
-                    {can('deleteProject') && (
+                    {can('deleteProject', project.id) && (
                       <button
                         onClick={(e) => handleDelete(e, project.id)}
                         className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded text-slate-400 hover:text-red-500 transition-colors shadow-sm"
@@ -446,6 +456,37 @@ export const Sidebar: React.FC = () => {
         </form>
       </Modal>
 
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Project">
+        <div className="space-y-4">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/50 flex gap-3 text-red-600 dark:text-red-400">
+            <div className="shrink-0 pt-0.5">
+              <Trash2 size={20} />
+            </div>
+            <div>
+              <h3 className="font-medium">Are you sure?</h3>
+              <p className="text-sm mt-1 opacity-90">
+                This action cannot be undone. This will permanently delete the project and all its tasks, columns, and history.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 font-medium text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="px-5 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-sm hover:shadow font-medium text-sm transition-all"
+            >
+              Delete Project
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isJoinModalOpen} onClose={() => setIsJoinModalOpen(false)} title="Join Existing Project">
         <form onSubmit={handleJoin} className="space-y-6">
           <div className="text-center">
@@ -484,13 +525,15 @@ export const Sidebar: React.FC = () => {
         </form>
       </Modal>
 
-      {isTemplateSelectorOpen && (
-        <TemplateSelector
-          onSelectTemplate={handleTemplateSelect}
-          onClose={() => { setIsTemplateSelectorOpen(false); setIsModalOpen(true); }}
-          userIsPremium={canAccessPremium()}
-        />
-      )}
-    </aside>
+      {
+        isTemplateSelectorOpen && (
+          <TemplateSelector
+            onSelectTemplate={handleTemplateSelect}
+            onClose={() => { setIsTemplateSelectorOpen(false); setIsModalOpen(true); }}
+            userIsPremium={canAccessPremium()}
+          />
+        )
+      }
+    </aside >
   );
 };
