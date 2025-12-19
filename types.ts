@@ -217,8 +217,11 @@ export interface SupportTicket {
   type: string;
   title: string;
   description: string;
-  status: string; // 'open' | 'resolved'
+  status: string; // 'open' | 'resolved' | 'dismissed'
   createdAt: number;
   userName?: string; // Computed
   userEmail?: string; // Computed
+  resolution_note?: string;
+  resolved_at?: string;
+  resolved_by?: string;
 }

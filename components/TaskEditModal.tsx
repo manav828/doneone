@@ -412,13 +412,6 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                     }}
                                     className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
                                 />
-                                <button
-                                    onClick={() => toggleTaskTimer(task.id)}
-                                    title={task.timerStartedAt ? "Stop Timer" : "Start Timer"}
-                                    className={`p-2 rounded border transition-colors ${task.timerStartedAt ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'}`}
-                                >
-                                    {task.timerStartedAt ? <Pause size={16} /> : <Play size={16} />}
-                                </button>
                             </div>
                         </div>
                     </div>

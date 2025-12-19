@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare } from 'lucide-react';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
 import { DataManagementModal } from './DataManagementModal';
 import { PremiumModal } from './PremiumModal';
 import { PricingModal } from './PricingModal';
+import { UserTicketsModal } from './UserTicketsModal';
 
 export const TopBar: React.FC = () => {
   const {
@@ -42,6 +43,7 @@ export const TopBar: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isUserTicketsModalOpen, setIsUserTicketsModalOpen] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -430,6 +432,16 @@ export const TopBar: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);
+                    setIsUserTicketsModalOpen(true);
+                  }}
+                  className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                >
+                  <MessageSquare size={16} />
+                  My Support Tickets
+                </button>
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
                     const event = new CustomEvent('openArchiveSettings');
                     window.dispatchEvent(event);
                   }}
@@ -467,6 +479,7 @@ export const TopBar: React.FC = () => {
         featureName={premiumFeature}
       />
       <HelpSupportModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />
+      <UserTicketsModal isOpen={isUserTicketsModalOpen} onClose={() => setIsUserTicketsModalOpen(false)} />
     </>
   );
 };

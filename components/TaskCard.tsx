@@ -29,9 +29,11 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   // Feature Flag Check
   // Feature Flag Check
   const projectManager = users.find(u => u.id === activeProject?.managerId);
-  const hasPremium = canAccessPremium();
+  // CHANGED: Use Project Manager's Premium Status
+  const hasPremium = projectManager?.isPremium === true;
   const remindersEnabled = hasPremium && (projectManager?.remindersEnabled || false);
-  const timeTrackingEnabled = hasPremium && (projectManager?.timeTrackingEnabled || false);
+  // SIMPLIFIED: If Owner is Premium, Time Tracking is Enabled.
+  const timeTrackingEnabled = hasPremium;
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -232,18 +234,36 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                   </div>
                 )}
 
-                {/* Timer Control */}
+                {/* Timer Control - Unified Widget */}
+                {(() => {
+                  // Debug Logging
+                  if (task.columnId === 'col-in-progress-id' || task.title.includes('Debug')) { // Reduce noise, or just log once
+                    // console.log(`TaskCard [${task.title}]: PM=${projectManager?.name}, Prem=${projectManager?.isPremium}, Track=${projectManager?.timeTrackingEnabled}, HAS_PREM=${hasPremium}`);
+                  }
+                  return null;
+                })()}
+
                 {timeTrackingEnabled && canMove && (
                   <button
-                    onClick={handleToggleTimer}
-                    className={`p-1 rounded-full flex items-center gap-1 text-[10px] font-mono border transition-all z-10 ${task.timerStartedAt
-                      ? 'bg-green-50 text-green-600 border-green-200 animate-pulse'
-                      : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100 hover:text-slate-600'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTaskTimer(task.id);
+                    }}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border transition-all z-10 
+                      ${task.timerStartedAt
+                        ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-700 animate-pulse'
+                        : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600'
                       }`}
-                    title={task.timerStartedAt ? "Stop Timer" : "Start Timer"}
+                    title={task.timerStartedAt ? "Pause Timer" : "Start Timer"}
                   >
-                    {task.timerStartedAt ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
-                    {elapsedTime > 0 && <span>{formatTime(elapsedTime)}</span>}
+                    {task.timerStartedAt ? (
+                      <Pause size={10} fill="currentColor" />
+                    ) : (
+                      <Play size={10} fill="currentColor" />
+                    )}
+                    <span className="font-mono min-w-[32px] text-center">
+                      {formatTime(elapsedTime)}
+                    </span>
                   </button>
                 )}
               </div>

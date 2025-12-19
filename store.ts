@@ -126,7 +126,7 @@ interface AppState {
   // Support
   submitSupportTicket: (ticket: { type: 'Bug' | 'Enhancement', title: string, description: string }) => Promise<void>;
   fetchSupportTickets: () => Promise<void>;
-  resolveSupportTicket: (ticketId: string, status: 'open' | 'resolved' | 'dismissed') => Promise<void>;
+  resolveSupportTicket: (ticketId: string, status: 'open' | 'resolved' | 'dismissed', note?: string) => Promise<void>;
 
 
   // Helpers
@@ -159,6 +159,7 @@ interface AppState {
   clearHistorySelection: () => void;
   checkAutoArchive: () => Promise<void>;
   canAccessPremium: () => boolean;
+  canProjectUsePremium: (projectId: string) => boolean;
 
   // UI State
   isPricingModalOpen: boolean;
@@ -226,10 +227,39 @@ const setupRealtimeSubscription = (get: any, set: any) => {
             if (project && project.managerId === currentUser.id) {
               chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icon-128.png',
+                iconUrl: 'icon128.png',
                 title: 'New Join Request',
                 message: `A user has requested to join ${project.name}.`
               });
+            }
+          }
+        }
+
+        // 3. New Notification Logic
+        if (payload.table === 'notifications' && payload.eventType === 'INSERT') {
+          const notif = payload.new;
+          if (notif.recipient_id === currentUser.id) {
+            let title = notif.title || 'New Notification';
+            if (!notif.title && notif.message && notif.message.toLowerCase().includes('ticket')) {
+              title = 'Support Ticket Update';
+            }
+            if (typeof chrome !== 'undefined' && chrome.notifications) {
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icon128.png',
+                title: title,
+                message: notif.message
+              });
+            } else if ('Notification' in window) {
+              if (Notification.permission === 'granted') {
+                new Notification(title, { body: notif.message, icon: 'icon128.png' });
+              } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                  if (permission === 'granted') {
+                    new Notification(title, { body: notif.message, icon: 'icon128.png' });
+                  }
+                });
+              }
             }
           }
         }
@@ -428,8 +458,19 @@ export const useStore = create<AppState>((set, get) => ({
       if (now - lastHeartbeat > GAP_THRESHOLD) {
         const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
         if (runningTask) {
-          // It was running when we shut down at 'lastHeartbeat'
+          // Auto-Resume Logic:
+          // 1. Credit time up to the last heartbeat (exclude sleep time)
           stopTimer(runningTask, lastHeartbeat);
+
+          // 2. Immediately restart timer from NOW (Wake Up)
+          get().updateTask(runningTask.id, { timerStartedAt: now });
+
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('DoneOne', {
+              body: `Timer for "${runningTask.title}" auto-resumed (gap skipped).`,
+              icon: 'icon128.png'
+            });
+          }
         }
       }
     }
@@ -452,10 +493,21 @@ export const useStore = create<AppState>((set, get) => ({
       set({ lastHeartbeat: now });
 
       if (now - lastHeartbeat > GAP_THRESHOLD) {
-        console.log("System sleep detected (Interval).");
+        console.log("System sleep detected (Interval). Auto-Resuming.");
         const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser?.id);
         if (runningTask) {
-          stopTimer(runningTask, lastHeartbeat);
+          // 1. Stop at last heartbeat
+          await stopTimer(runningTask, lastHeartbeat);
+
+          // 2. Resume now
+          await get().updateTask(runningTask.id, { timerStartedAt: now });
+
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('DoneOne', {
+              body: `Timer for "${runningTask.title}" auto-resumed (gap skipped).`,
+              icon: 'icon128.png'
+            });
+          }
         }
       }
     }, 10000);
@@ -609,6 +661,46 @@ export const useStore = create<AppState>((set, get) => ({
       });
       // REMOVED: Retroactive Trial code that was automatically setting is_premium=true
       // The database is_premium value is now the ONLY source of truth
+
+      // SLEEP DETECTION & TIMER CORRECTION
+      // Check every 5 seconds. If gap > 10s, we assume sleep.
+      if (!(window as any).doneone_sleep_interval) {
+        let lastTick = Date.now();
+        (window as any).doneone_sleep_interval = setInterval(async () => {
+          const now = Date.now();
+          const delta = now - lastTick;
+          if (delta > 10000) { // 10 seconds threshold
+            const sleepTime = delta - 5000; // Subtract normal interval
+            console.log(`💤 Sleep Detected! Gap: ${delta}ms. Adjusting timer by ${sleepTime}ms.`);
+
+            // Check if active timer exists
+            const { tasks, currentUser, updateTask } = get();
+            if (tasks && currentUser) {
+              const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
+              if (runningTask && runningTask.timerStartedAt) {
+                const newStart = runningTask.timerStartedAt + sleepTime;
+
+                // Update Local
+                set(state => ({
+                  tasks: state.tasks.map(t => t.id === runningTask.id ? { ...t, timerStartedAt: newStart } : t)
+                }));
+
+                // Update DB
+                await updateTask(runningTask.id, { timerStartedAt: newStart });
+
+                // Notify User
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  new Notification(`Resumed: ${runningTask.title}`, {
+                    body: `Sleep time excluded (${Math.round(sleepTime / 1000 / 60)} mins).`,
+                    icon: 'icon128.png'
+                  });
+                }
+              }
+            }
+          }
+          lastTick = Date.now();
+        }, 5000);
+      }
 
       // Load Archive Settings
       const { data: archiveSettings } = await supabase
@@ -1621,7 +1713,26 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       // Auto-Start Timer
-      if (!updatedTask.timerStartedAt) {
+      // RESTRICTION: Only if User has Premium AND Manager enabled Time Tracking
+      // CHANGED: Use PROJECT OWNER'S Plan (canProjectUsePremium)
+      const hasPremium = get().canProjectUsePremium(project.id);
+      const projectManager = state.users.find(u => u.id === project.managerId);
+      // SIMPLIFIED: If Owner is Premium, Time Tracking is Enabled. Ignore explicit flag.
+      const timeTrackingEnabled = hasPremium;
+
+      // Debug Auto-Start
+      console.log('⏱️ Auto-Start Debug:', {
+        taskId: updatedTask.id,
+        projectId: project.id,
+        canProjectUsePremium: hasPremium,
+        managerId: project.managerId,
+        managerFound: !!projectManager,
+        managerIsPremium: projectManager?.isPremium,
+        managerTimeTracking: projectManager?.timeTrackingEnabled,
+        FINAL_ENABLED: timeTrackingEnabled
+      });
+
+      if (timeTrackingEnabled && !updatedTask.timerStartedAt) {
         updatedTask.timerStartedAt = Date.now();
         // Stop any other running timers just in case (though limit prevents it, safety first)
         const otherRunning = state.tasks.find(t => t.timerStartedAt && t.id !== taskId && t.assigneeId === user.id);
@@ -2063,22 +2174,52 @@ export const useStore = create<AppState>((set, get) => ({
         status: (t.status || 'open').trim().toLowerCase(),
         createdAt: new Date(t.created_at).getTime(),
         userName: user ? user.name : 'Unknown',
-        userEmail: user ? user.email : 'Unknown'
+        userEmail: user ? user.email : 'Unknown',
+        resolution_note: t.resolution_note,
+        resolved_at: t.resolved_at,
+        resolved_by: t.resolved_by
       };
     });
 
     set({ supportTickets: mapped });
   },
 
-  resolveSupportTicket: async (ticketId, status) => {
+  resolveSupportTicket: async (ticketId, status, note) => {
     // Capitalize for DB constraint
     const dbStatus = status.charAt(0).toUpperCase() + status.slice(1);
-    console.log(`[Store] Updating ticket ${ticketId} status to: ${dbStatus} (Original: ${status})`);
-    const { error } = await supabase.from('support_tickets').update({ status: dbStatus }).eq('id', ticketId);
+    const { currentUser } = get();
+
+    const updates: any = { status: dbStatus };
+    if (note) updates.resolution_note = note;
+    if (status === 'resolved') {
+      updates.resolved_at = new Date().toISOString();
+      if (currentUser) updates.resolved_by = currentUser.id;
+    }
+
+    // 1. Update Database
+    const { error } = await supabase.from('support_tickets').update(updates).eq('id', ticketId);
+
     if (!error) {
-      // Local state we keep using the normalized lowercase or whatever passed
-      const tickets = get().supportTickets.map(t => t.id === ticketId ? { ...t, status } : t);
+      // 2. Update Local State
+      const tickets = get().supportTickets.map(t =>
+        t.id === ticketId ? { ...t, status, resolution_note: note, resolved_at: updates.resolved_at, resolved_by: updates.resolved_by } : t
+      );
       set({ supportTickets: tickets });
+
+      // 3. Notify the User (if not self)
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (ticket && currentUser) {
+        // Create a notification for the ticket owner
+        const { error: notifError } = await supabase.from('notifications').insert({
+          recipient_id: ticket.userId,
+          message: `Your ticket "${ticket.title}" has been ${status}. ${note ? `Note: ${note}` : ''}`,
+          type: 'info',
+          is_read: false,
+          created_at: new Date().toISOString()
+        });
+        if (notifError) console.error("Failed to send notification:", notifError);
+      }
+
     } else {
       console.error("Resolve Error:", error);
     }
@@ -2391,10 +2532,16 @@ export const useStore = create<AppState>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return false;
 
-    // ONLY check the isPremium flag from database
-    // If undefined or false, return false
     // Only return true if explicitly true
     return currentUser.isPremium === true;
+  },
+
+  canProjectUsePremium: (projectId) => {
+    const { projects, users } = get();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return false;
+    const manager = users.find(u => u.id === project.managerId);
+    return manager?.isPremium === true;
   },
 
   getVisibleProjects: () => {
