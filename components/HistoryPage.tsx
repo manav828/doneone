@@ -231,9 +231,6 @@ export const HistoryPage: React.FC = () => {
                                 <option key={u.id} value={u.id}>{u.name}</option>
                             ))}
                         </select>
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                            <svg width="8" height="5" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m1 1 4 4 4-4" /></svg>
-                        </div>
                     </div>
 
                     {(historyFilters.dateStart || historyFilters.dateEnd || historyFilters.searchQuery || historyFilters.assigneeIds) && (

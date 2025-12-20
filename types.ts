@@ -78,6 +78,7 @@ export interface Task {
   capturedText?: string;
   capturedScreenshot?: string;
   isHighlighted?: boolean;
+  isReminderDismissed?: boolean;
 }
 
 export interface Column {

@@ -28,7 +28,8 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
   // Feature Flag Check
   // Feature Flag Check
-  const projectManager = users.find(u => u.id === activeProject?.managerId);
+  // FIX: Use activeProject.manager directly as it contains the enriched plan overrides from fetchProjects
+  const projectManager = activeProject?.manager || users.find(u => u.id === activeProject?.managerId);
   // CHANGED: Use Project Manager's Premium Status
   const hasPremium = projectManager?.isPremium === true;
   const remindersEnabled = hasPremium && (projectManager?.remindersEnabled || false);
@@ -99,8 +100,8 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
   // Animation classes
   const animationClass = task.isHighlighted ? 'task-highlighted' :
-    (isOverdue && !isDoneColumn) ? 'task-overdue' :
-      (isDueSoon && !isDoneColumn) ? 'task-reminder-soon' : '';
+    (isOverdue && !isDoneColumn && !task.isReminderDismissed) ? 'task-overdue' :
+      (isDueSoon && !isDoneColumn && !task.isReminderDismissed) ? 'task-reminder-soon' : '';
 
   if (isDragging) {
     return (
@@ -291,23 +292,24 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
                 {(task.reminderAt || task.updatedAt) && (
                   <div className="flex items-center gap-2">
-                    {/* Dismiss Reminder Button */}
-                    {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && (
+                    {/* Stop Animation Button */}
+                    {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && !task.isReminderDismissed && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          updateTask(task.id, { reminderAt: null });
+                          updateTask(task.id, { isReminderDismissed: true });
                         }}
-                        className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-md hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors flex items-center gap-1.5 font-bold animate-none shadow-sm border border-emerald-200 dark:border-emerald-800"
-                        title="Dismiss Reminder (Stop Animation)"
+                        className="text-[10px] bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-1 font-medium shadow-sm"
+                        title="Stop Animation (Keep Date)"
                       >
-                        <CheckSquare size={12} className="stroke-[3]" /> Dismiss
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                        Stop Alert
                       </button>
                     )}
 
-                    <span className={`text-[10px] font-medium flex items-center gap-1 ${isOverdue && !isDoneColumn ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
-                      {task.reminderAt && remindersEnabled && !isDoneColumn && !(isOverdue || isDueSoon) && <Clock size={10} />}
-                      {task.reminderAt && remindersEnabled && !isDoneColumn
+                    <span className={`text-[10px] font-medium flex items-center gap-1 ${((isOverdue || isDueSoon) && !isDoneColumn && !task.isReminderDismissed) ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                      {task.reminderAt && remindersEnabled && !((isOverdue || isDueSoon) && !isDoneColumn && !task.isReminderDismissed) && <Clock size={10} />}
+                      {task.reminderAt && remindersEnabled
                         ? new Date(task.reminderAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         : new Date(task.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </span>

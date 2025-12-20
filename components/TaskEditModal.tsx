@@ -389,28 +389,34 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                             </div>
                         </div>
 
-                        {/* Time Tracking (Existing) */}
                         <div>
-                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Estimated Time (min)</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Estimated Time (Hours)</label>
                             <input
                                 type="number"
-                                value={localEstimatedMinutes}
-                                onChange={e => setLocalEstimatedMinutes(parseInt(e.target.value) || 0)}
+                                step="0.1"
+                                value={localEstimatedMinutes > 0 ? (localEstimatedMinutes / 60).toFixed(1).replace(/\.0$/, '') : ''}
+                                onChange={e => {
+                                    const val = Math.round(parseFloat(e.target.value || '0') * 60);
+                                    setLocalEstimatedMinutes(val);
+                                }}
                                 className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
+                                placeholder="0"
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Actual Time (min)</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Actual Time (Hours)</label>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="number"
-                                    value={localActualMinutes}
+                                    step="0.1"
+                                    value={localActualMinutes > 0 ? (localActualMinutes / 60).toFixed(1).replace(/\.0$/, '') : ''}
                                     onChange={e => {
-                                        const val = parseInt(e.target.value) || 0;
+                                        const val = Math.round(parseFloat(e.target.value || '0') * 60);
                                         setLocalActualMinutes(val);
                                         setElapsedTime(val * 60);
                                     }}
                                     className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
+                                    placeholder="0"
                                 />
                             </div>
                         </div>

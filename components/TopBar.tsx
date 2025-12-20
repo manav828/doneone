@@ -140,7 +140,7 @@ export const TopBar: React.FC = () => {
         className="hidden"
         accept="image/*"
       />
-      <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 transition-colors duration-300 relative">
+      <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 z-40 transition-colors duration-300 relative">
         <div className="flex items-center gap-6">
           {activeProject ? (
             <div>

@@ -847,12 +847,16 @@ export const useStore = create<AppState>((set, get) => ({
       // Determine if Manager has premium logic
       let managerHasPremium = false;
       if (managerUser) {
-        const mCreatedAt = new Date(managerUser.created_at).getTime();
-        const mPremiumUntil = managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : 0;
-        const now = Date.now();
+        // [MODIFIED] Check DB flag and trial logic
+        if (managerUser.is_premium) managerHasPremium = true;
+        else {
+          const mCreatedAt = new Date(managerUser.created_at).getTime();
+          const mPremiumUntil = managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : 0;
+          const now = Date.now();
 
-        if (mPremiumUntil > now) managerHasPremium = true;
-        else if (mCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) managerHasPremium = true;
+          if (mPremiumUntil > now) managerHasPremium = true;
+          else if (mCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) managerHasPremium = true;
+        }
       }
 
       // [NEW LOGIC] Apply Plan Overrides
@@ -1604,6 +1608,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.reminderAt !== undefined) {
       dbUpdates.reminder_at = updates.reminderAt ? new Date(updates.reminderAt).toISOString() : null;
     }
+    if (updates.isReminderDismissed !== undefined) dbUpdates.is_reminder_dismissed = updates.isReminderDismissed;
     if (updates.reminderUserIds !== undefined) dbUpdates.reminder_user_ids = updates.reminderUserIds;
 
     if (updates.timeTracked !== undefined) dbUpdates.time_tracked = updates.timeTracked;

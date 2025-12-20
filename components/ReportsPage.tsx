@@ -16,6 +16,7 @@ export const ReportsPage: React.FC = () => {
 
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
+    const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
     // Project Dropdown State
     const [isProjectOpen, setIsProjectOpen] = useState(false);
@@ -101,6 +102,10 @@ export const ReportsPage: React.FC = () => {
             filtered = filtered.filter(t => t.assigneeId === selectedAssignee);
         }
 
+        if (selectedStatus !== 'all') {
+            filtered = filtered.filter(t => t.columnId === selectedStatus);
+        }
+
         if (dateRange.start) {
             const start = new Date(dateRange.start).getTime();
             filtered = filtered.filter(t => t.createdAt >= start);
@@ -154,6 +159,14 @@ export const ReportsPage: React.FC = () => {
         if (!doneColumn) return 0;
         return filteredTasks.filter(t => t.columnId === doneColumn.id).length;
     }, [filteredTasks, columns, activeProjectId]);
+
+    const formatTime = (seconds: number) => {
+        const hours = (seconds / 3600);
+        return hours > 0 ? `${hours.toFixed(1)}h` : '-';
+    };
+
+    // Check Premium Status
+    const isPremium = activeProject?.manager?.isPremium || false;
 
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -239,6 +252,23 @@ export const ReportsPage: React.FC = () => {
                             className="bg-transparent border-none text-xs px-2 py-1 outline-none dark:text-white"
                             onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                         />
+                    </div>
+
+                    {/* Status Filter */}
+                    <div className="relative">
+                        <select
+                            className="appearance-none bg-slate-100 dark:bg-slate-700 border-none rounded-lg pl-3 pr-8 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer dark:text-white"
+                            value={selectedStatus}
+                            onChange={e => setSelectedStatus(e.target.value)}
+                        >
+                            <option value="all">All Statuses</option>
+                            {columns.filter(c => c.projectId === activeProjectId).map(c => (
+                                <option key={c.id} value={c.id}>{c.title}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg width="8" height="5" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m1 1 4 4 4-4" /></svg>
+                        </div>
                     </div>
 
                     {/* Assignee Filter */}
@@ -337,6 +367,7 @@ export const ReportsPage: React.FC = () => {
                                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Created</th>
                                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Started</th>
                                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Completed</th>
+                                    {isPremium && <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Hours Taken</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -366,6 +397,11 @@ export const ReportsPage: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                                                 {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : '-'}
                                             </td>
+                                            {isPremium && (
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                                                    {formatTime(task.timeTracked || 0)}
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}
