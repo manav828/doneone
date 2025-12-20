@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2 } from 'lucide-react';
+import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2, Camera } from 'lucide-react';
 import { Modal } from './Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TemplateSelector } from './TemplateSelector';
@@ -20,7 +20,8 @@ export const Sidebar: React.FC = () => {
     projects,
     updateProject,
     currentUser,
-    canAccessPremium
+    canAccessPremium,
+    uploadFile // Add uploadFile
   } = useStore();
 
   const navigate = useNavigate();
@@ -41,6 +42,8 @@ export const Sidebar: React.FC = () => {
   const [editDesc, setEditDesc] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editViewAllReports, setEditViewAllReports] = useState(false);
+  const [editLogoUrl, setEditLogoUrl] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
@@ -124,6 +127,7 @@ export const Sidebar: React.FC = () => {
     setEditDesc(project.description || '');
     setEditColor(project.themeColor);
     setEditViewAllReports(project.viewAllReportsEnabled || false);
+    setEditLogoUrl(project.logo || '');
     setIsEditModalOpen(true);
   };
 
@@ -134,9 +138,26 @@ export const Sidebar: React.FC = () => {
         name: editName,
         description: editDesc,
         themeColor: editColor,
-        viewAllReportsEnabled: editViewAllReports
+        viewAllReportsEnabled: editViewAllReports,
+        logo: editLogoUrl
       });
       setIsEditModalOpen(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploadingLogo(true);
+      try {
+        const url = await uploadFile(e.target.files[0]);
+        if (url) {
+          setEditLogoUrl(url);
+        }
+      } catch (error) {
+        console.error('Failed to upload logo', error);
+      } finally {
+        setIsUploadingLogo(false);
+      }
     }
   };
 
@@ -196,10 +217,14 @@ export const Sidebar: React.FC = () => {
                 title={isCollapsed ? project.name : undefined}
               >
                 <div className="flex items-center gap-3 truncate">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${activeProjectId !== project.id ? 'opacity-70' : ''}`}
-                    style={{ backgroundColor: project.themeColor }}
-                  ></span>
+                  {project.logo ? (
+                    <img src={project.logo} alt={project.name} className="w-6 h-6 rounded-md object-cover bg-white shrink-0" title={project.name} />
+                  ) : (
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${activeProjectId !== project.id ? 'opacity-70' : ''}`}
+                      style={{ backgroundColor: project.themeColor }}
+                    ></span>
+                  )}
                   {!isCollapsed && <span className="truncate text-sm">{project.name}</span>}
                 </div>
 
@@ -438,6 +463,40 @@ export const Sidebar: React.FC = () => {
               </label>
             </div>
           )}
+
+          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-3">
+              {editLogoUrl ? (
+                <img src={editLogoUrl} alt="Logo" className="w-10 h-10 rounded-md object-cover bg-white" />
+              ) : (
+                <div className="w-10 h-10 rounded-md bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400">
+                  <Camera size={20} />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Project Logo</label>
+                <p className="text-xs text-slate-500">Visible when sidebar is collapsed</p>
+              </div>
+            </div>
+            <div>
+              <input
+                type="file"
+                id="logo-upload"
+                className="hidden"
+                accept="image/*"
+                onChange={handleLogoUpload}
+              />
+              <button
+                type="button"
+                onClick={() => document.getElementById('logo-upload')?.click()}
+                disabled={isUploadingLogo}
+                className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+              >
+                {isUploadingLogo ? 'Uploading...' : 'Change Logo'}
+              </button>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 mt-8">
             <button
               type="button"

@@ -1,190 +1,225 @@
-import React from 'react';
-import { Shield, ShieldAlert, User, FolderKanban, Bell, Filter, LayoutList, Calendar, Archive, Settings, Crown, Clock, Download } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Shield, ShieldAlert, User, FolderKanban, Bell, Filter, LayoutList, Calendar,
+  Archive, Settings, Crown, Clock, Download, Zap, MousePointerClick,
+  Users, Lock, BarChart, X, Check
+} from 'lucide-react';
 import { useStore } from '../store';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface FeatureCardProps {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  isPremium?: boolean;
+  image?: string;
+  benefits: string[];
+  color: string;
+}
+
+const FeatureCard: React.FC<FeatureCardProps> = ({ icon: Icon, title, description, isPremium, image, benefits, color }) => (
+  <div className={`relative group bg-white dark:bg-gray-800 rounded-2xl p-6 border transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isPremium ? 'border-yellow-200 dark:border-yellow-900/30' : 'border-gray-100 dark:border-gray-700'}`}>
+    {isPremium && (
+      <div className="absolute -top-3 -right-3">
+        <span className="flex items-center gap-1 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-full shadow-lg">
+          <Crown size={12} fill="currentColor" /> Premium
+        </span>
+      </div>
+    )}
+
+    <div className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+      <Icon size={24} className="text-white" />
+    </div>
+
+    <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2">
+      {title}
+    </h3>
+
+    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+      {description}
+    </p>
+
+    {image && (
+      <div className="mb-4 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm relative group-hover:shadow-md transition-shadow">
+        <img src={image} alt={title} className="w-full h-32 object-cover object-top hover:scale-105 transition-transform duration-500" />
+      </div>
+    )}
+
+    <div className="space-y-2 mt-auto">
+      <h4 className="text-xs font-bold uppercase text-gray-400 tracking-wider mb-2">Why you need this</h4>
+      {benefits.map((benefit, idx) => (
+        <div key={idx} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+          <Check size={14} className={`mt-0.5 shrink-0 ${isPremium ? 'text-yellow-500' : 'text-green-500'}`} />
+          <span>{benefit}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 export const Guide: React.FC = () => {
+  const [filter, setFilter] = useState<'all' | 'free' | 'premium'>('all');
+
+  const categories = [
+    { id: 'all', label: 'All Features' },
+    { id: 'free', label: 'Essentials' },
+    { id: 'premium', label: 'Premium Powers' }
+  ];
+
+  const features = [
+    {
+      icon: FolderKanban,
+      title: "Kanban Board",
+      description: "Visual project management at its finest. Drag and drop tasks across columns to track progress instantly.",
+      benefits: ["Visualize your workflow clearly", "Drag-and-drop simplicity", "Customizable columns"],
+      color: "bg-blue-500",
+      image: '/assets/kanban_preview.png',
+      isPremium: false
+    },
+    {
+      icon: LayoutList,
+      title: "List View",
+      description: "A powerful spreadsheet-style view for managing massive backlogs without the visual clutter.",
+      benefits: ["Sort by any field (Date, Priority)", "Scan hundreds of tasks in seconds", "Compact data density"],
+      color: "bg-emerald-500",
+      image: '/assets/list_preview.png',
+      isPremium: true
+    },
+    {
+      icon: Calendar,
+      title: "Calendar View",
+      description: "Map your tasks onto a monthly calendar. Perfect for deadline-driven projects and planning ahead.",
+      benefits: ["Never miss a deadline", "Plan your month effectively", "Visual timeline of deliverables"],
+      color: "bg-orange-500",
+      isPremium: true
+    },
+    {
+      icon: Clock,
+      title: "Smart Time Tracking",
+      description: "Track time on tasks with a single click. Includes intelligent sleep detection to pause timers when you step away.",
+      benefits: ["Accurate billing & productivity stats", "Auto-pause when system sleeps", "Detailed time logs"],
+      color: "bg-indigo-500",
+      isPremium: false
+    },
+    {
+      icon: Download,
+      title: "Data Export (CSV)",
+      description: "Take your data with you. Export project history and task lists to CSV for Excel or external analysis.",
+      benefits: ["Create custom reports in Excel", "Backup your project data", "Share data with stakeholders"],
+      color: "bg-purple-500",
+      isPremium: true
+    },
+    {
+      icon: Archive,
+      title: "Unlimited History and Analytics",
+      description: "Keep a permanent record of every completed task. Search, filter, and reference past work forever.",
+      benefits: ["Audit trails for compliance", "Learn from past projects", "Never lose a completed task"],
+      color: "bg-rose-500",
+      image: '/assets/analytics_preview.png',
+      isPremium: true
+    },
+    {
+      icon: Users,
+      title: "Team Collaboration",
+      description: "Invite members to your projects. Assign tasks, share updates, and work together in real-time.",
+      benefits: ["Real-time sync", "Role-based permissions (Manager/Lead)", "Effective delegation"],
+      color: "bg-cyan-500",
+      isPremium: false
+    },
+    {
+      icon: Bell,
+      title: "Smart Notifications",
+      description: "Stay in the loop without the noise. Get alerts for deadlines, assignments, and sleep timer adjustments.",
+      benefits: ["Instant updates", "Browser-native alerts", "Interactive action buttons"],
+      color: "bg-teal-500",
+      isPremium: false
+    }
+  ];
+
+  const filteredFeatures = filter === 'all' ? features : features.filter(f => filter === 'premium' ? f.isPremium : !f.isPremium);
+
   return (
-    <div className="p-8 max-w-5xl mx-auto overflow-y-auto h-full pb-20">
-      <div className="mb-8 border-b border-gray-200 dark:border-gray-700 pb-6">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">DoneOne User Guide</h1>
-        <p className="text-gray-500 text-lg">Master your workflow with this comprehensive guide.</p>
-      </div>
+    <div className="h-full overflow-y-auto bg-gray-50/50 dark:bg-gray-900/50 p-6 md:p-10 pb-24">
+      <div className="max-w-7xl mx-auto">
 
-      <div className="space-y-12">
-
-        {/* 1. Project Views */}
-        <section>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-            <LayoutList className="text-blue-500" /> Project Views
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-              <h3 className="font-bold mb-3 flex items-center gap-2 text-lg"><FolderKanban size={20} className="text-indigo-500" /> Kanban Board</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                The classic visual workflow. Drag and drop tasks between columns to update their status instantly.
-              </p>
-              <ul className="list-disc list-inside text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <li>Best for: Visualizing process flow</li>
-                <li>Drag & Drop enabled</li>
-                <li>Collapse columns to save space</li>
-              </ul>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-              <h3 className="font-bold mb-3 flex items-center gap-2 text-lg"><LayoutList size={20} className="text-emerald-500" /> List View</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                A structured table view of all tasks. Perfect for scanning many items and sorting by priority or due date.
-              </p>
-              <ul className="list-disc list-inside text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <li>Best for: Managing large backlogs</li>
-                <li>Sortable columns</li>
-                <li>Compact density</li>
-              </ul>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-              <h3 className="font-bold mb-3 flex items-center gap-2 text-lg"><Calendar size={20} className="text-orange-500" /> Calendar View</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                See tasks plotted on a monthly calendar based on their due dates. Never miss a deadline again.
-              </p>
-              <ul className="list-disc list-inside text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <li>Best for: Deadline tracking</li>
-                <li>Month/Week views</li>
-                <li>Color-coded by priority</li>
-              </ul>
-            </div>
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white mb-4 tracking-tight">
+            Unlock Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Productivity</span>
+          </h1>
+          <p className="text-xl text-gray-500 max-w-2xl mx-auto">
+            Explore the powerful features designed to streamline your workflow.
+            From essential tools to premium power-ups, we've got you covered.
+          </p>
+          <div className="mt-8 max-w-4xl mx-auto rounded-2xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-700">
+            <img src="/assets/feature_cards_screenshot.png" alt="Feature Cards Screenshot" className="w-full h-auto" />
           </div>
-        </section>
+        </div>
 
-        {/* 2. History Management */}
-        <section>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-            <Archive className="text-purple-500" /> History & Archiving
-          </h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="font-bold text-lg mb-3">Accessing History</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                  Click the <strong>History</strong> tab in the sidebar to view archived tasks. History is project-specific.
-                </p>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Filter size={18} className="text-gray-400 mt-1" />
-                    <div>
-                      <span className="font-bold text-sm block">Filtering</span>
-                      <p className="text-xs text-gray-500">Use the filter panel to search by text, date range, assignee, or tags.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Download size={18} className="text-gray-400 mt-1" />
-                    <div>
-                      <span className="font-bold text-sm block">Exporting</span>
-                      <p className="text-xs text-gray-500">Download history as CSV. Options: Export All, Export Filtered, or Export Selected.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-5">
-                <h3 className="font-bold text-lg mb-3">Auto-Archive Settings</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                  Configure when your completed tasks automatically move to history.
-                </p>
-                <ol className="list-decimal list-inside text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                  <li>Click your profile picture in the top right.</li>
-                  <li>Select <strong>Archive Settings</strong>.</li>
-                  <li>Choose a duration (e.g., 7 days, 30 days).</li>
-                  <li>Tasks in the "Done" column older than this will be automatically archived.</li>
-                </ol>
-                <div className="mt-4 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 p-3 rounded border border-blue-100 dark:border-blue-800">
-                  <strong>Note:</strong> You can also manually archive any task instantly using the "Archive Now" button in the task edit modal.
-                </div>
-              </div>
-            </div>
+        {/* Filter Tabs */}
+        <div className="flex justify-center mb-12">
+          <div className="bg-white dark:bg-gray-800 p-1.5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex gap-1">
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setFilter(cat.id as any)}
+                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${filter === cat.id
+                  ? 'bg-primary text-white shadow-md'
+                  : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+              >
+                {cat.label}
+              </button>
+            ))}
           </div>
-        </section>
+        </div>
 
-        {/* 3. User Roles */}
-        <section>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-            <User className="text-green-500" /> Roles & Permissions
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 font-bold text-primary">
-                <Shield size={18} /> Manager (Owner)
+        {/* Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <AnimatePresence mode="popLayout">
+            {filteredFeatures.map((feature, idx) => (
+              <motion.div
+                key={feature.title}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2, delay: idx * 0.05 }}
+              >
+                <FeatureCard {...feature} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* CTA Section */}
+        <div className="mt-20 bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-10 md:p-16 text-center text-white relative overflow-hidden shadow-2xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+
+          <div className="relative z-10 max-w-3xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to upgrade your workflow?</h2>
+            <p className="text-gray-300 text-lg mb-8">
+              Join thousands of productive teams using Premium to manage projects more effectively.
+              Get unlimited history, advanced views, and data exports.
+            </p>
+            {/* Logic check: If user not premium, show upgrade button */}
+            {!useStore.getState().canAccessPremium() && (
+              <button
+                onClick={() => useStore.getState().setPricingModalOpen(true)}
+                className="bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-white text-lg font-bold py-4 px-10 rounded-full shadow-lg transform transition-transform hover:scale-105"
+              >
+                Get Premium Now
+              </button>
+            )}
+            {useStore.getState().canAccessPremium() && (
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full text-yellow-400 font-bold border border-yellow-500/30">
+                <Crown size={20} fill="currentColor" />
+                You are a Premium Member
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Full control. Can manage team, edit project settings, and configure columns.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 font-bold text-orange-500">
-                <ShieldAlert size={18} /> Lead
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Team leader. Can manage tasks and view resources, but cannot delete projects.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 font-bold text-gray-500">
-                <User size={18} /> Resource
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Standard member. Can view and update assigned tasks.
-              </p>
-            </div>
+            )}
           </div>
-        </section>
-
-        {/* 4. Admin Panel (If applicable) */}
-        {useStore.getState().currentUser?.email === 'manavss828@gmail.com' && (
-          <section>
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
-              <Shield className="text-red-500" /> Admin Controls
-            </h2>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                Super Admins have access to the <strong>Admin Panel</strong> to manage global settings and user limits.
-              </p>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-bold text-sm uppercase text-gray-500 mb-3">User Management</h4>
-                  <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                    <li className="flex items-center gap-2">
-                      <Crown size={16} className="text-yellow-500" />
-                      <span><strong>Premium Status:</strong> Toggle premium features for users.</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <FolderKanban size={16} className="text-blue-500" />
-                      <span><strong>Limits:</strong> Set max projects, leads, and resources per user.</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Settings size={16} className="text-gray-500" />
-                      <span><strong>Features:</strong> Enable/disable notifications, time tracking, etc.</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-sm uppercase text-gray-500 mb-3">Data Retention</h4>
-                  <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                    <li className="flex items-center gap-2">
-                      <Clock size={16} className="text-purple-500" />
-                      <span><strong>History Retention:</strong> Set how long archived data is kept (e.g., 90 days).</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">∞</span>
-                      <span>Leave empty to keep history forever.</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
+        </div>
 
       </div>
     </div>

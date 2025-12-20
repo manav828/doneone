@@ -35,7 +35,7 @@ const App: React.FC = () => {
         localStorage.setItem('doneone_welcome_seen', 'true');
       }
     }
-  }, [currentUser]); // Add currentUser dependency to check when loaded
+  }, []); // Run only on mount
 
   const [showWelcome, setShowWelcome] = React.useState(false);
   const { isPricingModalOpen, setPricingModalOpen } = useStore();

@@ -313,14 +313,16 @@ export const TopBar: React.FC = () => {
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="flex items-center gap-2 group outline-none"
             >
-              <div className={`relative h-9 w-9 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 transition-all group-hover:ring-primary/30 ${canAccessPremium() ? 'ring-yellow-400 dark:ring-yellow-500' : 'ring-white dark:ring-slate-800'} overflow-hidden`}>
-                {currentUser.avatar ? (
-                  <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{currentUser.name.charAt(0)}</span>
-                )}
+              <div className="relative">
+                <div className={`relative h-9 w-9 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 transition-all group-hover:ring-primary/30 ${canAccessPremium() ? 'ring-yellow-400 dark:ring-yellow-500' : 'ring-white dark:ring-slate-800'} overflow-hidden`}>
+                  {currentUser.avatar ? (
+                    <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{currentUser.name.charAt(0)}</span>
+                  )}
+                </div>
                 {canAccessPremium() && (
-                  <div className="absolute top-0 right-0 bg-yellow-400 text-white p-0.5 rounded-full border border-white dark:border-slate-900 z-10 w-3 h-3 flex items-center justify-center">
+                  <div className="absolute -top-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border border-white dark:border-slate-900 z-10 w-3.5 h-3.5 flex items-center justify-center shadow-sm">
                     <Crown size={8} fill="currentColor" />
                   </div>
                 )}

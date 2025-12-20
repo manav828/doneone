@@ -419,98 +419,56 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   initSleepDetection: () => {
-    // 1. Check for Shutdown Gap immediately
-    const lastHeartbeatStr = localStorage.getItem('doneone_heartbeat');
-    const { tasks, currentUser } = get();
-
-    // Helper to stop timer
-    const stopTimer = async (task: Task, stopTime: number) => {
-      if (!task.timerStartedAt) return;
-      const elapsed = Math.floor((stopTime - task.timerStartedAt) / 1000);
-      // Ensure elapsed is positive (if clock skew)
-      const safeElapsed = elapsed > 0 ? elapsed : 0;
-      const newTotal = (task.timeTracked || 0) + safeElapsed;
-
-      console.log(`Stopping timer for ${task.title}. Elapsed: ${safeElapsed}s`);
-
-      set(state => ({
-        tasks: state.tasks.map(t =>
-          t.id === task.id
-            ? { ...t, timeTracked: newTotal, timerStartedAt: undefined }
-            : t
-        )
-      }));
-      await get().updateTask(task.id, { timeTracked: newTotal, timerStartedAt: null });
-
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('DoneOne', {
-          body: `Timer for "${task.title}" stopped (System Sleep/Shutdown).`,
-          icon: 'icon128.png'
-        });
-      }
-    };
-
-    if (lastHeartbeatStr && currentUser) {
-      const lastHeartbeat = parseInt(lastHeartbeatStr, 10);
-      const now = Date.now();
-      const GAP_THRESHOLD = 5 * 60 * 1000; // 5 mins gap implies shutdown/close
-
-      if (now - lastHeartbeat > GAP_THRESHOLD) {
-        const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
-        if (runningTask) {
-          // Auto-Resume Logic:
-          // 1. Credit time up to the last heartbeat (exclude sleep time)
-          stopTimer(runningTask, lastHeartbeat);
-
-          // 2. Immediately restart timer from NOW (Wake Up)
-          get().updateTask(runningTask.id, { timerStartedAt: now });
-
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('DoneOne', {
-              body: `Timer for "${runningTask.title}" auto-resumed (gap skipped).`,
-              icon: 'icon128.png'
-            });
-          }
-        }
+    // Request permission if default, warn if denied
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      } else if (Notification.permission === 'denied') {
+        console.warn("Notifications are blocked. Sleep detection alerts will not appear.");
       }
     }
 
-    // 2. Start Interval
-    set({ lastHeartbeat: Date.now() });
+    // Prevent multiple intervals
+    if ((window as any).doneone_sleep_interval) {
+      clearInterval((window as any).doneone_sleep_interval);
+    }
 
-    // Clear any existing interval to prevent duplicates if called multiple times
-    // (We accept that we might leak one if not stored in a ref, but init is usually called once)
-
-    setInterval(async () => {
-      const { lastHeartbeat, tasks, currentUser } = get();
+    let lastTick = Date.now();
+    (window as any).doneone_sleep_interval = setInterval(async () => {
       const now = Date.now();
-      const GAP_THRESHOLD = 2 * 60 * 1000; // 2 minutes (Sleep threshold)
+      const delta = now - lastTick;
+      lastTick = now; // Update immediately to prevent overlap
 
-      // Persist heartbeat
-      localStorage.setItem('doneone_heartbeat', String(now));
+      if (delta > 10000) { // 10 seconds threshold
+        const sleepTime = delta - 5000; // Subtract normal interval
+        console.log(`💤 Sleep Detected! Gap: ${delta}ms. Adjusting timer by ${sleepTime}ms.`);
 
-      // Update state heartbeat
-      set({ lastHeartbeat: now });
+        try {
+          const { tasks, currentUser, updateTask } = get();
+          if (tasks && currentUser) {
+            const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
+            if (runningTask && runningTask.timerStartedAt) {
+              const newStart = runningTask.timerStartedAt + sleepTime;
 
-      if (now - lastHeartbeat > GAP_THRESHOLD) {
-        console.log("System sleep detected (Interval). Auto-Resuming.");
-        const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser?.id);
-        if (runningTask) {
-          // 1. Stop at last heartbeat
-          await stopTimer(runningTask, lastHeartbeat);
+              // Update Local & DB
+              // We don't await this to block the interval, but we do want it to happen.
+              updateTask(runningTask.id, { timerStartedAt: newStart });
 
-          // 2. Resume now
-          await get().updateTask(runningTask.id, { timerStartedAt: now });
-
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('DoneOne', {
-              body: `Timer for "${runningTask.title}" auto-resumed (gap skipped).`,
-              icon: 'icon128.png'
-            });
+              // Notify User
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(`Resumed: ${runningTask.title}`, {
+                  body: `Sleep time excluded (${Math.round(sleepTime / 1000 / 60)} mins).`,
+                  icon: 'icon128.png',
+                  tag: 'sleep-resume' // Prevent duplicate notifications stacking
+                });
+              }
+            }
           }
+        } catch (e) {
+          console.error("Error in sleep detection:", e);
         }
       }
-    }, 10000);
+    }, 5000);
   },
 
   initialized: false,
@@ -648,6 +606,23 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
     } else {
+      // Ensure the trial fields are set for existing profiles
+      if (!profile.is_premium) {
+        const { error: trialUpdateErr } = await supabase
+          .from('profiles')
+          .update({
+            is_premium: true,
+            premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          })
+          .eq('id', session.user.id);
+        if (trialUpdateErr) {
+          console.error('❌ Failed to set trial on existing profile', trialUpdateErr);
+        } else {
+          console.log('✅ Trial fields added to existing profile');
+          profile.is_premium = true;
+          profile.premium_until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        }
+      }
       profile.email = session.user.email;
     }
 
@@ -663,44 +638,7 @@ export const useStore = create<AppState>((set, get) => ({
       // The database is_premium value is now the ONLY source of truth
 
       // SLEEP DETECTION & TIMER CORRECTION
-      // Check every 5 seconds. If gap > 10s, we assume sleep.
-      if (!(window as any).doneone_sleep_interval) {
-        let lastTick = Date.now();
-        (window as any).doneone_sleep_interval = setInterval(async () => {
-          const now = Date.now();
-          const delta = now - lastTick;
-          if (delta > 10000) { // 10 seconds threshold
-            const sleepTime = delta - 5000; // Subtract normal interval
-            console.log(`💤 Sleep Detected! Gap: ${delta}ms. Adjusting timer by ${sleepTime}ms.`);
-
-            // Check if active timer exists
-            const { tasks, currentUser, updateTask } = get();
-            if (tasks && currentUser) {
-              const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
-              if (runningTask && runningTask.timerStartedAt) {
-                const newStart = runningTask.timerStartedAt + sleepTime;
-
-                // Update Local
-                set(state => ({
-                  tasks: state.tasks.map(t => t.id === runningTask.id ? { ...t, timerStartedAt: newStart } : t)
-                }));
-
-                // Update DB
-                await updateTask(runningTask.id, { timerStartedAt: newStart });
-
-                // Notify User
-                if ('Notification' in window && Notification.permission === 'granted') {
-                  new Notification(`Resumed: ${runningTask.title}`, {
-                    body: `Sleep time excluded (${Math.round(sleepTime / 1000 / 60)} mins).`,
-                    icon: 'icon128.png'
-                  });
-                }
-              }
-            }
-          }
-          lastTick = Date.now();
-        }, 5000);
-      }
+      get().initSleepDetection();
 
       // Load Archive Settings
       const { data: archiveSettings } = await supabase
@@ -922,6 +860,7 @@ export const useStore = create<AppState>((set, get) => ({
         name: p.name,
         description: p.description,
         code: p.code,
+        logo: p.logo,
         managerId: p.manager_id,
         themeColor: p.theme_color || '#3b82f6',
         autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true,
@@ -1313,7 +1252,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   updateProject: async (id, updates) => {
-    await supabase.from('projects').update({ name: updates.name, description: updates.description, theme_color: updates.themeColor }).eq('id', id);
+    const dbUpdates: any = {
+      name: updates.name,
+      description: updates.description,
+      theme_color: updates.themeColor
+    };
+    if (updates.logo !== undefined) dbUpdates.logo = updates.logo;
+    if (updates.viewAllReportsEnabled !== undefined) dbUpdates.view_all_reports_enabled = updates.viewAllReportsEnabled;
+
+    await supabase.from('projects').update(dbUpdates).eq('id', id);
     get().fetchProjects();
   },
 

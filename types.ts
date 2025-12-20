@@ -103,6 +103,7 @@ export interface Project {
   autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
   viewAllReportsEnabled?: boolean; // If true, all members can see all reports (default: false)
   manager?: User & { hasPremiumAccess?: boolean }; // Full manager details including premium status
+  logo?: string; // URL to project logo image
 }
 
 export interface Activity {
