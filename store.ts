@@ -855,6 +855,12 @@ export const useStore = create<AppState>((set, get) => ({
         else if (mCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) managerHasPremium = true;
       }
 
+      // [NEW LOGIC] Apply Plan Overrides
+      const plans = get().plans; // Ensure plans are loaded
+      const activePlan = managerHasPremium
+        ? plans.find(p => p.id === 'premium')
+        : plans.find(p => p.id === 'free');
+
       return {
         id: p.id,
         name: p.name,
@@ -878,10 +884,11 @@ export const useStore = create<AppState>((set, get) => ({
           premiumUntil: managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : undefined,
           hasPremiumAccess: managerHasPremium,
 
-          remindersEnabled: managerUser.reminders_enabled,
-          imageUploadEnabled: managerUser.image_upload_enabled,
-          timeTrackingEnabled: managerUser.time_tracking_enabled,
-          maxAttachmentsPerTask: managerUser.max_attachments_per_task || 3
+          // [CHANGED] Use OR logic with Plan limits
+          remindersEnabled: managerUser.reminders_enabled || activePlan?.canSetReminders || false,
+          imageUploadEnabled: managerUser.image_upload_enabled || activePlan?.canUploadImages || false,
+          timeTrackingEnabled: managerUser.time_tracking_enabled || true, // Default true
+          maxAttachmentsPerTask: Math.max(managerUser.max_attachments_per_task || 0, activePlan?.maxUploadsPerTaskLimit || 0)
         } as User : undefined
       };
     });
@@ -1592,13 +1599,19 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.orderIndex !== undefined) dbUpdates.order_index = updates.orderIndex;
     if (updates.assigneeId !== undefined) dbUpdates.assignee_id = updates.assigneeId;
     if (updates.tagIds !== undefined) dbUpdates.tag_ids = updates.tagIds;
-    if (updates.reminderAt !== undefined) dbUpdates.reminder_at = updates.reminderAt ? new Date(updates.reminderAt).toISOString() : null;
+
+    // FIXED: Strictly handle reminder_at. If it's number (timestamp) or null, convert to ISO.
+    if (updates.reminderAt !== undefined) {
+      dbUpdates.reminder_at = updates.reminderAt ? new Date(updates.reminderAt).toISOString() : null;
+    }
     if (updates.reminderUserIds !== undefined) dbUpdates.reminder_user_ids = updates.reminderUserIds;
+
     if (updates.timeTracked !== undefined) dbUpdates.time_tracked = updates.timeTracked;
     if (updates.estimatedTime !== undefined) dbUpdates.estimated_time = updates.estimatedTime;
     if (updates.timerStartedAt !== undefined) dbUpdates.timer_started_at = updates.timerStartedAt ? new Date(updates.timerStartedAt).toISOString() : null;
     if (updates.attachments !== undefined) dbUpdates.attachments = updates.attachments;
 
+    console.log("Saving Task Updates:", dbUpdates); // DEBUG
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
     if (error) console.error("Failed to save task:", error);
   },

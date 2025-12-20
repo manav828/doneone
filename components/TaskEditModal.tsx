@@ -130,8 +130,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             description: localDesc,
             assigneeId: localAssignee || undefined,
             tagIds: finalTags,
-            reminderAt: showReminder && reminderDate ? new Date(reminderDate).getTime() : undefined,
-            reminderUserIds: showReminder && reminderDate ? localReminderUsers : undefined,
+            reminderAt: reminderDate ? new Date(reminderDate).getTime() : null,
+            reminderUserIds: reminderDate ? localReminderUsers : undefined,
             attachments: [] as string[], // Placeholder, will be filled below
             estimatedTime: localEstimatedMinutes * 60,
             timeTracked: localActualMinutes * 60

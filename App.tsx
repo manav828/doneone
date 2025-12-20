@@ -53,7 +53,7 @@ const App: React.FC = () => {
 
             if (isRecipient && Notification.permission === 'granted') {
               new Notification(`Task Reminder: ${task.title}`, {
-                body: `This task is due now!`,
+                body: `Reminder: You set a reminder for this task.`,
                 icon: 'icon128.png'
               });
             }

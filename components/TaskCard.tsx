@@ -14,7 +14,7 @@ interface Props {
 
 export const TaskCard: React.FC<Props> = ({ task }) => {
   const {
-    tags, toggleTaskTimer,
+    tags, toggleTaskTimer, updateTask,
     currentUser, users, projects, activeProjectId,
     collapsedTaskIds, toggleTaskCollapse,
     columns, archiveTaskManually, canAccessPremium
@@ -237,8 +237,8 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                 {/* Timer Control - Unified Widget */}
                 {(() => {
                   // Debug Logging
-                  if (task.columnId === 'col-in-progress-id' || task.title.includes('Debug')) { // Reduce noise, or just log once
-                    // console.log(`TaskCard [${task.title}]: PM=${projectManager?.name}, Prem=${projectManager?.isPremium}, Track=${projectManager?.timeTrackingEnabled}, HAS_PREM=${hasPremium}`);
+                  if (true) { // Log always for debugging
+                    console.log(`TaskCard [${task.title}]: PM=${projectManager?.name}, PM_Premium=${projectManager?.isPremium}, PM_Reminders=${projectManager?.remindersEnabled}, HAS_PREM=${hasPremium}, REM_ENABLED=${remindersEnabled}`);
                   }
                   return null;
                 })()}
@@ -290,12 +290,28 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                 )}
 
                 {(task.reminderAt || task.updatedAt) && (
-                  <span className={`text-[10px] font-medium flex items-center gap-1 ${isOverdue && !isDoneColumn ? 'text-red-500' : 'text-slate-400'}`}>
-                    {task.reminderAt && remindersEnabled && !isDoneColumn && <Clock size={10} />}
-                    {task.reminderAt && remindersEnabled && !isDoneColumn
-                      ? new Date(task.reminderAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : new Date(task.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {/* Dismiss Reminder Button */}
+                    {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateTask(task.id, { reminderAt: null });
+                        }}
+                        className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-md hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors flex items-center gap-1.5 font-bold animate-none shadow-sm border border-emerald-200 dark:border-emerald-800"
+                        title="Dismiss Reminder (Stop Animation)"
+                      >
+                        <CheckSquare size={12} className="stroke-[3]" /> Dismiss
+                      </button>
+                    )}
+
+                    <span className={`text-[10px] font-medium flex items-center gap-1 ${isOverdue && !isDoneColumn ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                      {task.reminderAt && remindersEnabled && !isDoneColumn && !(isOverdue || isDueSoon) && <Clock size={10} />}
+                      {task.reminderAt && remindersEnabled && !isDoneColumn
+                        ? new Date(task.reminderAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : new Date(task.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
                 )}
               </div>
             </div>

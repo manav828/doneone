@@ -33,8 +33,28 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
     onConfirm: () => { },
   });
 
-  // Use tasks directly to respect manual ordering (order_index)
-  const displayTasks = tasks;
+  // Sorting: Overdue tasks float to the top
+  const displayTasks = React.useMemo(() => {
+    const now = Date.now();
+    const overdue: TaskType[] = [];
+    const others: TaskType[] = [];
+
+    tasks.forEach(t => {
+      // Only count as overdue if reminders enabled and time passed
+      // Note: checking isOverdue logic. 
+      if (t.reminderAt && t.reminderAt < now && column.title !== 'Done') {
+        overdue.push(t);
+      } else {
+        others.push(t);
+      }
+    });
+
+    // Sort overdue by time (most overdue first?) or just keep existing order? 
+    // Let's sort by reminderAt ascending.
+    overdue.sort((a, b) => (a.reminderAt || 0) - (b.reminderAt || 0));
+
+    return [...overdue, ...others];
+  }, [tasks, column.title]);
 
   // Identify if any task in this column has a running timer for the current user
   const activeTimerTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser?.id);
