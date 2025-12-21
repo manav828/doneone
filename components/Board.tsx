@@ -40,12 +40,31 @@ export const Board: React.FC = () => {
 
   if (!activeProjectId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-400">
-        <div className="w-40 h-40 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner">
-          <span className="text-6xl grayscale opacity-50">👋</span>
+      <div className="h-full flex flex-col items-center justify-center text-slate-400 px-4">
+        {/* Custom Illustration */}
+        <div className="w-48 h-48 mb-6">
+          <img
+            src="/welcome_rocket.png"
+            alt="Welcome"
+            className="w-full h-full object-contain float-animation"
+          />
         </div>
-        <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200">Welcome to DoneOne</h2>
-        <p className="mt-2 text-slate-500 max-w-xs text-center">Select a project from the sidebar or create a new one to get started.</p>
+
+        {/* Heading */}
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Welcome to DoneOne</h2>
+
+        {/* Subtitle */}
+        <p className="text-slate-500 dark:text-slate-400 max-w-sm text-center mb-6 text-sm leading-relaxed">
+          Your productivity command center. Select a project from the sidebar or create a new one to get started.
+        </p>
+
+        {/* Quick Tips */}
+        <div className="flex gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
+            <kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-700 rounded text-[10px] font-mono shadow-sm border border-slate-200 dark:border-slate-600">Ctrl+Shift+F</kbd>
+            <span>Quick Add</span>
+          </div>
+        </div>
       </div>
     );
   }

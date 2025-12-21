@@ -124,16 +124,16 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   };
 
   const containerClasses = `
-    group relative flex flex-col gap-2 p-3 rounded-lg border shadow-sm transition-all duration-200 select-none
-    ${isDragging ? 'opacity-50 scale-105 z-50 cursor-grabbing' : 'opacity-100 hover:border-primary/50 cursor-grab hover:shadow-md'}
+    card-lift group relative flex flex-col gap-2 p-3.5 rounded-xl border shadow-sm transition-all duration-200 select-none
+    ${isDragging ? 'opacity-50 scale-105 z-50 cursor-grabbing' : 'opacity-100 cursor-grab'}
     bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700
     ${animationClass}
-    ${canMove ? 'cursor-grab active:cursor-grabbing hover:shadow-card-hover hover:-translate-y-0.5' : 'cursor-default opacity-90'}
+    ${canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-90'}
     ${isOverdue && !isDoneColumn
       ? 'border-red-400 dark:border-red-600 bg-red-50/30 dark:bg-red-900/10'
       : isCreatedByMe
-        ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5 hover:border-blue-400'
-        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 shadow-card'
+        ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5'
+        : 'border-slate-200 dark:border-slate-700'
     }
   `;
 
@@ -166,7 +166,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
             {taskTags.map(tag => (
               <span
                 key={tag.id}
-                className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide text-white shadow-sm"
+                className="tag-premium text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide text-white shadow-sm cursor-default"
                 style={{ backgroundColor: tag.color }}
               >
                 {tag.name}

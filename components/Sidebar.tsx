@@ -205,14 +205,14 @@ export const Sidebar: React.FC = () => {
             </div>
           )}
 
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {visibleProjects.map(project => (
               <div
                 key={project.id}
                 onClick={() => { setActiveProject(project.id); navigate('/'); }}
-                className={`group flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${activeProjectId === project.id
-                  ? 'bg-primary/5 text-primary font-medium'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                className={`sidebar-item group flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${activeProjectId === project.id
+                  ? 'active bg-primary/10 text-primary font-medium shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400'
                   }`}
                 title={isCollapsed ? project.name : undefined}
               >
@@ -315,7 +315,7 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={openCreateModal}
           disabled={!can('createProject')}
-          className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-center gap-2'} py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-sm font-medium text-white transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-center gap-2'} py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-sm font-medium text-white transition-all shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed`}
           title={isCollapsed ? "New Project" : undefined}
         >
           <Plus size={16} />
