@@ -560,7 +560,9 @@ export const useStore = create<AppState>((set, get) => ({
     let { data: profile } = profileResponse;
 
     if (!profile) {
-      const { data: newProfile, error: upsertError } = await supabase.from('profiles').upsert({
+      // FIXED: Changed from upsert to insert. Upsert was overwriting existing is_premium values!
+      // Only INSERT for truly new profiles (profile was null from the query above)
+      const { data: newProfile, error: insertError } = await supabase.from('profiles').insert({
         id: session.user.id,
         name: session.user.email?.split('@')[0] || 'User',
         role: 'Resource',
@@ -569,7 +571,7 @@ export const useStore = create<AppState>((set, get) => ({
         max_projects: 10000, // Trial limit
         max_leads: 10,
         max_resources: 20,
-        is_premium: true, // Enable Trial
+        is_premium: true, // Enable Trial for NEW users only
         premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days
         notifications_enabled: true,
         reminders_enabled: true,
@@ -580,7 +582,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       console.log('📝 Profile Creation Result:', {
         success: !!newProfile,
-        error: upsertError,
+        error: insertError,
         profileData: newProfile,
         emailInPayload: session.user.email,
         emailInResult: newProfile?.email
@@ -606,23 +608,9 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
     } else {
-      // Ensure the trial fields are set for existing profiles
-      if (!profile.is_premium) {
-        const { error: trialUpdateErr } = await supabase
-          .from('profiles')
-          .update({
-            is_premium: true,
-            premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          })
-          .eq('id', session.user.id);
-        if (trialUpdateErr) {
-          console.error('❌ Failed to set trial on existing profile', trialUpdateErr);
-        } else {
-          console.log('✅ Trial fields added to existing profile');
-          profile.is_premium = true;
-          profile.premium_until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        }
-      }
+      // REMOVED: Auto-trial code that was setting is_premium=true for existing users
+      // This was the bug causing premium to reset on every refresh!
+      // The database is_premium value is now respected as-is.
       profile.email = session.user.email;
     }
 

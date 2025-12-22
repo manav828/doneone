@@ -38,10 +38,10 @@ const DraggableTask: React.FC<{ task: Task; columns: Column[]; onClick: () => vo
             className="text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1.5 rounded shadow-sm cursor-pointer hover:border-primary transition-colors mb-1 group"
         >
             <div className="flex items-center gap-1 mb-0.5">
-                {timeString && <span className="text-[9px] text-primary font-bold bg-primary/10 px-1 rounded">{timeString}</span>}
+                {timeString && <span className="text-[10px] text-primary font-bold bg-primary/10 px-1 rounded">{timeString}</span>}
                 <div className="font-medium truncate text-slate-800 dark:text-slate-200 flex-1">{task.title}</div>
             </div>
-            <div className="text-[9px] text-slate-400 flex items-center gap-1 justify-between">
+            <div className="text-[10px] text-slate-400 flex items-center gap-1 justify-between">
                 <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: column.color }} />
                     {column.title}
@@ -51,7 +51,7 @@ const DraggableTask: React.FC<{ task: Task; columns: Column[]; onClick: () => vo
                         {users.find(u => u.id === task.assigneeId)?.avatar ? (
                             <img src={users.find(u => u.id === task.assigneeId)?.avatar} alt="" className="w-full h-full object-cover" />
                         ) : (
-                            <div className="w-full h-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">
+                            <div className="w-full h-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
                                 {users.find(u => u.id === task.assigneeId)?.name.charAt(0)}
                             </div>
                         )}

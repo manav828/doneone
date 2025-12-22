@@ -77,7 +77,7 @@ export const PricingModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <Modal isOpen={isOpen} onClose={onClose} title="Plans & Pricing" maxWidth="max-w-4xl">
             <div className="space-y-6">
                 <div className="text-center mb-8">
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Unlock Your Full Potential</h2>
+                    <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">Unlock Your Full Potential</h2>
                     <p className="text-slate-500 dark:text-slate-400">Choose the plan that fits your workflow.</p>
                 </div>
 

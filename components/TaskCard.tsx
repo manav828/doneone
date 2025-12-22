@@ -30,8 +30,9 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   // Feature Flag Check
   // FIX: Use activeProject.manager directly as it contains the enriched plan overrides from fetchProjects
   const projectManager = activeProject?.manager || users.find(u => u.id === activeProject?.managerId);
-  // CHANGED: Use Project Manager's Premium Status
-  const hasPremium = projectManager?.isPremium === true;
+  // CHANGED: Use Project Manager's Premium Status - Check BOTH property names
+  // activeProject.manager has 'hasPremiumAccess', users array has 'isPremium'
+  const hasPremium = (projectManager as any)?.hasPremiumAccess === true || projectManager?.isPremium === true;
   const remindersEnabled = hasPremium && (projectManager?.remindersEnabled || false);
   // SIMPLIFIED: If Owner is Premium, Time Tracking is Enabled.
   const timeTrackingEnabled = hasPremium;
@@ -166,7 +167,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
             {taskTags.map(tag => (
               <span
                 key={tag.id}
-                className="tag-premium text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide text-white shadow-sm cursor-default"
+                className="tag-premium text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide text-white shadow-sm cursor-default"
                 style={{ backgroundColor: tag.color }}
               >
                 {tag.name}
@@ -206,7 +207,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                   </div>
                 ))}
                 {task.attachments.length > 3 && (
-                  <div className="w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                  <div className="w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500">
                     +{task.attachments.length - 3}
                   </div>
                 )}
@@ -221,7 +222,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                     {assignedUser.avatar ? (
                       <img src={assignedUser.avatar} alt={assignedUser.name} className="w-4 h-4 rounded-full object-cover shadow-sm border border-white dark:border-slate-700" />
                     ) : (
-                      <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[8px] font-bold shadow-sm">
+                      <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
                         {assignedUser.name.charAt(0)}
                       </div>
                     )}
@@ -239,7 +240,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                 {(() => {
                   // Debug Logging
                   if (true) { // Log always for debugging
-                    console.log(`TaskCard [${task.title}]: PM=${projectManager?.name}, PM_Premium=${projectManager?.isPremium}, PM_Reminders=${projectManager?.remindersEnabled}, HAS_PREM=${hasPremium}, REM_ENABLED=${remindersEnabled}`);
+                    console.log(`TaskCard [${task.title}]: PM=${projectManager?.name}, hasPremiumAccess=${(projectManager as any)?.hasPremiumAccess}, isPremium=${projectManager?.isPremium}, HAS_PREM=${hasPremium}`);
                   }
                   return null;
                 })()}

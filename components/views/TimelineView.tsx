@@ -184,12 +184,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ tasks, users }) => {
                                                     customT.assigneeAvatar ? (
                                                         <img src={customT.assigneeAvatar} alt="" className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700" title={customT.assigneeName} />
                                                     ) : (
-                                                        <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold" title={customT.assigneeName}>
+                                                        <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold" title={customT.assigneeName}>
                                                             {customT.assigneeName.charAt(0)}
                                                         </div>
                                                     )
                                                 ) : (
-                                                    <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[9px] text-slate-400">
+                                                    <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] text-slate-400">
                                                         -
                                                     </div>
                                                 )}
