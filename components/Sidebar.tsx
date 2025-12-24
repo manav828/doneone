@@ -169,20 +169,13 @@ export const Sidebar: React.FC = () => {
           {!isCollapsed ? (
             <div className="flex flex-col pl-3">
               <img
-                src={localStorage.getItem('logo_version') === '2' ? "/logo_2.png" : "/logo_1.png"}
+                src="/logo.png"
                 alt="DoneOne"
-                className="h-8 w-auto object-contain cursor-pointer"
-                title="Click to switch logo version"
-                onClick={() => {
-                  const current = localStorage.getItem('logo_version') || '1';
-                  const next = current === '1' ? '2' : '1';
-                  localStorage.setItem('logo_version', next);
-                  window.location.reload();
-                }}
+                className="h-8 w-auto object-contain"
               />
             </div>
           ) : (
-            <img src={localStorage.getItem('logo_version') === '2' ? "/logo_2.png" : "/logo_1.png"} alt="DoneOne" className="h-8 w-8 object-contain" />
+            <img src="/logo.png" alt="DoneOne" className="h-8 w-8 object-contain" />
           )}
         </div>
 

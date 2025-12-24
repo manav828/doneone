@@ -550,12 +550,6 @@ export const useStore = create<AppState>((set, get) => ({
 
     const profileResponse = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
 
-    console.log('🗄️ RAW Database Response:', {
-      error: profileResponse.error,
-      data: profileResponse.data,
-      is_premium_value: profileResponse.data?.is_premium,
-      is_premium_type: typeof profileResponse.data?.is_premium
-    });
 
     let { data: profile } = profileResponse;
 
@@ -615,13 +609,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     if (profile) {
-      console.log('📄 Profile loaded from DB:', {
-        id: profile.id,
-        name: profile.name,
-        is_premium: profile.is_premium,
-        premium_until: profile.premium_until,
-        created_at: profile.created_at
-      });
+
       // REMOVED: Retroactive Trial code that was automatically setting is_premium=true
       // The database is_premium value is now the ONLY source of truth
 
@@ -940,7 +928,8 @@ export const useStore = create<AppState>((set, get) => ({
       attachments: t.attachments || [],
       capturedUrl: t.captured_url,
       capturedText: t.captured_text,
-      capturedScreenshot: t.captured_screenshot
+      capturedScreenshot: t.captured_screenshot,
+      isReminderDismissed: t.is_reminder_dismissed || false
     }));
     set({ tasks: processedTasks });
     return processedTasks;

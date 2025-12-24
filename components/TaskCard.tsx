@@ -84,7 +84,8 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    return `${h}h ${m}m ${s}s`;
+    // Compact format without spaces to prevent wrapping
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
   const taskTags = tags.filter(t => task.tagIds.includes(t.id));
@@ -236,14 +237,6 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                   </div>
                 )}
 
-                {/* Timer Control - Unified Widget */}
-                {(() => {
-                  // Debug Logging
-                  if (true) { // Log always for debugging
-                    console.log(`TaskCard [${task.title}]: PM=${projectManager?.name}, hasPremiumAccess=${(projectManager as any)?.hasPremiumAccess}, isPremium=${projectManager?.isPremium}, HAS_PREM=${hasPremium}`);
-                  }
-                  return null;
-                })()}
 
                 {timeTrackingEnabled && canMove && (
                   <button
@@ -263,7 +256,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                     ) : (
                       <Play size={10} fill="currentColor" />
                     )}
-                    <span className="font-mono min-w-[32px] text-center">
+                    <span className="font-mono whitespace-nowrap">
                       {formatTime(elapsedTime)}
                     </span>
                   </button>
@@ -292,7 +285,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                 )}
 
                 {(task.reminderAt || task.updatedAt) && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {/* Stop Animation Button */}
                     {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && !task.isReminderDismissed && (
                       <button
@@ -300,11 +293,16 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                           e.stopPropagation();
                           updateTask(task.id, { isReminderDismissed: true });
                         }}
-                        className="text-[10px] bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-200 transition-colors flex items-center gap-1 font-medium shadow-sm"
-                        title="Stop Animation (Keep Date)"
+                        className={`text-[10px] px-2 py-1 rounded-md border transition-all flex items-center gap-1 font-semibold shadow-sm hover:scale-105 active:scale-95 ${isOverdue
+                          ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/50'
+                          : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                          }`}
+                        title="Stop Alert Animation"
                       >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                        Stop Alert
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="6" y="6" width="12" height="12" rx="2" />
+                        </svg>
+                        Stop
                       </button>
                     )}
 
