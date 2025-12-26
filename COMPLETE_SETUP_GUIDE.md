@@ -3,7 +3,7 @@
 ## 🔧 What Was Fixed:
 
 ### **Fix #1: Tab Now Pins Automatically** ✅
-- FlowBoard opens in a **pinned tab** (compact, left side)
+- DoneOne opens in a **pinned tab** (compact, left side)
 - Stays persistent and organized!
 
 ### **Fix #2: Right-Click Works Everywhere** ✅
@@ -24,7 +24,7 @@ Chrome extensions require **manual shortcut configuration**. Here's how:
 ### **Step 1: Configure Shortcut in Chrome**
 
 1. **Open:** `chrome://extensions/shortcuts`
-2. **Find:** "FlowBoard - Project Management"
+2. **Find:** "DoneOne - Project Management"
 3. **Look for:** "Quick add task from anywhere"
 4. **Click** the pencil/edit icon ✏️
 5. **Press:** `Alt+Shift+A` on your keyboard
@@ -33,8 +33,8 @@ Chrome extensions require **manual shortcut configuration**. Here's how:
 
 **Screenshot Guide:**
 ```
-FlowBoard - Project Management
-├─ Open FlowBoard: Ctrl+Shift+F ✅ (already set)
+DoneOne - Project Management
+├─ Open DoneOne: Ctrl+Shift+F ✅ (already set)
 └─ Quick add task from anywhere: [Not set] ← CLICK HERE
    → Press Alt+Shift+A
    → Click OK
@@ -47,7 +47,7 @@ FlowBoard - Project Management
 ### **Test 1: Configure Shortcut** (One Time Only)
 
 1. Go to `chrome://extensions/shortcuts`
-2. Find FlowBoard
+2. Find DoneOne
 3. Set "Quick add task" to `Alt+Shift+A`
 4. ✅ Done!
 
@@ -61,7 +61,7 @@ FlowBoard - Project Management
 4. If not:
    - Open DevTools (F12) → Console tab
    - Press `Alt+Shift+A` again
-   - Check for "FlowBoard: Command received" message
+   - Check for "DoneOne: Command received" message
    - If you see it → shortcut works, content script may need reload
    - If you don't see it → shortcut not configured yet
 
@@ -71,7 +71,7 @@ FlowBoard - Project Management
 
 1. Go to **google.com**
 2. **Right-click** on empty space (DON'T select anything)
-3. Click "📋 Add to FlowBoard"
+3. Click "📋 Add to DoneOne"
 4. ✅ Modal should appear!
 
 **If it doesn't work:**
@@ -85,14 +85,14 @@ FlowBoard - Project Management
 
 1. Select some text on any webpage
 2. Right-click
-3. Click "📋 Add to FlowBoard"
+3. Click "📋 Add to DoneOne"
 4. ✅ Modal appears with selected text as title!
 
 ---
 
 ### **Test 5: Pinned Tab**
 
-1. Click FlowBoard extension icon
+1. Click DoneOne extension icon
 2. ✅ Tab opens on the LEFT side (pinned)
 3. ✅ Tab is smaller/compact
 4. ✅ Only shows icon, not full title
@@ -111,7 +111,7 @@ If `Alt+Shift+A` still doesn't work:
 1. Open any website
 2. Press F12 → Console tab
 3. Press `Alt+Shift+A`
-4. Look for: `FlowBoard: Command received: quick-add-task`
+4. Look for: `DoneOne: Command received: quick-add-task`
 
 **If you see it**: ✅ Shortcut works! Content script issue - just reload page
 **If you don't see it**: ❌ Shortcut not configured in Chrome
@@ -119,7 +119,7 @@ If `Alt+Shift+A` still doesn't work:
 ### **Step 3: Alternative Shortcuts**
 
 If `Alt+Shift+A` conflicts with something else on your system, try:
-- `Alt+Shift+F` (F = Flowboard)
+- `Alt+Shift+F` (F = DoneOne)
 - `Alt+Shift+T` (T = Task)
 - `Ctrl+Shift+Space`
 
@@ -135,7 +135,7 @@ To change: Edit `manifest.json` line 31, rebuild, reload extension
 - [ ] Right-click works with selected text
 - [ ] Extension icon opens pinned tab
 - [ ] URL shows in task description
-- [ ] Task syncs to FlowBoard
+- [ ] Task syncs to DoneOne
 
 ---
 
@@ -159,8 +159,8 @@ To change: Edit `manifest.json` line 31, rebuild, reload extension
 
 Once the shortcut is configured:
 - **`Alt+Shift+A`** = Quick add from anywhere
-- **Right-click** = Add to FlowBoard (anywhere on page)
-- **Extension icon** = Open FlowBoard (pinned tab)
+- **Right-click** = Add to DoneOne (anywhere on page)
+- **Extension icon** = Open DoneOne (pinned tab)
 
 ---
 

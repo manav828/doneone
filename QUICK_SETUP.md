@@ -14,7 +14,7 @@
 The extension was just rebuilt with fixes!
 
 1. Go to **chrome://extensions/**
-2. Find "FlowBoard - Project Management"
+2. Find "DoneOne - Project Management"
 3. Click the **🔄 Reload** button (circular arrow icon)
 
 ✅ Extension is now updated!
@@ -41,8 +41,8 @@ Click **Run**
 ### Step 3: Test It!
 
 #### Test Extension Icon:
-1. Click the **FlowBoard extension icon** in Chrome toolbar
-2. ✅ **FlowBoard should open in a new tab**
+1. Click the **DoneOne extension icon** in Chrome toolbar
+2. ✅ **DoneOne should open in a new tab**
 
 #### Test Quick-Add Shortcut:
 1. Go to **any website** (e.g., google.com)
@@ -51,7 +51,7 @@ Click **Run**
 
 #### Test Right-Click Menu:
 1. On any webpage, **right-click**
-2. ✅ **See "📋 Add to FlowBoard"**
+2. ✅ **See "📋 Add to DoneOne"**
 3. Click it
 4. ✅ **Modal appears!**
 
@@ -68,11 +68,11 @@ Easy to remember: **A** for **Add** task!
 
 ## 🎯 Quick Test Checklist:
 
-- [ ] Extension icon opens FlowBoard in new tab
+- [ ] Extension icon opens DoneOne in new tab
 - [ ] `Ctrl+Shift+A` shows quick-add modal
-- [ ] Right-click shows "📋 Add to FlowBoard"
+- [ ] Right-click shows "📋 Add to DoneOne"
 - [ ] Can create task from any website
-- [ ] Task appears in FlowBoard with captured URL
+- [ ] Task appears in DoneOne with captured URL
 
 ---
 
@@ -89,7 +89,7 @@ Easy to remember: **A** for **Add** task!
 
 **Tasks not appearing:**
 - Make sure you ran the SQL migration (Step 2)
-- Check if you have a project created in FlowBoard
+- Check if you have a project created in DoneOne
 
 ---
 

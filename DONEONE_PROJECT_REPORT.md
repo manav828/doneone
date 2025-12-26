@@ -1,6 +1,6 @@
-PROJECT DOCUMENT: FLOWBOARD
+PROJECT DOCUMENT: DONEONE
 
-Project Name: FlowBoard
+Project Name: DoneOne
 Type: Chrome Extension Application
 Date: December 2025
 
@@ -8,9 +8,9 @@ Date: December 2025
 
 1. PROJECT DESCRIPTION
 
-FlowBoard is a comprehensive task management tool designed specifically as a Google Chrome Extension. Its primary purpose is to help professionals manage their daily tasks and projects without needing to switch contexts or leave their current web browser tab.
+DoneOne is a comprehensive task management tool designed specifically as a Google Chrome Extension. Its primary purpose is to help professionals manage their daily tasks and projects without needing to switch contexts or leave their current web browser tab.
 
-Unlike traditional project management websites that require you to navigate to a dedicated URL, FlowBoard lives in your browser's side panel or popup. It provides a persistent, always-accessible workspace that integrates seamlessly with your browsing experience. It combines a clean, premium user interface with powerful features like Kanban boards, time tracking, and real-time collaboration.
+Unlike traditional project management websites that require you to navigate to a dedicated URL, DoneOne lives in your browser's side panel or popup. It provides a persistent, always-accessible workspace that integrates seamlessly with your browsing experience. It combines a clean, premium user interface with powerful features like Kanban boards, time tracking, and real-time collaboration.
 
 The application is built to be fast, intuitive, and visually appealing, ensuring that task management feels like a natural part of the workflow rather than an administrative chore.
 
@@ -18,7 +18,7 @@ The application is built to be fast, intuitive, and visually appealing, ensuring
 
 2. KEY FUNCTIONALITIES
 
-FlowBoard offers the following core functionalities to its users:
+DoneOne offers the following core functionalities to its users:
 
 2.1 User Authentication and Security
 - Secure Sign Up and Login: Users can create a secure account using their email and password.
@@ -36,11 +36,11 @@ FlowBoard offers the following core functionalities to its users:
 - List View: A table view that lists all tasks in a structured format, allowing users to sort by priority, assignee, or due date.
 - Calendar View: A time-based view that displays tasks on a monthly calendar according to their due dates.
 
-39: 2.4 Quick-Add Context Menu
-40: - Browser Integration: Users can add a task from ANY website they are visiting.
-41: - Keyboard Shortcut: Pressing `Ctrl+Shift+F` opens a quick-entry modal.
-42: - Smart Selection: The modal allows selecting the target **Project** and **Assignee**, defaulting to the current user for seamless workflow.
-43: - Right-Click Menu: Users can right-click on selected text or a page to add it directly to their selected project.
+2.4 Quick-Add Context Menu
+- Browser Integration: Users can add a task from ANY website they are visiting.
+- Keyboard Shortcut: Pressing `Ctrl+Shift+F` opens a quick-entry modal.
+- Smart Selection: The modal allows selecting the target **Project** and **Assignee**, defaulting to the current user for seamless workflow.
+- Right-Click Menu: Users can right-click on selected text or a page to add it directly to their selected project.
 
 2.5 Time Tracking System
 - Built-in Timer: Each task has a "Play" and "Pause" button. Users can track the exact time spent working on specific items.

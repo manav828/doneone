@@ -1,6 +1,6 @@
-# 🌟 FlowBoard: Comprehensive Features & Guide
+# 🌟 DoneOne: Comprehensive Features & Guide
 
-This document serves as the master guide for all functionality in FlowBoard, including recent updates.
+This document serves as the master guide for all functionality in DoneOne, including recent updates.
 
 ## 🚀 Getting Started
 

@@ -15,7 +15,7 @@
 
 ### **1. Reload Extension**
 - chrome://extensions/
-- Find FlowBoard → Click 🔄 Reload
+- Find DoneOne → Click 🔄 Reload
 3. ✅ Modal appears!
 
 ---
@@ -25,9 +25,9 @@
 ### **Quick-Add from Anywhere:**
 - **Keyboard:** Press `Ctrl+Shift+F`
 - **Mouse:** Click extension icon
-- **Right-click:** "Add to FlowBoard"
+- **Right-click:** "Add to DoneOne"
 
-### **Open Full FlowBoard:**
+### **Open Full DoneOne:**
 - Open a new tab
 - Type in address bar: Your extension URL
 - Or add task → Click "Open Full Board" link in success toast
@@ -37,7 +37,7 @@
 ## ✨ **Benefits:**
 
 ✅ **Zero Setup** - Works immediately after install  
-✅ **One Shortcut** - Easy to remember (Ctrl+Shift+F = FlowBoard)  
+✅ **One Shortcut** - Easy to remember (Ctrl+Shift+F = DoneOne)  
 ✅ **Three Ways** - Keyboard, icon, or right-click  
 ✅ **Perfect UX** - No confusing shortcuts to configure  
 

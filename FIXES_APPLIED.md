@@ -17,7 +17,7 @@
 
 ### **1. Reload Extension**
 - chrome://extensions/
-- Find FlowBoard → Click **🔄 Reload**
+- Find DoneOne → Click **🔄 Reload**
 
 ### **2. Test Alt+Shift+A**
 1. Go to **google.com**
@@ -28,7 +28,7 @@
 1. In the modal, look at the **Description field**
 2. ✅ You should see: `📎 From: https://www.google.com/`
 3. Add the task
-4. Open FlowBoard → View task → Check description
+4. Open DoneOne → View task → Check description
 5. ✅ URL is saved!
 
 ---
@@ -39,8 +39,8 @@
 2. Type task title (e.g., "Check this out")
 3. **Description already has the URL!** You can add more notes if needed
 4. Press Enter or click "Add Task"
-5. ✅ Green toast appears: "Task added to FlowBoard!"
-6. Open FlowBoard → Find your task
+5. ✅ Green toast appears: "Task added to DoneOne!"
+6. Open DoneOne → Find your task
 7. Click task → See description with URL!
 
 ---
@@ -50,8 +50,8 @@
 | Action | Shortcut |
 |--------|----------|
 | Quick add task | **`Alt+Shift+A`** |
-| Open FlowBoard | `Ctrl+Shift+F` |
-| Right-click menu | `Right-click → 📋 Add to FlowBoard` |
+| Open DoneOne | `Ctrl+Shift+F` |
+| Right-click menu | `Right-click → 📋 Add to DoneOne` |
 
 ---
 

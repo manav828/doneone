@@ -1,13 +1,13 @@
-# 🌟 FlowBoard Features & Guide
+# 🌟 DoneOne Features & Guide
 
-This document provides a detailed overview of all features available in FlowBoard and how to use them effectively.
+This document provides a detailed overview of all features available in DoneOne and how to use them effectively.
 
 ## ⌨️ Shortcuts & Quick Actions
 
 | Action | Shortcut / Method | Description |
 | :--- | :--- | :--- |
 | **Quick Add Task** | `Ctrl + Shift + F` | Opens the Quick Add modal on **any** webpage. |
-| **Quick Add (Mouse)** | Right-Click > "Add to FlowBoard" | Adds the current page or selected text as a task. |
+| **Quick Add (Mouse)** | Right-Click > "Add to DoneOne" | Adds the current page or selected text as a task. |
 | **Extension Icon** | Click Icon | Opens the Quick Add modal. |
 | **Close Modal** | `Esc` | Closes any open modal. |
 | **Save Task** | `Enter` (in input) | Saves the task (if configured). |

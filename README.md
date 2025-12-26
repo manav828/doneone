@@ -1,8 +1,8 @@
-# 🌊 FlowBoard - Premium Task Management Extension
+# ✅ DoneOne - Premium Task Management Extension
 
-FlowBoard is a powerful, aesthetic, and feature-rich Chrome extension designed to streamline your project management directly from your browser. With a focus on speed, visual appeal, and seamless integration, FlowBoard helps you stay organized without leaving your current tab.
+DoneOne is a powerful, aesthetic, and feature-rich Chrome extension designed to streamline your project management directly from your browser. With a focus on speed, visual appeal, and seamless integration, DoneOne helps you stay organized without leaving your current tab.
 
-![FlowBoard Banner](https://via.placeholder.com/1200x400?text=FlowBoard+Premium+Extension)
+![DoneOne Banner](https://via.placeholder.com/1200x400?text=DoneOne+Premium+Extension)
 
 ## 🚀 Key Features
 
@@ -17,8 +17,8 @@ FlowBoard is a powerful, aesthetic, and feature-rich Chrome extension designed t
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/manav828/flowboard.git
-    cd flowboard
+    git clone https://github.com/manav828/doneone.git
+    cd doneone
     ```
 
 2.  **Install Dependencies:**

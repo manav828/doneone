@@ -1,190 +1,257 @@
 import { motion } from 'framer-motion';
 
 const Hero = () => {
+    const stats = [
+        { value: '50k+', label: 'Active Users' },
+        { value: '4.9★', label: 'Chrome Rating' },
+        { value: '2M+', label: 'Tasks Completed' },
+    ];
+
     return (
-        <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-orange-50 via-white to-blue-50 pt-20">
-            {/* Animated Background Elements */}
-            <div className="absolute inset-0 overflow-hidden">
+        <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
+            {/* Animated Mesh Gradient Background */}
+            <div className="absolute inset-0 mesh-gradient" />
+
+            {/* Floating Shapes */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <motion.div
+                    className="absolute top-[10%] left-[5%] w-72 h-72 rounded-full bg-gradient-to-br from-primary/20 to-transparent blur-3xl"
                     animate={{
-                        scale: [1, 1.2, 1],
-                        rotate: [0, 90, 0],
+                        y: [0, 30, 0],
+                        scale: [1, 1.1, 1],
                     }}
-                    transition={{
-                        duration: 20,
-                        repeat: Infinity,
-                        ease: 'linear',
-                    }}
-                    className="absolute top-20 -left-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl"
+                    transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
                 />
                 <motion.div
+                    className="absolute bottom-[20%] right-[10%] w-96 h-96 rounded-full bg-gradient-to-br from-secondary/20 to-transparent blur-3xl"
                     animate={{
-                        scale: [1, 1.3, 1],
-                        rotate: [0, -90, 0],
+                        y: [0, -40, 0],
+                        scale: [1, 1.2, 1],
                     }}
-                    transition={{
-                        duration: 25,
-                        repeat: Infinity,
-                        ease: 'linear',
+                    transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+                />
+                <motion.div
+                    className="absolute top-[40%] right-[30%] w-64 h-64 rounded-full bg-gradient-to-br from-purple-500/10 to-transparent blur-3xl"
+                    animate={{
+                        y: [0, 20, 0],
+                        x: [0, -20, 0],
                     }}
-                    className="absolute bottom-20 -right-20 w-96 h-96 bg-secondary/10 rounded-full blur-3xl"
+                    transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
                 />
             </div>
 
-            <div className="relative z-10 max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
-                {/* Left Content */}
+            {/* Content */}
+            <div className="relative z-10 max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+                {/* Left Column - Text Content */}
                 <motion.div
-                    initial={{ opacity: 0, x: -50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.8, delay: 0.2 }}
+                    initial={{ opacity: 0, y: 40 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
                 >
-                    <motion.h1
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6, delay: 0.4 }}
-                        className="text-6xl md:text-7xl font-bold mb-6 leading-tight"
-                    >
-                        Manage Projects{' '}
-                        <span className="gradient-text">with DoneOne</span>
-                    </motion.h1>
-
-                    <motion.p
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6, delay: 0.6 }}
-                        className="text-xl text-gray-600 mb-8 leading-relaxed"
-                    >
-                        The all-in-one Chrome extension for seamless task management.
-                        Kanban boards, List views, and Calendar - all in your browser.
-                    </motion.p>
-
+                    {/* Badge */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6, delay: 0.8 }}
-                        className="flex gap-4"
+                        transition={{ duration: 0.6, delay: 0.2 }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
+                    >
+                        <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                        <span className="text-sm font-medium text-primary">Now with AI-powered insights</span>
+                    </motion.div>
+
+                    {/* Main Headline */}
+                    <motion.h1
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8, delay: 0.3 }}
+                        className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 leading-tight mb-6"
+                    >
+                        Get it <span className="gradient-text">done.</span>
+                        <br />
+                        One task at a time.
+                    </motion.h1>
+
+                    {/* Subheadline */}
+                    <motion.p
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8, delay: 0.4 }}
+                        className="text-xl text-slate-600 leading-relaxed mb-8 max-w-lg"
+                    >
+                        The Chrome extension that turns chaos into clarity. Kanban boards,
+                        time tracking, and team collaboration — all in your browser.
+                    </motion.p>
+
+                    {/* CTA Buttons */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8, delay: 0.5 }}
+                        className="flex flex-wrap gap-4 mb-12"
                     >
                         <motion.a
                             href="https://chrome.google.com/webstore"
                             target="_blank"
                             rel="noopener noreferrer"
+                            className="btn-primary inline-flex items-center gap-2 text-lg"
                             whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="bg-primary text-white px-8 py-4 rounded-full font-semibold text-lg shadow-xl hover:shadow-2xl transition-all duration-300"
+                            whileTap={{ scale: 0.98 }}
                         >
-                            Add to Chrome - It's Free
+                            <span>Add to Chrome — Free</span>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                            </svg>
                         </motion.a>
-
                         <motion.a
-                            href="#features"
+                            href="#demo"
+                            className="btn-secondary inline-flex items-center gap-2 text-lg"
                             whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-full font-semibold text-lg hover:border-primary hover:text-primary transition-all duration-300"
+                            whileTap={{ scale: 0.98 }}
                         >
-                            Learn More
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                            </svg>
+                            <span>Watch Demo</span>
                         </motion.a>
                     </motion.div>
 
                     {/* Stats */}
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.6, delay: 1 }}
-                        className="flex gap-8 mt-12"
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8, delay: 0.6 }}
+                        className="flex gap-8 md:gap-12"
                     >
-                        <div>
-                            <div className="text-3xl font-bold text-primary">10k+</div>
-                            <div className="text-sm text-gray-500">Active Users</div>
-                        </div>
-                        <div>
-                            <div className="text-3xl font-bold text-primary">4.8★</div>
-                            <div className="text-sm text-gray-500">Chrome Rating</div>
-                        </div>
-                        <div>
-                            <div className="text-3xl font-bold text-primary">50k+</div>
-                            <div className="text-sm text-gray-500">Tasks Completed</div>
-                        </div>
+                        {stats.map((stat, index) => (
+                            <motion.div
+                                key={stat.label}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
+                            >
+                                <div className="text-3xl md:text-4xl font-bold gradient-text-orange">{stat.value}</div>
+                                <div className="text-sm text-slate-500 mt-1">{stat.label}</div>
+                            </motion.div>
+                        ))}
                     </motion.div>
                 </motion.div>
 
-                {/* Right Content - Laptop Mockup */}
+                {/* Right Column - Product Screenshot */}
                 <motion.div
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.8, delay: 0.4 }}
+                    initial={{ opacity: 0, x: 60, rotateY: 10 }}
+                    animate={{ opacity: 1, x: 0, rotateY: 0 }}
+                    transition={{ duration: 1, delay: 0.4, ease: 'easeOut' }}
                     className="relative"
                 >
                     <motion.div
-                        animate={{
-                            y: [0, -20, 0],
-                        }}
-                        transition={{
-                            duration: 6,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                        }}
-                        className="relative z-10"
+                        animate={{ y: [0, -15, 0] }}
+                        transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+                        className="relative"
                     >
-                        {/* Laptop Frame */}
-                        <div className="relative mx-auto" style={{ maxWidth: '600px' }}>
-                            {/* Screen */}
-                            <div className="relative bg-gray-900 rounded-t-2xl p-2 shadow-2xl">
+                        {/* Browser Frame */}
+                        <div className="relative mx-auto max-w-[600px] perspective-1000">
+                            {/* Glow Effect */}
+                            <div className="absolute -inset-4 bg-gradient-to-r from-primary/30 via-secondary/20 to-primary/30 rounded-3xl blur-2xl opacity-50" />
+
+                            {/* Browser Window */}
+                            <div className="relative bg-slate-900 rounded-2xl p-2 shadow-2xl">
+                                {/* Browser Header */}
+                                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
+                                    <div className="flex gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                                    </div>
+                                    <div className="flex-1 mx-4">
+                                        <div className="bg-slate-800 rounded-lg px-4 py-1.5 text-slate-400 text-sm flex items-center gap-2">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                            </svg>
+                                            doneone.app
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Screenshot Content */}
                                 <div className="bg-white rounded-lg overflow-hidden">
                                     <img
-                                        src="/screenshots/kanban.png"
+                                        src="/screenshots/board-view.png"
                                         alt="DoneOne Kanban View"
                                         className="w-full h-auto"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = 'https://placehold.co/800x500/f97316/white?text=DoneOne+Kanban';
+                                        }}
                                     />
                                 </div>
                             </div>
-                            {/* Base */}
-                            <div className="h-4 bg-gray-800 rounded-b-2xl shadow-lg" />
-                            <div className="h-1 bg-gray-700 mx-auto w-32 rounded-b-lg" />
-                        </div>
-                    </motion.div>
 
-                    {/* Floating Elements */}
-                    <motion.div
-                        animate={{
-                            y: [0, -15, 0],
-                            rotate: [0, 5, 0],
-                        }}
-                        transition={{
-                            duration: 4,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                        }}
-                        className="absolute top-10 -left-10 glass px-4 py-3 rounded-xl shadow-xl"
-                    >
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                            <span className="text-sm font-semibold">Real-time Sync</span>
+                            {/* Base/Stand */}
+                            <div className="h-4 bg-slate-800 rounded-b-2xl mx-4" />
+                            <div className="h-1 bg-slate-700 rounded-b-lg mx-12" />
                         </div>
-                    </motion.div>
 
-                    <motion.div
-                        animate={{
-                            y: [0, 15, 0],
-                            rotate: [0, -5, 0],
-                        }}
-                        transition={{
-                            duration: 5,
-                            repeat: Infinity,
-                            ease: 'easeInOut',
-                            delay: 0.5,
-                        }}
-                        className="absolute bottom-20 -right-10 glass px-4 py-3 rounded-xl shadow-xl"
-                    >
-                        <div className="flex items-center gap-2">
-                            <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-sm font-semibold">42 Tasks Today</span>
-                        </div>
+                        {/* Floating Badge */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.5, delay: 1 }}
+                            className="absolute -right-4 top-1/4 glass rounded-2xl px-4 py-3 shadow-xl"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-semibold text-slate-900">Task Completed!</div>
+                                    <div className="text-xs text-slate-500">+15 min tracked</div>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        {/* Floating Timer */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.5, delay: 1.2 }}
+                            className="absolute -left-8 bottom-1/3 glass rounded-2xl px-4 py-3 shadow-xl"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center animate-pulse">
+                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div className="text-lg font-bold text-slate-900">02:34:18</div>
+                                    <div className="text-xs text-slate-500">Time tracked today</div>
+                                </div>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 </motion.div>
             </div>
+
+            {/* Scroll Indicator */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="absolute bottom-8 left-1/2 -translate-x-1/2"
+            >
+                <motion.div
+                    animate={{ y: [0, 10, 0] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    className="flex flex-col items-center gap-2 text-slate-400"
+                >
+                    <span className="text-sm">Scroll to explore</span>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                </motion.div>
+            </motion.div>
         </section>
     );
 };

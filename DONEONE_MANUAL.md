@@ -1,4 +1,4 @@
-# 🌊 FlowBoard Professional User Manual
+# ✅ DoneOne Professional User Manual
 
 **Version:** 1.0  
 **Last Updated:** December 2025
@@ -19,7 +19,7 @@
 
 ## <a id="introduction"></a>1. Introduction
 
-**FlowBoard** is a premium, high-performance task management extension designed for professionals who need to manage projects without leaving their browser. It combines the visual utility of a Kanban board with the speed of keyboard-centric workflows, all wrapped in a modern, aesthetic interface.
+**DoneOne** is a premium, high-performance task management extension designed for professionals who need to manage projects without leaving their browser. It combines the visual utility of a Kanban board with the speed of keyboard-centric workflows, all wrapped in a modern, aesthetic interface.
 
 ### Key Benefits
 *   **Seamless Integration:** Capture tasks from any webpage instantly.
@@ -33,7 +33,7 @@
 
 ### Installation
 1.  **Load the Extension:** In Chrome, go to `chrome://extensions/`, enable Developer Mode, and load the unpacked extension.
-2.  **Pin it:** Pin the FlowBoard icon to your browser toolbar for quick access.
+2.  **Pin it:** Pin the DoneOne icon to your browser toolbar for quick access.
 3.  **Account Setup:** Click the icon and sign up to create your profile.
 
 ### Your First Project
@@ -45,12 +45,12 @@
 
 ## <a id="core-workflows"></a>3. Core Workflows
 
-48: ### ⚡ Quick Add Task
-49: Capture ideas instantly without context switching.
-50: *   **Shortcut:** Press `Ctrl + Shift + F` on any webpage.
-51: *   **Popup:** A modal appears asking for Task Title, Project, and Assignee.
-52: *   **Smart Defaults:** The project defaults to your last used (or first available), and Assignee defaults to "Me".
-*   **Context Menu:** Right-click any text or page background and select **"Add to FlowBoard"**.
+### ⚡ Quick Add Task
+Capture ideas instantly without context switching.
+*   **Shortcut:** Press `Ctrl + Shift + F` on any webpage.
+*   **Popup:** A modal appears asking for Task Title, Project, and Assignee.
+*   **Smart Defaults:** The project defaults to your last used (or first available), and Assignee defaults to "Me".
+*   **Context Menu:** Right-click any text or page background and select **"Add to DoneOne"**.
 *   **Extension Icon:** Click the icon in the toolbar.
 
 ### Managing Tasks
@@ -143,4 +143,4 @@ Located in the sidebar, this area allows global configuration:
 
 ---
 
-*FlowBoard - Empowering Productivity.*
+*DoneOne - Get Things Done, Without Leaving Where You Are.*

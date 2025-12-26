@@ -54,25 +54,25 @@ npm run build
 4. Click **Load unpacked**
 5. Navigate to: `d:\Manav\premium extension\flowboard_5\dist`
 6. Click **Select Folder**
-7. ✅ FlowBoard extension should appear in your extensions list
+7. ✅ DoneOne extension should appear in your extensions list
 
 ---
 
 ## Test 1: Right-Click Context Menu
 
 **Steps:**
-1. Open FlowBoard extension and create a project (click extension icon, create a project with a name)
+1. Open DoneOne extension and create a project (click extension icon, create a project with a name)
 2. Navigate to **any website** (e.g., google.com, youtube.com, news article)
 3. **Right-click** anywhere on the page
-4. ✅ **VERIFY**: You see "📋 Add to FlowBoard" in the context menu
+4. ✅ **VERIFY**: You see "📋 Add to DoneOne" in the context menu
 
 5. Select some text on the page (e.g., a headline or paragraph)
 6. Right-click on the selected text
-7. ✅ **VERIFY**: You still see "📋 Add to FlowBoard" in the context menu
+7. ✅ **VERIFY**: You still see "📋 Add to DoneOne" in the context menu
 
-8. Click "📋 Add to FlowBoard"
+8. Click "📋 Add to DoneOne"
 9. ✅ **VERIFY**: A beautiful modal appears with:
-   - Title: "📋 Add Task to FlowBoard"
+   - Title: "📋 Add Task to DoneOne"
    - Task title input (pre-filled with selected text or page title)
    - Description textarea
    - Captured info showing the URL
@@ -80,10 +80,10 @@ npm run build
 
 10. Modify the task title if needed
 11. Click "Add Task"
-12. ✅ **VERIFY**: You see a green success toast: "✅ Task added to FlowBoard!"
+12. ✅ **VERIFY**: You see a green success toast: "✅ Task added to DoneOne!"
 13. ✅ **VERIFY**: Toast disappears after 3 seconds
 
-14. Click the FlowBoard extension icon to open the main app
+14. Click the DoneOne extension icon to open the main app
 15. ✅ **VERIFY**: The task appears in the first column of your project
 16. Click on the task to open details
 17. ✅ **VERIFY**: The task description or captured URL is visible
@@ -101,7 +101,7 @@ npm run build
 5. Press `Enter` key
 6. ✅ **VERIFY**: Task is created and success toast appears
 
-7. Open FlowBoard main app
+7. Open DoneOne main app
 8. ✅ **VERIFY**: The task appears with the website URL captured
 
 ---
@@ -202,13 +202,13 @@ npm run build
 
 ###  Issue: Modal doesn't appear
 **Solution:**
-- Check if content script is injected: F12 → Console → look for "FlowBoard content script loaded"
+- Check if content script is injected: F12 → Console → look for "DoneOne content script loaded"
 - Ensure you're not on chrome:// pages (extensions can't run there)
 - Reload extension and webpage
 
-### Issue: Tasks not appearing in FlowBoard
+### Issue: Tasks not appearing in DoneOne
 **Solution:**
-- Open FlowBoard → check if you have an active project
+- Open DoneOne → check if you have an active project
 - Check browser console for errors
 - Verify SQL migration ran successfully
 - Check Supabase → Table Editor → tasks table manually
@@ -229,7 +229,8 @@ npm run build
 ✅ **Task Creation**: Instant with success feedback  
 ✅ **URL Capture**: Automatic for every task created via browser  
 ✅ **Text Capture**: When text is selected before right-click  
-✅ **Responsive**: Modal works on any screen sizePerfect! ✅ **Sync**: Tasks appear in main FlowBoard app within 2 seconds  
+✅ **Responsive**: Modal works on any screen size
+✅ **Sync**: Tasks appear in main DoneOne app within 2 seconds  
 
 ---
 
