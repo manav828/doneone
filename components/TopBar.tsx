@@ -274,7 +274,7 @@ export const TopBar: React.FC = () => {
             </button>
 
             {isNotifOpen && (
-              <div className="absolute top-full right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="absolute top-full right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-[60]">
                 <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
                   <h3 className="font-semibold text-sm text-slate-800 dark:text-white">Notifications</h3>
                   {unreadCount > 0 && (

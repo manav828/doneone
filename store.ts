@@ -107,6 +107,7 @@ interface AppState {
   moveTask: (taskId: string, newColumnId: string, newIndex: number) => Promise<void>;
   toggleTaskTimer: (taskId: string) => Promise<void>;
   endDiscussion: (taskId: string) => Promise<void>;
+  startDiscussion: (taskId: string, participantIds: string[]) => Promise<void>;
 
   markNotificationRead: (notificationId: string) => Promise<void>;
   clearNotifications: () => Promise<void>;
@@ -2071,20 +2072,66 @@ export const useStore = create<AppState>((set, get) => ({
     // Persist to database
     await get().updateTask(taskId, { discussionEnded: true });
 
-    // Send notifications to all discussion participants
+    // Send notifications to all discussion participants (including creator for testing)
     const discussionUsers = task.discussionUserIds || [];
-    const notifiedUsers = discussionUsers.filter(uid => uid !== currentUser.id);
+    // NOTE: Including creator for testing - remove filter to include self
+    const notifiedUsers = discussionUsers; // Changed from: discussionUsers.filter(uid => uid !== currentUser.id)
+
+    console.log('[endDiscussion] Sending notifications to:', notifiedUsers);
 
     for (const userId of notifiedUsers) {
       // Create in-app notification
-      await supabase.from('notifications').insert({
+      const { error } = await supabase.from('notifications').insert({
         id: uuidv4(),
         recipient_id: userId,
         message: `Discussion "${task.title}" has been concluded by ${currentUser.name}`,
         project_id: task.projectId,
-        read: false,
+        is_read: false,
+        type: 'discussion_ended',
         created_at: new Date().toISOString()
       });
+
+      if (error) {
+        console.error('[endDiscussion] Failed to send notification to', userId, error);
+      } else {
+        console.log('[endDiscussion] Notification sent to', userId);
+      }
+    }
+
+    // Refresh notifications
+    await get().fetchNotifications();
+  },
+
+  // Start Discussion - marks task as discussion and notifies all participants
+  startDiscussion: async (taskId: string, participantIds: string[]) => {
+    const { tasks, currentUser } = get();
+    if (!currentUser) return;
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    console.log('[startDiscussion] Starting discussion for task:', task.title, 'with participants:', participantIds);
+
+    // Send notifications to all participants (including creator for testing)
+    // NOTE: Including creator for testing - remove filter to include self
+    const notifiedUsers = participantIds; // Changed from: participantIds.filter(uid => uid !== currentUser.id)
+
+    for (const userId of notifiedUsers) {
+      const { error } = await supabase.from('notifications').insert({
+        id: uuidv4(),
+        recipient_id: userId,
+        message: `You've been added to discussion "${task.title}" by ${currentUser.name}`,
+        project_id: task.projectId,
+        is_read: false,
+        type: 'discussion_started',
+        created_at: new Date().toISOString()
+      });
+
+      if (error) {
+        console.error('[startDiscussion] Failed to send notification to', userId, error);
+      } else {
+        console.log('[startDiscussion] Notification sent to', userId);
+      }
     }
 
     // Refresh notifications

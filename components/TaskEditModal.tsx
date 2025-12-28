@@ -16,7 +16,7 @@ interface TaskEditModalProps {
 
 export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, task, isCreating, onSaveNew }) => {
     const {
-        tags, updateTask, deleteTask, createTag, toggleTaskTimer, endDiscussion,
+        tags, updateTask, deleteTask, createTag, toggleTaskTimer, endDiscussion, startDiscussion,
         users, uploadFile, deleteFile, isOffline, currentUser, projects, activeProjectId, deleteTag, archiveTaskManually
     } = useStore();
 
@@ -51,6 +51,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [isDiscussion, setIsDiscussion] = useState(task.isDiscussion || false);
     const [discussionUsers, setDiscussionUsers] = useState<string[]>(task.discussionUserIds || []);
     const [isDiscussionDropdownOpen, setIsDiscussionDropdownOpen] = useState(false);
+    const [discussionSearch, setDiscussionSearch] = useState('');
 
     // Time Tracking
     const [localEstimatedMinutes, setLocalEstimatedMinutes] = useState(Math.floor((task.estimatedTime || 0) / 60));
@@ -169,8 +170,23 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
 
         if (isCreating && onSaveNew) {
             await onSaveNew(taskData);
+            // Note: For new tasks, startDiscussion needs to be called after the task is created
+            // The parent component should handle this if needed
         } else {
             await updateTask(task.id, taskData);
+
+            // Send notifications if discussion is being started (was not a discussion before, now is)
+            if (isDiscussion && !task.isDiscussion && discussionUsers.length > 0) {
+                await startDiscussion(task.id, discussionUsers);
+            }
+            // Also notify if new participants were added to an existing discussion
+            else if (isDiscussion && task.isDiscussion && !task.discussionEnded) {
+                const oldParticipants = task.discussionUserIds || [];
+                const newParticipants = discussionUsers.filter(uid => !oldParticipants.includes(uid));
+                if (newParticipants.length > 0) {
+                    await startDiscussion(task.id, newParticipants);
+                }
+            }
         }
         onClose();
     };
@@ -499,7 +515,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                     </div>
 
                     {/* Discussion Task Section */}
-                    <div className="border rounded-lg dark:border-slate-600 overflow-hidden">
+                    <div className="border rounded-lg dark:border-slate-600">
                         <div
                             className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${isDiscussion && !task.discussionEnded ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-slate-50 dark:bg-slate-700/50'}`}
                             onClick={() => setIsDiscussion(!isDiscussion)}
@@ -560,57 +576,79 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
 
                                         {isDiscussionDropdownOpen && (
                                             <>
-                                                <div className="fixed inset-0 z-10" onClick={() => setIsDiscussionDropdownOpen(false)}></div>
-                                                <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto">
-                                                    {(() => {
-                                                        // Use task's project for member list
-                                                        const taskProject = projects.find(p => p.id === task.projectId) || activeProject;
-                                                        const projectMembers = users.filter(u =>
-                                                            taskProject ? (
-                                                                u.id === taskProject.managerId ||
-                                                                taskProject.leadIds?.includes(u.id) ||
-                                                                taskProject.resourceIds?.includes(u.id)
-                                                            ) : false
-                                                        );
-
-                                                        if (projectMembers.length === 0) {
-                                                            return (
-                                                                <div className="p-3 text-center text-slate-400 text-sm">
-                                                                    No project members found
-                                                                </div>
+                                                <div className="fixed inset-0 z-50" onClick={() => { setIsDiscussionDropdownOpen(false); setDiscussionSearch(''); }}></div>
+                                                <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-[60] overflow-hidden">
+                                                    {/* Search Input */}
+                                                    <div className="p-2 border-b border-slate-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search members..."
+                                                            value={discussionSearch}
+                                                            onChange={(e) => setDiscussionSearch(e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:text-white"
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                    {/* Members List */}
+                                                    <div className="max-h-48 overflow-y-auto overscroll-contain" style={{ overscrollBehavior: 'contain' }}>
+                                                        {(() => {
+                                                            // Use activeProjectId for new tasks (isCreating), task.projectId for existing tasks
+                                                            const projectId = isCreating ? activeProjectId : (task.projectId || activeProjectId);
+                                                            const taskProject = projects.find(p => p.id === projectId);
+                                                            const projectMembers = users.filter(u =>
+                                                                taskProject ? (
+                                                                    u.id === taskProject.managerId ||
+                                                                    taskProject.leadIds?.includes(u.id) ||
+                                                                    taskProject.resourceIds?.includes(u.id)
+                                                                ) : false
                                                             );
-                                                        }
 
-                                                        return projectMembers.map(u => (
-                                                            <div
-                                                                key={u.id}
-                                                                onClick={() => {
-                                                                    if (discussionUsers.includes(u.id)) {
-                                                                        setDiscussionUsers(prev => prev.filter(id => id !== u.id));
-                                                                    } else {
-                                                                        setDiscussionUsers(prev => [...prev, u.id]);
-                                                                    }
-                                                                }}
-                                                                className={`p-2 cursor-pointer flex items-center gap-2 ${discussionUsers.includes(u.id) ? 'bg-purple-50 dark:bg-purple-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={discussionUsers.includes(u.id)}
-                                                                    readOnly
-                                                                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
-                                                                />
-                                                                {u.avatar ? (
-                                                                    <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
-                                                                ) : (
-                                                                    <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px] font-bold">
-                                                                        {u.name.charAt(0)}
+                                                            // Filter by search
+                                                            const filteredMembers = projectMembers.filter(u =>
+                                                                u.name.toLowerCase().includes(discussionSearch.toLowerCase()) ||
+                                                                u.email?.toLowerCase().includes(discussionSearch.toLowerCase())
+                                                            );
+
+                                                            if (filteredMembers.length === 0) {
+                                                                return (
+                                                                    <div className="p-3 text-center text-slate-400 text-sm">
+                                                                        {projectMembers.length === 0 ? 'No project members found' : 'No matching members'}
                                                                     </div>
-                                                                )}
-                                                                <span className="text-sm text-slate-700 dark:text-slate-200">{u.name}</span>
-                                                                {u.id === currentUser?.id && <span className="text-xs text-slate-400">(Me)</span>}
-                                                            </div>
-                                                        ));
-                                                    })()}
+                                                                );
+                                                            }
+
+                                                            return filteredMembers.map(u => (
+                                                                <div
+                                                                    key={u.id}
+                                                                    onClick={() => {
+                                                                        if (discussionUsers.includes(u.id)) {
+                                                                            setDiscussionUsers(prev => prev.filter(id => id !== u.id));
+                                                                        } else {
+                                                                            setDiscussionUsers(prev => [...prev, u.id]);
+                                                                        }
+                                                                    }}
+                                                                    className={`p-2.5 cursor-pointer flex items-center gap-3 border-b border-slate-50 dark:border-slate-700 last:border-0 ${discussionUsers.includes(u.id) ? 'bg-purple-50 dark:bg-purple-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={discussionUsers.includes(u.id)}
+                                                                        readOnly
+                                                                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                                                    />
+                                                                    {u.avatar ? (
+                                                                        <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                                                                    ) : (
+                                                                        <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                                                            {u.name.charAt(0)}
+                                                                        </div>
+                                                                    )}
+                                                                    <span className="text-sm text-slate-700 dark:text-slate-200 truncate">{u.name}</span>
+                                                                    {u.id === currentUser?.id && <span className="text-xs text-slate-400 flex-shrink-0">(Me)</span>}
+                                                                </div>
+                                                            ));
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             </>
                                         )}
@@ -628,6 +666,20 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                     >
                                         <CheckCircle size={16} />
                                         End Discussion & Notify All
+                                    </button>
+                                )}
+
+                                {/* Restart Discussion Button - Show when discussion was concluded */}
+                                {!isCreating && task.discussionEnded && (
+                                    <button
+                                        onClick={async () => {
+                                            await updateTask(task.id, { discussionEnded: false });
+                                            onClose();
+                                        }}
+                                        className="w-full py-2 px-4 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <MessageCircle size={16} />
+                                        Restart Discussion
                                     </button>
                                 )}
                             </div>

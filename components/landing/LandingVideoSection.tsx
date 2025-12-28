@@ -5,8 +5,8 @@ const LandingVideoSection = () => {
         <section id="demo">
             <ScrollExpandMedia
                 mediaType="video"
-                mediaSrc="https://me7aitdbxq.ufs.sh/f/2wsMIGDMQRdYuZ5R8ahEEZ4aQK56LizRdfBSqeDMsmUIrJN1"
-                posterSrc="https://images.pexels.com/videos/5752729/space-earth-universe-cosmos-5752729.jpeg"
+                mediaSrc="https://videos.pexels.com/video-files/5752729/5752729-uhd_2560_1440_30fps.mp4"
+                posterSrc="/guide/board-view.png"
                 title="See DoneOne in action"
                 scrollHint="Scroll to explore"
             >
