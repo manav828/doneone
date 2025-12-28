@@ -7,10 +7,8 @@ const LandingVideoSection = () => {
                 mediaType="video"
                 mediaSrc="https://me7aitdbxq.ufs.sh/f/2wsMIGDMQRdYuZ5R8ahEEZ4aQK56LizRdfBSqeDMsmUIrJN1"
                 posterSrc="https://images.pexels.com/videos/5752729/space-earth-universe-cosmos-5752729.jpeg"
-                title="Watch DoneOne In Action"
-                subtitle="See It In Action"
-                scrollHint="Scroll to Expand"
-                textBlend={true}
+                title="See DoneOne in action"
+                scrollHint="Scroll to explore"
             >
                 <div className='max-w-4xl mx-auto text-center'>
                     <h2 className='text-3xl font-bold mb-6 text-slate-900'>

@@ -23,16 +23,16 @@ const LandingBentoFeatures = () => {
     }) => (
         <motion.div
             variants={itemVariants}
-            className="flex-1 group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300 flex flex-col"
+            className="flex-1 min-h-0 group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300 flex flex-col"
         >
             <div className={`h-1 bg-gradient-to-r ${gradient} flex-shrink-0`} />
             <div className="p-3 flex-shrink-0">
                 <h3 className="text-base font-bold text-slate-900">{title}</h3>
                 <p className="text-slate-500 text-xs">{description}</p>
             </div>
-            <div className="px-2 pb-2 flex-1 flex items-end">
+            <div className="px-2 pb-2 flex-1 min-h-0 flex items-center overflow-hidden">
                 <div className="rounded-lg overflow-hidden border border-slate-100 w-full">
-                    <img src={image} alt={title} className="w-full h-auto block" loading="lazy" />
+                    <img src={image} alt={title} className="w-full h-auto max-h-[180px] object-cover block" loading="lazy" />
                 </div>
             </div>
         </motion.div>

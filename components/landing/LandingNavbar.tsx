@@ -38,14 +38,14 @@ const LandingNavbar = ({ onLogin, onRegister }: LandingNavbarProps) => {
                 <div className="flex items-center justify-between">
                     {/* Logo */}
                     <motion.a
-                        href="#"
+                        href="/"
                         className="flex items-center gap-2 group"
                         whileHover={{ scale: 1.02 }}
                     >
                         <img
-                            src="/logo-full.png"
+                            src="/logo.png"
                             alt="D.one Logo"
-                            className="h-10 md:h-12 w-auto"
+                            className="h-7 md:h-8 w-auto"
                         />
                     </motion.a>
 

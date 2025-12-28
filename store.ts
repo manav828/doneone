@@ -516,6 +516,13 @@ export const useStore = create<AppState>((set, get) => ({
 
     const { data: { session } } = await supabase.auth.getSession();
 
+    // Clean up URL hash from OAuth callback (removes #access_token=... etc.)
+    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token')) {
+      // Use replaceState to clean URL without reload
+      const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
+      window.history.replaceState(null, '', cleanUrl);
+    }
+
     // If no session, clear user and return
     if (!session) {
       // If we have an active subscription, unsubscribe

@@ -33,11 +33,11 @@ const LandingPage = ({ onLogin, onRegister }: LandingPageProps) => {
             {/* Video Demo Section */}
             <LandingVideoSection />
 
-            {/* Metrics / Stats */}
-            <LandingMetrics />
-
             {/* Testimonials */}
             <LandingTestimonials />
+
+            {/* Metrics / Stats */}
+            <LandingMetrics />
 
             {/* Pricing Section */}
             <LandingPricing onRegister={onRegister} />

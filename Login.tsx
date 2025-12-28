@@ -97,7 +97,9 @@ export const Login: React.FC = () => {
       <div className="w-full lg:w-[45%] flex flex-col px-8 lg:px-12 xl:px-16 py-6 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <img src="/logo.png" alt="DoneOne" className="h-9 w-auto" />
+          <a href="/" className="cursor-pointer">
+            <img src="/logo.png" alt="DoneOne" className="h-9 w-auto hover:opacity-80 transition-opacity" />
+          </a>
           <div className="text-sm text-slate-500">
             {isLogin ? "New here? " : "Have an account? "}
             <button
@@ -211,10 +213,12 @@ export const Login: React.FC = () => {
             <button
               type="button"
               onClick={async () => {
+                // Use clean origin URL (removes any trailing slashes or paths)
+                const redirectUrl = window.location.origin.replace(/\/$/, '');
                 await supabase.auth.signInWithOAuth({
                   provider: 'google',
                   options: {
-                    redirectTo: window.location.origin
+                    redirectTo: redirectUrl
                   }
                 });
               }}

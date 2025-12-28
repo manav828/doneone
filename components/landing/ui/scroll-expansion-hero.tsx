@@ -21,9 +21,9 @@ const ScrollExpandMedia = ({
     mediaType = 'video',
     mediaSrc,
     posterSrc,
-    title,
-    subtitle,
-    scrollHint,
+    title = "See DoneOne in action",
+    subtitle = "Built for focus. Designed for flow.",
+    scrollHint = "Scroll to explore",
     textBlend = true,
     children,
 }: ScrollExpandMediaProps) => {
@@ -41,7 +41,8 @@ const ScrollExpandMedia = ({
             const viewportHeight = window.innerHeight;
 
             const totalScrollDistance = sectionHeight - viewportHeight;
-            const expansionDistance = totalScrollDistance * 0.5;
+            // Start expansion ~15% earlier
+            const expansionDistance = totalScrollDistance * 0.4;
 
             if (sectionTop >= 0) {
                 setScrollProgress(0);
@@ -67,51 +68,135 @@ const ScrollExpandMedia = ({
     }, []);
 
     // Video dimensions
-    const minWidth = isMobile ? 280 : 400;
-    const maxWidth = isMobile ? 360 : 950;
-    const minHeight = isMobile ? 180 : 280;
-    const maxHeight = isMobile ? 240 : 560;
+    const minWidth = isMobile ? 300 : 480;
+    const maxWidth = isMobile ? 380 : 1000;
+    const minHeight = isMobile ? 200 : 320;
+    const maxHeight = isMobile ? 260 : 600;
 
     const mediaWidth = minWidth + scrollProgress * (maxWidth - minWidth);
     const mediaHeight = minHeight + scrollProgress * (maxHeight - minHeight);
 
-    // Text animation
-    const textOpacity = Math.max(0, 1 - scrollProgress * 1.8);
-    const textTranslateVW = scrollProgress * (isMobile ? 80 : 60);
-    const bottomTextTranslate = scrollProgress * (isMobile ? 60 : 40);
+    // Text fade timing - exits EARLY so video becomes focal point
+    // "Scroll to explore" fades first, headline by ~20%, subtitle by ~25%
+    const scrollHintOpacity = Math.max(0, 1 - scrollProgress * 8);  // Fades by ~12%
+    const headlineOpacity = Math.max(0, 1 - scrollProgress * 5);    // Fades by ~20%
+    const subtitleOpacity = Math.max(0, 1 - scrollProgress * 4);    // Fades by ~25%
 
-    const firstWord = title ? title.split(' ')[0] : '';
-    const restOfTitle = title ? title.split(' ').slice(1).join(' ') : '';
+    // Subtle vertical lift
+    const textLiftAmount = isMobile ? 15 : 25;
+    const textTranslateY = scrollProgress * textLiftAmount;
 
     return (
         <div ref={sectionRef} style={{ height: '280vh' }}>
-            {/* Sticky container - pt-16 accounts for navbar height */}
-            <div className='sticky top-0 h-screen w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-16'>
+            {/* Sticky container */}
+            <div
+                className='sticky top-0 h-screen w-full overflow-hidden'
+                style={{
+                    background: 'linear-gradient(135deg, #FAFAFA 0%, #F5F5F5 50%, #EEEEEE 100%)'
+                }}
+            >
 
-                {/* Background gradient orbs */}
-                <div className='absolute inset-0 pointer-events-none'>
+                {/* Subtle radial anchor behind video - felt not seen */}
+                <div
+                    className='absolute inset-0 pointer-events-none flex items-center justify-center'
+                    style={{ paddingTop: isMobile ? '60px' : '40px' }}
+                >
                     <div
-                        className='absolute w-96 h-96 rounded-full blur-3xl'
-                        style={{ top: '10%', left: '5%', background: 'rgba(232, 90, 53, 0.2)' }}
-                    />
-                    <div
-                        className='absolute w-80 h-80 rounded-full blur-3xl'
-                        style={{ bottom: '10%', right: '5%', background: 'rgba(100, 116, 139, 0.2)' }}
+                        style={{
+                            width: '900px',
+                            height: '700px',
+                            background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.03) 0%, transparent 70%)',
+                            borderRadius: '50%',
+                        }}
                     />
                 </div>
 
-                {/* VIDEO - z-10, offset by half navbar height to center in visible area */}
+                {/* CENTERED TEXT - Above video, fades + lifts on scroll */}
+                <div
+                    className="absolute inset-x-0 flex flex-col items-center pointer-events-none z-20"
+                    style={{
+                        top: isMobile ? '12%' : '10%',
+                        transform: `translateY(-${textTranslateY}px)`,
+                        transition: 'transform 0.12s ease-out'
+                    }}
+                >
+                    {/* Primary Headline - weight reduced to 500 */}
+                    <h2
+                        className='text-3xl md:text-4xl lg:text-5xl text-center px-6'
+                        style={{
+                            fontWeight: 500,
+                            color: '#1a1a1a',
+                            letterSpacing: '-0.02em',
+                            lineHeight: 1.2,
+                            opacity: headlineOpacity,
+                            transition: 'opacity 0.12s ease-out',
+                        }}
+                    >
+                        {title}
+                    </h2>
+
+                    {/* Micro-context line */}
+                    {subtitle && (
+                        <p
+                            className='mt-4 text-center px-6'
+                            style={{
+                                fontSize: '14px',
+                                color: 'rgba(100, 100, 100, 0.75)',
+                                maxWidth: '420px',
+                                lineHeight: 1.6,
+                                opacity: subtitleOpacity,
+                                transition: 'opacity 0.12s ease-out',
+                            }}
+                        >
+                            {subtitle}
+                        </p>
+                    )}
+
+                    {/* Scroll Hint - fades first */}
+                    {scrollHint && (
+                        <p
+                            className='mt-4 text-sm font-medium flex items-center gap-2'
+                            style={{
+                                color: 'rgba(150, 150, 150, 0.8)',
+                                opacity: scrollHintOpacity,
+                                transition: 'opacity 0.12s ease-out',
+                            }}
+                        >
+                            <span>{scrollHint}</span>
+                            <motion.svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                animate={{ y: [0, 3, 0] }}
+                                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                            >
+                                <path d="M12 5v14M19 12l-7 7-7-7" />
+                            </motion.svg>
+                        </p>
+                    )}
+                </div>
+
+                {/* VIDEO - Centered, expands on scroll */}
                 <div
                     className='absolute inset-0 flex items-center justify-center z-10'
-                    style={{ paddingTop: '32px' }}
+                    style={{ paddingTop: isMobile ? '60px' : '40px' }}
                 >
                     <div
-                        className='relative rounded-2xl overflow-hidden'
+                        className='relative overflow-hidden'
                         style={{
                             width: `${mediaWidth}px`,
                             height: `${mediaHeight}px`,
-                            boxShadow: '0 30px 100px rgba(0, 0, 0, 0.5)',
+                            borderRadius: '16px',
+                            boxShadow: `
+                                0 4px 6px -1px rgba(0, 0, 0, 0.05),
+                                0 20px 50px -12px rgba(0, 0, 0, 0.12),
+                                0 40px 80px -20px rgba(0, 0, 0, 0.08)
+                            `,
                             transition: 'width 0.08s ease-out, height 0.08s ease-out',
+                            border: '1px solid rgba(0, 0, 0, 0.04)',
                         }}
                     >
                         {mediaType === 'video' ? (
@@ -127,7 +212,8 @@ const ScrollExpandMedia = ({
                                             '?autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0&disablekb=1&modestbranding=1&playlist=' +
                                             mediaSrc.split('v=')[1]
                                     }
-                                    className='w-full h-full rounded-2xl pointer-events-none'
+                                    className='w-full h-full pointer-events-none'
+                                    style={{ borderRadius: '16px' }}
                                     frameBorder='0'
                                     allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
                                     allowFullScreen
@@ -141,7 +227,8 @@ const ScrollExpandMedia = ({
                                     loop
                                     playsInline
                                     preload='auto'
-                                    className='w-full h-full object-cover rounded-2xl'
+                                    className='w-full h-full object-cover'
+                                    style={{ borderRadius: '16px' }}
                                     controls={false}
                                     disablePictureInPicture
                                 />
@@ -150,76 +237,16 @@ const ScrollExpandMedia = ({
                             <img
                                 src={mediaSrc}
                                 alt={title || 'Media content'}
-                                className='w-full h-full object-cover rounded-2xl'
+                                className='w-full h-full object-cover'
+                                style={{ borderRadius: '16px' }}
                             />
                         )}
-
-                        {/* Dark overlay */}
-                        <div
-                            className='absolute inset-0 bg-black/30 rounded-2xl pointer-events-none'
-                            style={{ opacity: Math.max(0, 0.4 - scrollProgress * 0.4) }}
-                        />
                     </div>
                 </div>
 
-                {/* TEXT - z-20 - ON TOP of video, same offset as video */}
-                <div
-                    className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 ${textBlend ? 'mix-blend-difference' : ''}`}
-                    style={{ opacity: textOpacity, paddingTop: '32px' }}
-                >
-                    <motion.h2
-                        className='text-5xl md:text-7xl lg:text-8xl font-bold text-white whitespace-nowrap'
-                        style={{
-                            transform: `translateX(-${textTranslateVW}vw)`,
-                            transition: 'transform 0.05s ease-out'
-                        }}
-                    >
-                        {firstWord}
-                    </motion.h2>
-                    <motion.h2
-                        className='text-5xl md:text-7xl lg:text-8xl font-bold text-white whitespace-nowrap mt-2'
-                        style={{
-                            transform: `translateX(${textTranslateVW}vw)`,
-                            transition: 'transform 0.05s ease-out'
-                        }}
-                    >
-                        {restOfTitle}
-                    </motion.h2>
-                </div>
-
-                {/* Bottom hints */}
-                <div
-                    className='absolute bottom-12 left-0 right-0 z-20 pointer-events-none'
-                    style={{ opacity: textOpacity }}
-                >
-                    <div className='flex justify-between px-8'>
-                        {subtitle && (
-                            <p
-                                className='text-xl font-medium text-white/70 whitespace-nowrap'
-                                style={{
-                                    transform: `translateX(-${bottomTextTranslate}vw)`,
-                                    transition: 'transform 0.05s ease-out'
-                                }}
-                            >
-                                {subtitle}
-                            </p>
-                        )}
-                        {scrollHint && (
-                            <p
-                                className='text-white/50 text-sm whitespace-nowrap'
-                                style={{
-                                    transform: `translateX(${bottomTextTranslate}vw)`,
-                                    transition: 'transform 0.05s ease-out'
-                                }}
-                            >
-                                {scrollHint}
-                            </p>
-                        )}
-                    </div>
-                </div>
             </div>
 
-            {/* Children after sticky ends - simple approach */}
+            {/* Children after sticky ends */}
             {children && (
                 <div className='bg-white py-20 px-8 md:px-16'>
                     {children}
