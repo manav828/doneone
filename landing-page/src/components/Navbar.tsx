@@ -29,7 +29,7 @@ const Navbar = () => {
                 : 'bg-transparent'
                 }`}
         >
-            <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="max-w-7xl mx-auto px-6 py-2">
                 <div className="flex items-center justify-between">
                     {/* Logo */}
                     <motion.a
@@ -40,7 +40,7 @@ const Navbar = () => {
                         <img
                             src="/logo-full.png"
                             alt="D.one Logo"
-                            className="h-12 md:h-14 w-auto"
+                            className="h-8 md:h-10 w-auto"
                         />
                     </motion.a>
 

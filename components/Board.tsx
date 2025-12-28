@@ -6,6 +6,7 @@ import { ListView } from './views/ListView';
 import { CalendarView } from './views/CalendarView';
 import { TimelineView } from './views/TimelineView';
 import { ColumnReorderModal } from './ColumnReorderModal';
+import { DailyTimer } from './DailyTimer';
 
 export const Board: React.FC = () => {
   const {
@@ -71,100 +72,106 @@ export const Board: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Filter Toolbar */}
-      <div className="px-6 pt-4 pb-2 flex flex-wrap items-center gap-3 shrink-0">
-        {/* Member Filter */}
-        {usersToFilter.length > 0 && (
+      {/* Filter Toolbar - Filters LEFT, Timer RIGHT */}
+      <div className="px-6 pt-4 pb-2 flex items-center justify-between gap-3 shrink-0">
+        {/* Left Side: Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Member Filter */}
+          {usersToFilter.length > 0 && (
+            <div className="relative group">
+              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
+                <User size={12} />
+              </div>
+              <select
+                value={activeMemberFilter || 'ALL'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'ALL') setMemberFilter(null);
+                  else setMemberFilter(val);
+                }}
+                className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
+              >
+                <option value="ME">My Workspace</option>
+                {(currentUser?.email === 'manavss828@gmail.com' || project?.managerId === currentUser?.id || project?.leadIds.includes(currentUser?.id || '')) && (
+                  <option value="ALL">All Team</option>
+                )}
+                <optgroup label="Team Members">
+                  {usersToFilter.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+              {(activeMemberFilter && activeMemberFilter !== 'ME') && (
+                <button
+                  onClick={() => setMemberFilter('ME')}
+                  className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500"
+                  title="Reset to My Workspace"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Status Filter */}
           <div className="relative group">
             <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
-              <User size={12} />
+              <Columns size={12} />
             </div>
             <select
-              value={activeMemberFilter || 'ALL'}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === 'ALL') setMemberFilter(null);
-                else setMemberFilter(val);
-              }}
+              value={activeStatusFilter || ''}
+              onChange={(e) => setStatusFilter(e.target.value || null)}
               className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
             >
-              <option value="ME">My Workspace</option>
-              {(currentUser?.email === 'manavss828@gmail.com' || project?.managerId === currentUser?.id || project?.leadIds.includes(currentUser?.id || '')) && (
-                <option value="ALL">All Team</option>
-              )}
-              <optgroup label="Team Members">
-                {usersToFilter.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </optgroup>
+              <option value="">All Statuses</option>
+              {projectColumns.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
             </select>
-            {(activeMemberFilter && activeMemberFilter !== 'ME') && (
-              <button
-                onClick={() => setMemberFilter('ME')}
-                className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500"
-                title="Reset to My Workspace"
-              >
+            {activeStatusFilter && (
+              <button onClick={() => setStatusFilter(null)} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
                 <X size={10} />
               </button>
             )}
           </div>
-        )}
 
-        {/* Status Filter */}
-        <div className="relative group">
-          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
-            <Columns size={12} />
+          {/* Tag Filter */}
+          <div className="relative group">
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
+              <TagIcon size={12} />
+            </div>
+            <select
+              value={activeTagFilter || ''}
+              onChange={(e) => setTagFilter(e.target.value || null)}
+              className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
+            >
+              <option value="">All Tags</option>
+              {tags.filter(t => !t.projectId || t.projectId === activeProjectId).map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            {activeTagFilter && (
+              <button onClick={() => setTagFilter(null)} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
+                <X size={10} />
+              </button>
+            )}
           </div>
-          <select
-            value={activeStatusFilter || ''}
-            onChange={(e) => setStatusFilter(e.target.value || null)}
-            className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
-          >
-            <option value="">All Statuses</option>
-            {projectColumns.map(c => (
-              <option key={c.id} value={c.id}>{c.title}</option>
-            ))}
-          </select>
-          {activeStatusFilter && (
-            <button onClick={() => setStatusFilter(null)} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
-              <X size={10} />
+
+          {/* Arrange Columns Button */}
+          {can('manageColumns') && currentView === 'board' && (
+            <button
+              onClick={() => setIsReorderModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full hover:border-primary hover:text-primary transition-all shadow-sm"
+              title="Arrange Columns"
+            >
+              <ArrowLeftRight size={12} />
+              <span>Arrange</span>
             </button>
           )}
         </div>
 
-        {/* Tag Filter */}
-        <div className="relative group">
-          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
-            <TagIcon size={12} />
-          </div>
-          <select
-            value={activeTagFilter || ''}
-            onChange={(e) => setTagFilter(e.target.value || null)}
-            className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
-          >
-            <option value="">All Tags</option>
-            {tags.filter(t => !t.projectId || t.projectId === activeProjectId).map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          {activeTagFilter && (
-            <button onClick={() => setTagFilter(null)} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
-              <X size={10} />
-            </button>
-          )}
-        </div>
-
-        {/* Arrange Columns Button */}
-        {can('manageColumns') && currentView === 'board' && (
-          <button
-            onClick={() => setIsReorderModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full hover:border-primary hover:text-primary transition-all shadow-sm"
-            title="Arrange Columns"
-          >
-            <ArrowLeftRight size={12} />
-            <span>Arrange</span>
-          </button>
-        )}
+        {/* Right Side: Daily Timer */}
+        <DailyTimer />
       </div>
 
       {/* View Content */}

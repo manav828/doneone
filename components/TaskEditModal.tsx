@@ -4,7 +4,7 @@ import { Task, User } from '../types';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { PremiumModal } from './PremiumModal';
-import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users } from 'lucide-react';
+import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users, MessageCircle, CheckCircle } from 'lucide-react';
 
 interface TaskEditModalProps {
     isOpen: boolean;
@@ -16,7 +16,7 @@ interface TaskEditModalProps {
 
 export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, task, isCreating, onSaveNew }) => {
     const {
-        tags, updateTask, deleteTask, createTag, toggleTaskTimer,
+        tags, updateTask, deleteTask, createTag, toggleTaskTimer, endDiscussion,
         users, uploadFile, deleteFile, isOffline, currentUser, projects, activeProjectId, deleteTag, archiveTaskManually
     } = useStore();
 
@@ -46,6 +46,11 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [localPriority, setLocalPriority] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+
+    // Discussion Task State
+    const [isDiscussion, setIsDiscussion] = useState(task.isDiscussion || false);
+    const [discussionUsers, setDiscussionUsers] = useState<string[]>(task.discussionUserIds || []);
+    const [isDiscussionDropdownOpen, setIsDiscussionDropdownOpen] = useState(false);
 
     // Time Tracking
     const [localEstimatedMinutes, setLocalEstimatedMinutes] = useState(Math.floor((task.estimatedTime || 0) / 60));
@@ -81,6 +86,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             setLocalEstimatedMinutes(Math.floor((task.estimatedTime || 0) / 60));
             setLocalActualMinutes(Math.floor((task.timeTracked || 0) / 60));
             setElapsedTime(task.timeTracked || 0);
+            // Discussion
+            setIsDiscussion(task.isDiscussion || false);
+            setDiscussionUsers(task.discussionUserIds || []);
         }
     }, [isOpen, task]);
 
@@ -134,7 +142,10 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             reminderUserIds: reminderDate ? localReminderUsers : undefined,
             attachments: [] as string[], // Placeholder, will be filled below
             estimatedTime: localEstimatedMinutes * 60,
-            timeTracked: localActualMinutes * 60
+            timeTracked: localActualMinutes * 60,
+            // Discussion fields
+            isDiscussion: isDiscussion,
+            discussionUserIds: isDiscussion ? discussionUsers : []
         };
 
         // 1. Process Uploads (Convert File objects to URLs)
@@ -485,6 +496,142 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                 <Plus size={16} />
                             </button>
                         </form>
+                    </div>
+
+                    {/* Discussion Task Section */}
+                    <div className="border rounded-lg dark:border-slate-600 overflow-hidden">
+                        <div
+                            className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${isDiscussion && !task.discussionEnded ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-slate-50 dark:bg-slate-700/50'}`}
+                            onClick={() => setIsDiscussion(!isDiscussion)}
+                        >
+                            <div className="flex items-center gap-2">
+                                <MessageCircle size={16} className={isDiscussion ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
+                                <span className={`text-sm font-medium ${isDiscussion ? 'text-purple-600 dark:text-purple-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                                    Discussion Task
+                                </span>
+                                {task.isDiscussion && !task.discussionEnded && (
+                                    <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-[10px] rounded-full font-bold uppercase">Active</span>
+                                )}
+                                {task.discussionEnded && (
+                                    <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 text-[10px] rounded-full font-bold uppercase flex items-center gap-1">
+                                        <CheckCircle size={10} /> Concluded
+                                    </span>
+                                )}
+                            </div>
+                            <div className={`w-9 h-5 rounded-full transition-colors ${isDiscussion ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-600'} relative`}>
+                                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${isDiscussion ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                            </div>
+                        </div>
+
+                        {isDiscussion && (
+                            <div className="p-3 border-t border-slate-100 dark:border-slate-600 space-y-3">
+                                {/* Participants Selector */}
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500 mb-1 block flex items-center gap-1.5">
+                                        <Users size={12} /> Discussion Participants
+                                    </label>
+                                    <div className="relative">
+                                        <div
+                                            onClick={() => setIsDiscussionDropdownOpen(!isDiscussionDropdownOpen)}
+                                            className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-purple-400 transition-colors min-h-[40px]"
+                                        >
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {discussionUsers.length === 0 ? (
+                                                    <span className="text-slate-400 text-sm">Select participants...</span>
+                                                ) : (
+                                                    discussionUsers.map(uid => {
+                                                        const u = users.find(u => u.id === uid);
+                                                        return u ? (
+                                                            <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                                                                {u.name}
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setDiscussionUsers(prev => prev.filter(id => id !== uid)); }}
+                                                                    className="hover:text-red-500"
+                                                                >
+                                                                    <X size={10} />
+                                                                </button>
+                                                            </span>
+                                                        ) : null;
+                                                    })
+                                                )}
+                                            </div>
+                                            <Users size={14} className="text-slate-400 shrink-0 ml-2" />
+                                        </div>
+
+                                        {isDiscussionDropdownOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-10" onClick={() => setIsDiscussionDropdownOpen(false)}></div>
+                                                <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto">
+                                                    {(() => {
+                                                        // Use task's project for member list
+                                                        const taskProject = projects.find(p => p.id === task.projectId) || activeProject;
+                                                        const projectMembers = users.filter(u =>
+                                                            taskProject ? (
+                                                                u.id === taskProject.managerId ||
+                                                                taskProject.leadIds?.includes(u.id) ||
+                                                                taskProject.resourceIds?.includes(u.id)
+                                                            ) : false
+                                                        );
+
+                                                        if (projectMembers.length === 0) {
+                                                            return (
+                                                                <div className="p-3 text-center text-slate-400 text-sm">
+                                                                    No project members found
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return projectMembers.map(u => (
+                                                            <div
+                                                                key={u.id}
+                                                                onClick={() => {
+                                                                    if (discussionUsers.includes(u.id)) {
+                                                                        setDiscussionUsers(prev => prev.filter(id => id !== u.id));
+                                                                    } else {
+                                                                        setDiscussionUsers(prev => [...prev, u.id]);
+                                                                    }
+                                                                }}
+                                                                className={`p-2 cursor-pointer flex items-center gap-2 ${discussionUsers.includes(u.id) ? 'bg-purple-50 dark:bg-purple-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={discussionUsers.includes(u.id)}
+                                                                    readOnly
+                                                                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                                                />
+                                                                {u.avatar ? (
+                                                                    <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                                                ) : (
+                                                                    <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px] font-bold">
+                                                                        {u.name.charAt(0)}
+                                                                    </div>
+                                                                )}
+                                                                <span className="text-sm text-slate-700 dark:text-slate-200">{u.name}</span>
+                                                                {u.id === currentUser?.id && <span className="text-xs text-slate-400">(Me)</span>}
+                                                            </div>
+                                                        ));
+                                                    })()}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* End Discussion Button - Only for creator when discussion is active */}
+                                {!isCreating && task.isDiscussion && !task.discussionEnded && task.creatorId === currentUser?.id && (
+                                    <button
+                                        onClick={async () => {
+                                            await endDiscussion(task.id);
+                                            onClose();
+                                        }}
+                                        className="w-full py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <CheckCircle size={16} />
+                                        End Discussion & Notify All
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Actions - Single Line */}

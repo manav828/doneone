@@ -109,7 +109,7 @@ body {
    BUTTON STYLES
    ============================================ */
 .btn-primary {
-    @apply relative overflow-hidden px-8 py-4 rounded-full font-semibold text-white transition-all duration-300;
+    @apply relative overflow-hidden px-5 py-2.5 rounded-full font-semibold text-white text-sm transition-all duration-300;
     background: linear-gradient(135deg, #E85A35 0%, #D14B26 100%);
     box-shadow: 0 4px 20px rgba(232, 90, 53, 0.3);
 }

@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
 import { useStore } from '../store';
-import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare } from 'lucide-react';
+import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare, MessageCircle } from 'lucide-react';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { TaskEditModal } from './TaskEditModal';
@@ -100,10 +100,15 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   const taskColumn = columns.find(c => c.id === task.columnId);
   const isDoneColumn = taskColumn?.title === 'Done';
 
-  // Animation classes
-  const animationClass = task.isHighlighted ? 'task-highlighted' :
-    (isOverdue && !isDoneColumn && !task.isReminderDismissed) ? 'task-overdue' :
-      (isDueSoon && !isDoneColumn && !task.isReminderDismissed) ? 'task-reminder-soon' : '';
+  // Discussion Task Check
+  const isActiveDiscussion = task.isDiscussion && !task.discussionEnded;
+  const isDiscussionParticipant = task.discussionUserIds?.includes(currentUser?.id || '');
+
+  // Animation classes - Discussion takes priority
+  const animationClass = isActiveDiscussion ? 'task-discussion' :
+    task.isHighlighted ? 'task-highlighted' :
+      (isOverdue && !isDoneColumn && !task.isReminderDismissed) ? 'task-overdue' :
+        (isDueSoon && !isDoneColumn && !task.isReminderDismissed) ? 'task-reminder-soon' : '';
 
   if (isDragging) {
     return (
@@ -133,9 +138,11 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
     ${canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-90'}
     ${isOverdue && !isDoneColumn
       ? 'border-red-400 dark:border-red-600 bg-red-50/30 dark:bg-red-900/10'
-      : isCreatedByMe
-        ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5'
-        : 'border-slate-200 dark:border-slate-700'
+      : isActiveDiscussion
+        ? 'border-purple-400 dark:border-purple-500 bg-purple-50/30 dark:bg-purple-900/10 ring-2 ring-purple-300 dark:ring-purple-600'
+        : isCreatedByMe
+          ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5'
+          : 'border-slate-200 dark:border-slate-700'
     }
   `;
 
@@ -165,6 +172,13 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
         {/* Tags (Hidden if collapsed) */}
         {!isCollapsed && (
           <div className="flex flex-wrap gap-1.5 mb-2.5 pr-6">
+            {/* Discussion Badge */}
+            {isActiveDiscussion && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide bg-purple-500 text-white shadow-sm animate-pulse">
+                <MessageCircle size={10} fill="currentColor" />
+                Discussion
+              </span>
+            )}
             {taskTags.map(tag => (
               <span
                 key={tag.id}

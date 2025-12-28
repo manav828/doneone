@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../store';
+import { supabase } from '../supabaseClient';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Download, Filter, Calendar, User as UserIcon, CheckCircle, Search } from 'lucide-react';
+import { Download, Filter, Calendar, User as UserIcon, CheckCircle, Search, Clock } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
     const {
@@ -165,6 +166,79 @@ export const ReportsPage: React.FC = () => {
         return hours > 0 ? `${hours.toFixed(1)}h` : '-';
     };
 
+    const formatTimeDetailed = (seconds: number): string => {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    };
+
+    // Helper: Get start of today
+    const getStartOfToday = () => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    };
+
+    // Daily work logs from database
+    const [dailyLogs, setDailyLogs] = useState<any[]>([]);
+
+    // Fetch daily logs from database
+    useEffect(() => {
+        if (activeProjectId) {
+            const fetchLogs = async () => {
+                const today = new Date().toISOString().split('T')[0];
+                const { data } = await supabase
+                    .from('daily_work_logs')
+                    .select('*')
+                    .eq('project_id', activeProjectId)
+                    .eq('work_date', today);
+                setDailyLogs(data || []);
+            };
+            fetchLogs();
+        }
+    }, [activeProjectId]);
+
+    // Calculate daily work time for each team member - FROM DATABASE
+    const dailyTimeByMember = useMemo(() => {
+        if (!activeProjectId) return [];
+
+        const memberTimes: Record<string, { totalSeconds: number; isRunning: boolean }> = {};
+
+        // Initialize all project members with 0
+        projectMembers.forEach(member => {
+            memberTimes[member.id] = { totalSeconds: 0, isRunning: false };
+        });
+
+        // Add saved time from daily_work_logs
+        dailyLogs.forEach(log => {
+            if (memberTimes[log.user_id]) {
+                memberTimes[log.user_id].totalSeconds = log.total_seconds || 0;
+            }
+        });
+
+        // Add live timer time (only for currently running timers)
+        tasks.filter(t => t.projectId === activeProjectId && t.timerStartedAt).forEach(task => {
+            if (task.assigneeId && memberTimes[task.assigneeId]) {
+                memberTimes[task.assigneeId].isRunning = true;
+                const liveSeconds = Math.floor((Date.now() - task.timerStartedAt!) / 1000);
+                memberTimes[task.assigneeId].totalSeconds += liveSeconds;
+            }
+        });
+
+        return projectMembers.map(member => ({
+            id: member.id,
+            name: member.name,
+            totalSeconds: memberTimes[member.id]?.totalSeconds || 0,
+            isRunning: memberTimes[member.id]?.isRunning || false,
+            hours: (memberTimes[member.id]?.totalSeconds || 0) / 3600
+        })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+    }, [tasks, activeProjectId, projectMembers, dailyLogs]);
+
+    // Total team hours today
+    const totalTeamHoursToday = useMemo(() => {
+        return dailyTimeByMember.reduce((sum, m) => sum + m.totalSeconds, 0);
+    }, [dailyTimeByMember]);
+
     // Check Premium Status
     const isPremium = activeProject?.manager?.isPremium || false;
 
@@ -299,8 +373,82 @@ export const ReportsPage: React.FC = () => {
                             <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{totalDoneTasks}</h3>
                         </div>
                     </div>
-                    {/* Placeholder for future metrics */}
+
+                    {/* Team Hours Today */}
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">
+                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">
+                            <Clock size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Team Hours Today</p>
+                            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{formatTimeDetailed(totalTeamHoursToday)}</h3>
+                        </div>
+                    </div>
+
+                    {/* Active Members */}
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">
+                        <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full">
+                            <UserIcon size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Active Today</p>
+                            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">
+                                {dailyTimeByMember.filter(m => m.totalSeconds > 0).length} / {projectMembers.length}
+                            </h3>
+                        </div>
+                    </div>
                 </div>
+
+                {/* Daily Work Time by Member */}
+                {dailyTimeByMember.length > 0 && (
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                            <Clock size={18} className="text-blue-500" />
+                            Today's Work Time by Member
+                        </h3>
+                        <div className="space-y-3">
+                            {dailyTimeByMember.map(member => (
+                                <div key={member.id} className="flex items-center gap-4">
+                                    <div className="w-32 truncate">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                                                {member.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                                {member.name}
+                                            </span>
+                                            {member.isRunning && (
+                                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="h-6 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all ${member.isRunning ? 'bg-green-500' : 'bg-blue-500'}`}
+                                                style={{
+                                                    width: `${Math.min((member.hours / 8) * 100, 100)}%`,
+                                                    minWidth: member.totalSeconds > 0 ? '8px' : '0'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="w-20 text-right">
+                                        <span className={`text-sm font-mono ${member.isRunning ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                            {formatTimeDetailed(member.totalSeconds)}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+                            <span className="text-slate-500">Target: 8h per member</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200">
+                                Total: {formatTimeDetailed(totalTeamHoursToday)}
+                            </span>
+                        </div>
+                    </div>
+                )}
 
                 {/* Charts Row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

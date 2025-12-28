@@ -58,11 +58,23 @@ export const Login: React.FC = () => {
         }
 
         if (user && session) {
+          // Create profile with email, 30-day premium trial, and all required fields
           await supabase.from('profiles').upsert({
             id: user.id,
             name: name || email.split('@')[0],
+            email: email, // FIXED: Include email in profile
             role: 'Resource',
-            avatar_url: ''
+            avatar_url: '',
+            is_premium: true, // FIXED: Enable 30-day trial
+            premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+            max_projects: 10000,
+            max_leads: 10,
+            max_resources: 20,
+            notifications_enabled: true,
+            reminders_enabled: true,
+            time_tracking_enabled: true,
+            image_upload_enabled: true,
+            max_attachments_per_task: 10
           });
         } else if (user && !session) {
           setError("Account created! Check your email to confirm.");

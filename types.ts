@@ -79,6 +79,10 @@ export interface Task {
   capturedScreenshot?: string;
   isHighlighted?: boolean;
   isReminderDismissed?: boolean;
+  // Discussion Task Fields
+  isDiscussion?: boolean;
+  discussionUserIds?: string[];
+  discussionEnded?: boolean;
 }
 
 export interface Column {

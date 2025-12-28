@@ -106,6 +106,7 @@ interface AppState {
   deleteTask: (taskId: string) => Promise<void>;
   moveTask: (taskId: string, newColumnId: string, newIndex: number) => Promise<void>;
   toggleTaskTimer: (taskId: string) => Promise<void>;
+  endDiscussion: (taskId: string) => Promise<void>;
 
   markNotificationRead: (notificationId: string) => Promise<void>;
   clearNotifications: () => Promise<void>;
@@ -160,6 +161,11 @@ interface AppState {
   checkAutoArchive: () => Promise<void>;
   canAccessPremium: () => boolean;
   canProjectUsePremium: (projectId: string) => boolean;
+
+  // Daily Work Time Tracking
+  saveDailyWorkLog: (userId: string, projectId: string, secondsToAdd: number, taskWorked?: boolean, taskCompleted?: boolean) => Promise<void>;
+  fetchDailyWorkLogs: (projectId: string, date?: string) => Promise<any[]>;
+  fetchWeeklyWorkSummary: (userId: string, projectId?: string) => Promise<any[]>;
 
   // UI State
   isPricingModalOpen: boolean;
@@ -929,7 +935,11 @@ export const useStore = create<AppState>((set, get) => ({
       capturedUrl: t.captured_url,
       capturedText: t.captured_text,
       capturedScreenshot: t.captured_screenshot,
-      isReminderDismissed: t.is_reminder_dismissed || false
+      isReminderDismissed: t.is_reminder_dismissed || false,
+      // Discussion fields
+      isDiscussion: t.is_discussion || false,
+      discussionUserIds: t.discussion_user_ids || [],
+      discussionEnded: t.discussion_ended || false
     }));
     set({ tasks: processedTasks });
     return processedTasks;
@@ -1593,6 +1603,11 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.timerStartedAt !== undefined) dbUpdates.timer_started_at = updates.timerStartedAt ? new Date(updates.timerStartedAt).toISOString() : null;
     if (updates.attachments !== undefined) dbUpdates.attachments = updates.attachments;
 
+    // Discussion fields
+    if (updates.isDiscussion !== undefined) dbUpdates.is_discussion = updates.isDiscussion;
+    if (updates.discussionUserIds !== undefined) dbUpdates.discussion_user_ids = updates.discussionUserIds;
+    if (updates.discussionEnded !== undefined) dbUpdates.discussion_ended = updates.discussionEnded;
+
     console.log("Saving Task Updates:", dbUpdates); // DEBUG
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
     if (error) console.error("Failed to save task:", error);
@@ -1684,11 +1699,16 @@ export const useStore = create<AppState>((set, get) => ({
       }
     } else if (newColumnTitle === 'Done') {
       updatedTask.completedAt = Date.now();
-      // Stop Timer if running
+      // Stop Timer if running and save to daily logs
       if (updatedTask.timerStartedAt) {
         const elapsed = Math.floor((Date.now() - updatedTask.timerStartedAt) / 1000);
         updatedTask.timeTracked = (updatedTask.timeTracked || 0) + elapsed;
         updatedTask.timerStartedAt = undefined; // Will be set to null in DB update
+
+        // Save to daily work logs
+        if (elapsed > 0 && task.assigneeId) {
+          get().saveDailyWorkLog(task.assigneeId, task.projectId, elapsed, true, true);
+        }
       }
     } else {
       // Moving to Pending or any other column -> Stop Timer
@@ -1696,6 +1716,11 @@ export const useStore = create<AppState>((set, get) => ({
         const elapsed = Math.floor((Date.now() - updatedTask.timerStartedAt) / 1000);
         updatedTask.timeTracked = (updatedTask.timeTracked || 0) + elapsed;
         updatedTask.timerStartedAt = undefined;
+
+        // Save to daily work logs
+        if (elapsed > 0 && task.assigneeId) {
+          get().saveDailyWorkLog(task.assigneeId, task.projectId, elapsed, true, false);
+        }
       }
     }
 
@@ -1879,6 +1904,97 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  // Save daily work time to database
+  saveDailyWorkLog: async (userId: string, projectId: string, secondsToAdd: number, taskWorked: boolean = false, taskCompleted: boolean = false) => {
+    if (get().isOffline || secondsToAdd <= 0) return;
+
+    try {
+      // Use upsert pattern for daily_work_logs
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+      // First try to get existing record
+      const { data: existing } = await supabase
+        .from('daily_work_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+        .eq('work_date', today)
+        .single();
+
+      if (existing) {
+        // Update existing record
+        await supabase
+          .from('daily_work_logs')
+          .update({
+            total_seconds: existing.total_seconds + secondsToAdd,
+            tasks_worked: existing.tasks_worked + (taskWorked ? 1 : 0),
+            tasks_completed: existing.tasks_completed + (taskCompleted ? 1 : 0),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        // Insert new record
+        await supabase
+          .from('daily_work_logs')
+          .insert({
+            user_id: userId,
+            project_id: projectId,
+            work_date: today,
+            total_seconds: secondsToAdd,
+            tasks_worked: taskWorked ? 1 : 0,
+            tasks_completed: taskCompleted ? 1 : 0
+          });
+      }
+    } catch (error) {
+      console.error('Failed to save daily work log:', error);
+    }
+  },
+
+  // Fetch daily work logs for a project
+  fetchDailyWorkLogs: async (projectId: string, date?: string) => {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('daily_work_logs')
+      .select('*, profiles(name)')
+      .eq('project_id', projectId)
+      .eq('work_date', targetDate);
+
+    if (error) {
+      console.error('Failed to fetch daily work logs:', error);
+      return [];
+    }
+
+    return data || [];
+  },
+
+  // Fetch weekly work summary for a user
+  fetchWeeklyWorkSummary: async (userId: string, projectId?: string) => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const startDate = sevenDaysAgo.toISOString().split('T')[0];
+
+    let query = supabase
+      .from('daily_work_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('work_date', startDate)
+      .order('work_date', { ascending: false });
+
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Failed to fetch weekly work summary:', error);
+      return [];
+    }
+
+    return data || [];
+  },
+
   toggleTaskTimer: async (taskId) => {
     const { tasks, currentUser } = get();
     if (!currentUser) return;
@@ -1900,6 +2016,11 @@ export const useStore = create<AppState>((set, get) => ({
 
       await get().updateTask(runningTask.id, { timeTracked: newTotal, timerStartedAt: null });
       await get().updateTask(taskId, { timerStartedAt: now });
+
+      // Save daily work log for the stopped timer
+      if (elapsed > 0) {
+        await get().saveDailyWorkLog(currentUser.id, runningTask.projectId, elapsed, true, false);
+      }
       return;
     }
 
@@ -1907,12 +2028,18 @@ export const useStore = create<AppState>((set, get) => ({
     if (!task) return;
 
     if (task.timerStartedAt) {
+      // Stopping timer - save elapsed time to daily logs
       const elapsedSeconds = Math.floor((now - task.timerStartedAt) / 1000);
       const newTotal = (task.timeTracked || 0) + elapsedSeconds;
       set(state => ({
         tasks: state.tasks.map(t => t.id === taskId ? { ...t, timeTracked: newTotal, timerStartedAt: undefined } : t)
       }));
       await get().updateTask(taskId, { timeTracked: newTotal, timerStartedAt: null });
+
+      // Save daily work log
+      if (elapsedSeconds > 0) {
+        await get().saveDailyWorkLog(currentUser.id, task.projectId, elapsedSeconds, true, false);
+      }
     } else {
       set(state => ({
         tasks: state.tasks.map(t => t.id === taskId ? { ...t, timerStartedAt: now } : t)
@@ -1921,7 +2048,44 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  // End Discussion - marks discussion as complete and notifies all participants
+  endDiscussion: async (taskId: string) => {
+    const { tasks, currentUser, users } = get();
+    if (!currentUser) return;
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !task.isDiscussion) return;
+
+    // Update state
+    set(state => ({
+      tasks: state.tasks.map(t => t.id === taskId ? { ...t, discussionEnded: true } : t)
+    }));
+
+    // Persist to database
+    await get().updateTask(taskId, { discussionEnded: true });
+
+    // Send notifications to all discussion participants
+    const discussionUsers = task.discussionUserIds || [];
+    const notifiedUsers = discussionUsers.filter(uid => uid !== currentUser.id);
+
+    for (const userId of notifiedUsers) {
+      // Create in-app notification
+      await supabase.from('notifications').insert({
+        id: uuidv4(),
+        recipient_id: userId,
+        message: `Discussion "${task.title}" has been concluded by ${currentUser.name}`,
+        project_id: task.projectId,
+        read: false,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    // Refresh notifications
+    await get().fetchNotifications();
+  },
+
   // ... (Other functions remain same)
+
 
   // Registration Control
   getRegistrationStatus: async () => {
@@ -2380,6 +2544,12 @@ export const useStore = create<AppState>((set, get) => ({
     if (!project) return [];
     const projectTasks = tasks.filter(t => t.projectId === projectId);
 
+    // Helper: Check if user is in discussion participants
+    const isDiscussionParticipant = (task: Task) =>
+      task.isDiscussion &&
+      !task.discussionEnded &&
+      task.discussionUserIds?.includes(currentUser.id);
+
     // 1. Determine Base Visibility (What is *possible* to see)
     let allowedTasks = [];
     const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
@@ -2389,16 +2559,21 @@ export const useStore = create<AppState>((set, get) => ({
     if (isSuperAdmin || isManager) {
       allowedTasks = projectTasks;
     } else if (isLead) {
-      // Lead sees: Assigned to self OR Assigned to their team members
+      // Lead sees: Assigned to self OR Assigned to their team members OR Discussion participant
       allowedTasks = projectTasks.filter(t => {
         if (t.assigneeId === currentUser.id) return true;
         if (t.creatorId === currentUser.id) return true; // See tasks I created
         if (t.assigneeId && project.reportsTo[t.assigneeId] === currentUser.id) return true;
+        if (isDiscussionParticipant(t)) return true; // Discussion tasks
         return false;
       });
     } else {
-      // Resource sees: Assigned to self OR Created by self
-      allowedTasks = projectTasks.filter(t => t.assigneeId === currentUser.id || t.creatorId === currentUser.id);
+      // Resource sees: Assigned to self OR Created by self OR Discussion participant
+      allowedTasks = projectTasks.filter(t =>
+        t.assigneeId === currentUser.id ||
+        t.creatorId === currentUser.id ||
+        isDiscussionParticipant(t)
+      );
     }
 
 
