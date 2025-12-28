@@ -40,7 +40,7 @@ const Navbar = () => {
                         <img
                             src="/logo-full.png"
                             alt="D.one Logo"
-                            className="h-8 md:h-10 w-auto"
+                            className="h-10 md:h-12 w-auto"
                         />
                     </motion.a>
 

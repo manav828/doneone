@@ -85,8 +85,8 @@ const ScrollExpandMedia = ({
 
     return (
         <div ref={sectionRef} style={{ height: '280vh' }}>
-            {/* Sticky container */}
-            <div className='sticky top-0 h-screen w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'>
+            {/* Sticky container - pt-16 accounts for navbar height */}
+            <div className='sticky top-0 h-screen w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-16'>
 
                 {/* Background gradient orbs */}
                 <div className='absolute inset-0 pointer-events-none'>
@@ -100,8 +100,11 @@ const ScrollExpandMedia = ({
                     />
                 </div>
 
-                {/* VIDEO - z-10 */}
-                <div className='absolute inset-0 flex items-center justify-center z-10'>
+                {/* VIDEO - z-10, offset by half navbar height to center in visible area */}
+                <div
+                    className='absolute inset-0 flex items-center justify-center z-10'
+                    style={{ paddingTop: '32px' }}
+                >
                     <div
                         className='relative rounded-2xl overflow-hidden'
                         style={{
@@ -159,10 +162,10 @@ const ScrollExpandMedia = ({
                     </div>
                 </div>
 
-                {/* TEXT - z-20 - ON TOP of video */}
+                {/* TEXT - z-20 - ON TOP of video, same offset as video */}
                 <div
                     className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 ${textBlend ? 'mix-blend-difference' : ''}`}
-                    style={{ opacity: textOpacity }}
+                    style={{ opacity: textOpacity, paddingTop: '32px' }}
                 >
                     <motion.h2
                         className='text-5xl md:text-7xl lg:text-8xl font-bold text-white whitespace-nowrap'
