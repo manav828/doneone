@@ -12,9 +12,11 @@ import { Loader2 } from 'lucide-react';
 import { CustomAlert } from './components/CustomAlert';
 import { WelcomeModal } from './components/WelcomeModal';
 import { PricingModal } from './components/PricingModal';
+import LandingPage from './components/landing/LandingPage';
 
 const App: React.FC = () => {
   const { init, currentUser, isLoading, tasks, projects } = useStore();
+  const [showLoginForm, setShowLoginForm] = React.useState(false);
 
   useEffect(() => {
     init();
@@ -72,8 +74,32 @@ const App: React.FC = () => {
     );
   }
 
+  // Show Login form if user clicked login/register from landing page
+  if (!currentUser && showLoginForm) {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setShowLoginForm(false)}
+          className="absolute top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Home
+        </button>
+        <Login />
+      </div>
+    );
+  }
+
+  // Show Landing Page when not logged in
   if (!currentUser) {
-    return <Login />;
+    return (
+      <LandingPage
+        onLogin={() => setShowLoginForm(true)}
+        onRegister={() => setShowLoginForm(true)}
+      />
+    );
   }
 
   return (
