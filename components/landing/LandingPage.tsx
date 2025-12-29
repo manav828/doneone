@@ -1,7 +1,6 @@
 import LandingNavbar from './LandingNavbar';
 import LandingHero from './LandingHero';
 import LandingTrustBar from './LandingTrustBar';
-import LandingBentoFeatures from './LandingBentoFeatures';
 import TimelineFeatures from './TimelineFeatures';
 import LandingVideoSection from './LandingVideoSection';
 import LandingMetrics from './LandingMetrics';
@@ -28,10 +27,7 @@ const LandingPage = ({ onLogin, onRegister }: LandingPageProps) => {
             {/* Trust Bar - Logo Carousel */}
             <LandingTrustBar />
 
-            {/* Features Bento Grid (Original) */}
-            <LandingBentoFeatures />
-
-            {/* Features Timeline (New - for comparison) */}
+            {/* Features Timeline */}
             <TimelineFeatures />
 
             {/* Video Demo Section */}

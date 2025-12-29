@@ -19,11 +19,39 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
     const [activeIndex, setActiveIndex] = useState(0);
 
     useEffect(() => {
+        const updateHeight = () => {
+            if (ref.current) {
+                const rect = ref.current.getBoundingClientRect();
+                setHeight(rect.height);
+            }
+        };
+
+        // Initial calculation
+        updateHeight();
+
+        // Recalculate after a delay to account for images loading
+        const timer = setTimeout(updateHeight, 500);
+        const timer2 = setTimeout(updateHeight, 1500);
+
+        // Use ResizeObserver for dynamic content changes
+        const resizeObserver = new ResizeObserver(() => {
+            updateHeight();
+        });
+
         if (ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setHeight(rect.height);
+            resizeObserver.observe(ref.current);
         }
-    }, [ref]);
+
+        // Also recalculate on window resize
+        window.addEventListener('resize', updateHeight);
+
+        return () => {
+            clearTimeout(timer);
+            clearTimeout(timer2);
+            resizeObserver.disconnect();
+            window.removeEventListener('resize', updateHeight);
+        };
+    }, []);
 
     const { scrollYProgress } = useScroll({
         target: containerRef,
@@ -63,10 +91,9 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
                         <div className="sticky flex flex-col md:flex-row z-40 items-center top-40 self-start max-w-xs lg:max-w-sm md:w-full">
                             <div className="h-10 absolute left-3 md:left-3 w-10 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FFFBF7' }}>
                                 <motion.div
-                                    className="h-4 w-4 rounded-full border-2 transition-all duration-300"
+                                    className="h-4 w-4 rounded-full transition-all duration-300"
                                     style={{
-                                        borderColor: '#f97316',
-                                        backgroundColor: index <= activeIndex ? '#f97316' : 'transparent'
+                                        backgroundColor: '#f97316'
                                     }}
                                     animate={{
                                         scale: index === activeIndex ? 1.2 : 1,
@@ -93,18 +120,20 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
                         </div>
                     </div>
                 ))}
+                {/* Background timeline track - gray line for full height */}
                 <div
                     style={{
-                        height: height + "px",
+                        height: height > 0 ? height + "px" : "100%",
                     }}
-                    className="absolute md:left-8 left-8 top-0 overflow-hidden w-[2px] bg-[linear-gradient(to_bottom,var(--tw-gradient-stops))] from-transparent from-[0%] via-slate-200 to-transparent to-[99%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_10%,black_90%,transparent_100%)]"
+                    className="absolute md:left-8 left-8 top-0 overflow-hidden w-[3px] bg-slate-200 rounded-full"
                 >
+                    {/* Orange progress fill - grows based on scroll position */}
                     <motion.div
                         style={{
                             height: heightTransform,
                             opacity: opacityTransform,
                         }}
-                        className="absolute inset-x-0 top-0 w-[2px] bg-gradient-to-t from-orange-500 via-orange-400 to-transparent from-[0%] via-[10%] rounded-full"
+                        className="absolute inset-x-0 top-0 w-full bg-orange-500 rounded-full"
                     />
                 </div>
             </div>

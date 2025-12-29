@@ -24,11 +24,21 @@ export const TestimonialsColumn = (props: {
             // Pause: stop at current position
             controls.stop();
         } else {
-            // Resume: continue animation from current position
+            // Calculate remaining progress (0% to -50% is the range)
+            // currentY is negative when scrolling, so we calculate how much is left
+            const totalRange = 50; // 0% to -50%
+            const currentProgress = Math.abs(currentY); // How far we've gone (0 to 50)
+            const remainingProgress = (totalRange - currentProgress) / totalRange;
+
+            // Calculate remaining duration proportionally to maintain same speed
+            const baseDuration = props.duration || 10;
+            const remainingDuration = baseDuration * remainingProgress;
+
+            // Resume: continue animation from current position at consistent speed
             controls.start({
                 translateY: [currentY + "%", "-50%"],
                 transition: {
-                    duration: props.duration || 10,
+                    duration: Math.max(remainingDuration, 0.5), // Minimum 0.5s to avoid jerky animation
                     repeat: Infinity,
                     ease: "linear",
                     repeatType: "loop",

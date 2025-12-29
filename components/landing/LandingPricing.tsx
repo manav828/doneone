@@ -59,125 +59,156 @@ const LandingPricing = ({ onRegister }: LandingPricingProps) => {
     ];
 
     return (
-        <section id="pricing" className="py-24 bg-gradient-to-b from-slate-50 to-white">
-            <div className="max-w-7xl mx-auto px-6">
+        <section id="pricing" className="py-16 bg-slate-50/50">
+            <div className="max-w-6xl mx-auto px-6">
                 {/* Section Header */}
                 <motion.div
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.8 }}
-                    className="text-center mb-16"
+                    transition={{ duration: 0.6 }}
+                    className="text-center mb-10"
                 >
-                    <span className="inline-block px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
-                        Simple Pricing
-                    </span>
-                    <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
-                        Choose your{' '}
-                        <span className="gradient-text">perfect plan</span>
+                    <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-3 tracking-tight">
+                        Simple, transparent pricing
                     </h2>
-                    <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                        Start free, upgrade when you're ready. No hidden fees, no surprises.
+                    <p className="text-slate-500 text-base max-w-lg mx-auto">
+                        Start free, upgrade when you're ready. No hidden fees.
                     </p>
 
                     {/* Billing Toggle */}
-                    <div className="flex items-center justify-center gap-4 mt-8">
-                        <span className={`text-sm font-medium ${!annual ? 'text-slate-900' : 'text-slate-500'}`}>
+                    <div className="flex items-center justify-center gap-3 mt-6">
+                        <span className={`text-sm ${!annual ? 'text-slate-900 font-medium' : 'text-slate-400'}`}>
                             Monthly
                         </span>
                         <button
                             onClick={() => setAnnual(!annual)}
-                            className="relative w-14 h-8 rounded-full bg-primary/20 transition-colors"
+                            className={`relative w-14 h-7 rounded-full transition-colors ${annual ? 'bg-orange-500' : 'bg-slate-200 hover:bg-slate-300'
+                                }`}
                         >
                             <motion.div
-                                className="absolute top-1 w-6 h-6 rounded-full bg-primary shadow-lg"
-                                animate={{ left: annual ? '28px' : '4px' }}
+                                className="absolute top-1 w-5 h-5 rounded-full bg-white shadow-md"
+                                animate={{ left: annual ? '30px' : '4px' }}
                                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                             />
                         </button>
-                        <span className={`text-sm font-medium ${annual ? 'text-slate-900' : 'text-slate-500'}`}>
+                        <span className={`text-sm ${annual ? 'text-slate-900 font-medium' : 'text-slate-400'}`}>
                             Annual
                         </span>
-                        <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-                            Save 25%
-                        </span>
+                        {annual && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-xs font-medium">
+                                Save 25%
+                            </span>
+                        )}
                     </div>
                 </motion.div>
 
+                {/* Trust Signal */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.2 }}
+                    className="text-center mb-8"
+                >
+                    <p className="text-slate-400 text-sm">
+                        Trusted by 50,000+ professionals • 4.9★ Chrome Web Store rating
+                    </p>
+                </motion.div>
+
                 {/* Pricing Cards */}
-                <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                     {plans.map((plan, index) => (
                         <motion.div
                             key={plan.name}
-                            initial={{ opacity: 0, y: 30 }}
+                            initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            transition={{ duration: 0.6, delay: index * 0.1 }}
-                            className={`relative rounded-3xl p-8 ${plan.popular
-                                ? 'pricing-popular scale-105 z-10'
-                                : 'bg-white border border-slate-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300'
+                            transition={{ duration: 0.5, delay: index * 0.1 }}
+                            style={{
+                                background: plan.popular
+                                    ? 'linear-gradient(180deg, rgba(255, 247, 237, 0.9) 0%, rgba(255, 251, 245, 0.95) 100%)'
+                                    : 'linear-gradient(180deg, rgba(255, 250, 245, 0.7) 0%, rgba(255, 255, 255, 0.85) 100%)',
+                                boxShadow: plan.popular
+                                    ? '0 4px 24px -4px rgba(251, 146, 60, 0.12), 0 12px 40px -8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(251, 146, 60, 0.06)'
+                                    : '0 2px 16px -4px rgba(251, 146, 60, 0.08), 0 8px 32px -8px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04)',
+                                border: plan.popular
+                                    ? '1px solid rgba(251, 146, 60, 0.12)'
+                                    : '1px solid rgba(251, 146, 60, 0.06)'
+                            }}
+                            className={`relative rounded-2xl p-6 transition-all duration-300 hover:translate-y-[-2px] ${plan.popular ? 'scale-[1.02]' : 'hover:shadow-lg'
                                 }`}
                         >
-                            {/* Popular Badge */}
+                            {/* Popular Badge - Premium pill on card edge */}
                             {plan.popular && (
-                                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                                    <span className="px-4 py-2 rounded-full bg-primary text-white text-sm font-semibold shadow-lg">
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                                    <span className="px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-medium shadow-sm">
                                         Most Popular
                                     </span>
                                 </div>
                             )}
 
                             {/* Plan Header */}
-                            <div className="mb-6">
-                                <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-                                <p className="text-slate-600 text-sm">{plan.description}</p>
+                            <div className="mb-5 pt-2">
+                                <h3 className="text-lg font-semibold text-slate-800 mb-1">{plan.name}</h3>
+                                <p className="text-slate-400 text-xs">{plan.description}</p>
                             </div>
 
-                            {/* Price */}
-                            <div className="mb-6">
-                                <div className="flex items-baseline gap-2">
+                            {/* Price - Most dominant */}
+                            <div className="mb-5">
+                                <div className="flex items-baseline gap-1">
                                     <AnimatePresence mode="wait">
                                         <motion.span
                                             key={annual ? 'annual' : 'monthly'}
-                                            initial={{ opacity: 0, y: -20 }}
+                                            initial={{ opacity: 0, y: -10 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 20 }}
-                                            className="text-5xl font-bold text-slate-900"
+                                            exit={{ opacity: 0, y: 10 }}
+                                            className="text-4xl font-bold text-slate-900 tracking-tight"
                                         >
                                             ${annual ? plan.price.annual : plan.price.monthly}
                                         </motion.span>
                                     </AnimatePresence>
-                                    <span className="text-slate-500">/month</span>
+                                    <span className="text-slate-400 text-sm">/mo</span>
                                 </div>
                                 {plan.price.annual > 0 && annual && (
-                                    <p className="text-sm text-slate-500 mt-1">
-                                        Billed annually (${plan.price.annual * 12}/year)
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        ${plan.price.annual * 12} billed annually
+                                    </p>
+                                )}
+                                {plan.price.annual === 0 && (
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Free forever
                                     </p>
                                 )}
                             </div>
 
-                            {/* Features */}
-                            <ul className="space-y-4 mb-8">
+                            {/* Features - Calm, readable */}
+                            <ul className="space-y-2.5 mb-6">
                                 {plan.features.map((feature) => (
-                                    <li key={feature} className="flex items-start gap-3">
-                                        <svg className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    <li key={feature} className="flex items-start gap-2.5">
+                                        <svg
+                                            className={`w-4 h-4 mt-0.5 flex-shrink-0 ${plan.popular ? 'text-orange-400' : 'text-slate-300'
+                                                }`}
+                                            fill="currentColor"
+                                            viewBox="0 0 20 20"
+                                        >
+                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
-                                        <span className="text-slate-700">{feature}</span>
+                                        <span className="text-slate-600 text-sm">{feature}</span>
                                     </li>
                                 ))}
                             </ul>
 
-                            {/* CTA Button */}
+                            {/* CTA Button - Clear hierarchy */}
                             <motion.button
                                 onClick={onRegister}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                className={`block w-full text-center py-4 rounded-full font-semibold transition-all duration-300 ${plan.ctaStyle === 'primary'
-                                    ? 'bg-primary text-white shadow-lg hover:shadow-xl'
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
+                                className={`w-full py-3 rounded-xl text-sm font-medium transition-all duration-200 ${plan.ctaStyle === 'primary'
+                                    ? 'bg-orange-500 text-white shadow-sm shadow-orange-200 hover:bg-orange-600 hover:shadow-md hover:shadow-orange-200'
                                     : plan.ctaStyle === 'dark'
-                                        ? 'bg-slate-900 text-white hover:bg-slate-800'
-                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-slate-800 text-white hover:bg-slate-700'
+                                        : 'bg-transparent text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                     }`}
                             >
                                 {plan.cta}
@@ -186,19 +217,18 @@ const LandingPricing = ({ onRegister }: LandingPricingProps) => {
                     ))}
                 </div>
 
-                {/* Trust Message */}
-                <motion.p
+                {/* Trust Footer */}
+                <motion.div
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
-                    transition={{ delay: 0.5 }}
-                    className="text-center text-slate-500 mt-12"
+                    transition={{ delay: 0.4 }}
+                    className="text-center mt-10"
                 >
-                    <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    30-day money-back guarantee • Cancel anytime • No credit card required for free plan
-                </motion.p>
+                    <p className="text-slate-400 text-xs">
+                        30-day money-back guarantee • Cancel anytime • No credit card required
+                    </p>
+                </motion.div>
             </div>
         </section>
     );
