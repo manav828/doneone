@@ -83,6 +83,17 @@ export interface Task {
   isDiscussion?: boolean;
   discussionUserIds?: string[];
   discussionEnded?: boolean;
+  // Recurring Task Fields
+  recurrence?: RecurrenceConfig | null;
+}
+
+export interface RecurrenceConfig {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'custom';
+  interval: number; // e.g. 1 for "Every 1 week"
+  daysOfWeek?: number[]; // 0=Sun, 1=Mon, etc.
+  endsAt?: number | null; // Timestamp or null for "Never"
+  nextTriggerAt: number; // Timestamp of next creation
+  lastGeneratedAt?: number;
 }
 
 export interface Column {

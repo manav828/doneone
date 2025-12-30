@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store';
-import { Task, User } from '../types';
+import { Task, User, RecurrenceConfig } from '../types';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { PremiumModal } from './PremiumModal';
-import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users, MessageCircle, CheckCircle } from 'lucide-react';
+import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users, MessageCircle, CheckCircle, Edit2, Repeat } from 'lucide-react';
 
 interface TaskEditModalProps {
     isOpen: boolean;
@@ -16,7 +16,7 @@ interface TaskEditModalProps {
 
 export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, task, isCreating, onSaveNew }) => {
     const {
-        tags, updateTask, deleteTask, createTag, toggleTaskTimer, endDiscussion, startDiscussion,
+        tags, updateTask, deleteTask, createTag, updateTag, toggleTaskTimer, endDiscussion, startDiscussion,
         users, uploadFile, deleteFile, isOffline, currentUser, projects, activeProjectId, deleteTag, archiveTaskManually
     } = useStore();
 
@@ -38,6 +38,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [localAssignee, setLocalAssignee] = useState(task.assigneeId || '');
     const [localTags, setLocalTags] = useState<string[]>(task.tagIds);
     const [newTagName, setNewTagName] = useState('');
+    const [newTagColor, setNewTagColor] = useState('#f97316'); // Default to primary/theme color (Orange)
+    const [editingTagId, setEditingTagId] = useState<string | null>(null);
+    const [isManagingTags, setIsManagingTags] = useState(false);
     const [localAttachments, setLocalAttachments] = useState<(string | File)[]>(task.attachments || []);
     const [reminderDate, setReminderDate] = useState(task.reminderAt ? new Date(task.reminderAt).toISOString().slice(0, 16) : '');
     const [localReminderUsers, setLocalReminderUsers] = useState<string[]>(task.reminderUserIds || []);
@@ -46,12 +49,48 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [localPriority, setLocalPriority] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+    const assigneeDropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(event.target as Node)) {
+                setIsAssigneeDropdownOpen(false);
+            }
+        }
+
+        if (isAssigneeDropdownOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isAssigneeDropdownOpen]);
 
     // Discussion Task State
     const [isDiscussion, setIsDiscussion] = useState(task.isDiscussion || false);
     const [discussionUsers, setDiscussionUsers] = useState<string[]>(task.discussionUserIds || []);
     const [isDiscussionDropdownOpen, setIsDiscussionDropdownOpen] = useState(false);
     const [discussionSearch, setDiscussionSearch] = useState('');
+    const discussionDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Recurrence State
+    const [localRecurrence, setLocalRecurrence] = useState<RecurrenceConfig | null>(task.recurrence || null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (discussionDropdownRef.current && !discussionDropdownRef.current.contains(event.target as Node)) {
+                setIsDiscussionDropdownOpen(false);
+                setDiscussionSearch('');
+            }
+        }
+
+        if (isDiscussionDropdownOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isDiscussionDropdownOpen]);
 
     // Time Tracking
     const [localEstimatedMinutes, setLocalEstimatedMinutes] = useState(Math.floor((task.estimatedTime || 0) / 60));
@@ -134,6 +173,29 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             finalTags.push(localPriority);
         }
 
+        // Recurrence: If newly enabled, ensure next trigger is in the future to avoid immediate duplication
+        let finalRecurrence = localRecurrence;
+        if (localRecurrence && !task.recurrence) {
+            const now = Date.now();
+            const interval = localRecurrence.interval || 1;
+            let nextTime = now;
+
+            // Simple robust offsets for initial setup
+            if (localRecurrence.frequency === 'daily') {
+                nextTime += (86400000 * interval);
+            } else if (localRecurrence.frequency === 'weekly') {
+                nextTime += (604800000 * interval);
+            } else if (localRecurrence.frequency === 'monthly') {
+                const d = new Date(now);
+                d.setMonth(d.getMonth() + interval);
+                nextTime = d.getTime();
+            } else {
+                nextTime += (86400000 * interval);
+            }
+
+            finalRecurrence = { ...localRecurrence, nextTriggerAt: nextTime };
+        }
+
         const taskData = {
             title: localTitle,
             description: localDesc,
@@ -146,7 +208,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             timeTracked: localActualMinutes * 60,
             // Discussion fields
             isDiscussion: isDiscussion,
-            discussionUserIds: isDiscussion ? discussionUsers : []
+            discussionUserIds: isDiscussion ? discussionUsers : [],
+            // Recurrence
+            recurrence: finalRecurrence
         };
 
         // 1. Process Uploads (Convert File objects to URLs)
@@ -208,12 +272,28 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const handleCreateTag = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newTagName.trim()) {
-            const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#64748b'];
-            const randomColor = colors[Math.floor(Math.random() * colors.length)];
-            const newTag = await createTag(task.projectId, newTagName, randomColor);
-            setLocalTags([...localTags, newTag.id]);
+            if (editingTagId) {
+                await updateTag(editingTagId, newTagName, newTagColor);
+                setEditingTagId(null);
+            } else {
+                const newTag = await createTag(task.projectId, newTagName, newTagColor);
+                setLocalTags([...localTags, newTag.id]);
+            }
             setNewTagName('');
+            setNewTagColor('#3b82f6');
         }
+    };
+
+    const startEditingTag = (tag: any) => {
+        setNewTagName(tag.name);
+        setNewTagColor(tag.color);
+        setEditingTagId(tag.id);
+    };
+
+    const cancelEditing = () => {
+        setNewTagName('');
+        setNewTagColor('#3b82f6');
+        setEditingTagId(null);
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,7 +359,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assignee</label>
-                            <div className="relative">
+                            <div className="relative" ref={assigneeDropdownRef}>
                                 <div
                                     onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
                                     className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-primary transition-colors"
@@ -310,7 +390,6 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
 
                                 {isAssigneeDropdownOpen && (
                                     <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setIsAssigneeDropdownOpen(false)}></div>
                                         <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto">
                                             <div
                                                 onClick={() => { setLocalAssignee(''); setIsAssigneeDropdownOpen(false); }}
@@ -449,6 +528,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                         </div>
                     </div>
 
+
                     {/* Attachments */}
                     <div>
                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Attachments</label>
@@ -488,45 +568,124 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
 
                     {/* Tags */}
                     <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags</label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {typeTags.map(tag => (
-                                <div
-                                    key={tag.id}
-                                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${localTags.includes(tag.id) ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 text-slate-500'}`}
-                                >
-                                    <button onClick={() => handleTagToggle(tag.id)}>{tag.name}</button>
-                                    <button onClick={() => handleDeleteTag(tag.id)} className="hover:text-red-500 ml-1 text-slate-400"><Trash size={10} /></button>
-                                </div>
-                            ))}
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-bold uppercase text-slate-500 block">Tags</label>
+                            <button
+                                onClick={() => setIsManagingTags(!isManagingTags)}
+                                className="text-[10px] font-medium text-primary hover:text-primary/80 transition-colors"
+                            >
+                                {isManagingTags ? 'Done' : 'Manage Tags'}
+                            </button>
                         </div>
-                        <form onSubmit={handleCreateTag} className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {typeTags.map(tag => {
+                                const isSelected = localTags.includes(tag.id);
+                                return (
+                                    <div
+                                        key={tag.id}
+                                        className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-default select-none
+                                            ${isSelected
+                                                ? 'border-transparent'
+                                                : 'bg-slate-100 border-transparent text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                                            }`}
+                                        style={isSelected ? {
+                                            backgroundColor: `${tag.color}20`,
+                                            color: tag.color,
+                                        } : {}}
+                                    >
+                                        <button onClick={() => handleTagToggle(tag.id)} className="focus:outline-none">
+                                            {tag.name}
+                                        </button>
+
+                                        {/* Actions - Only visible when managing */}
+                                        {isManagingTags && (
+                                            <div className="flex items-center gap-0.5 pl-1 border-l border-current/20 animate-in fade-in zoom-in duration-200">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); startEditingTag(tag); }}
+                                                    className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors"
+                                                    title="Edit Tag"
+                                                >
+                                                    <Edit2 size={10} strokeWidth={2.5} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag.id); }}
+                                                    className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors"
+                                                    title="Delete Tag"
+                                                >
+                                                    <Trash size={10} strokeWidth={2.5} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {typeTags.length === 0 && <span className="text-xs text-slate-400 italic">No tags created yet.</span>}
+                        </div>
+
+                        {/* Tag Creation Input - Always visible for quick add */}
+                        <form onSubmit={handleCreateTag} className="flex gap-2 items-center bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div className="relative flex items-center justify-center w-8 h-8 shrink-0">
+                                <label className="cursor-pointer w-6 h-6 rounded-full shadow-sm ring-2 ring-white dark:ring-slate-700 overflow-hidden" style={{ backgroundColor: newTagColor }}>
+                                    <input
+                                        type="color"
+                                        value={newTagColor}
+                                        onChange={e => setNewTagColor(e.target.value)}
+                                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                        title="Pick Color"
+                                    />
+                                </label>
+                            </div>
                             <input
                                 type="text"
                                 value={newTagName}
                                 onChange={e => setNewTagName(e.target.value)}
-                                placeholder="New tag..."
-                                className="flex-1 p-1.5 text-sm border rounded dark:bg-slate-800 dark:border-slate-600"
+                                placeholder={editingTagId ? "Editing tag name..." : "Create new tag..."}
+                                className="flex-1 bg-transparent text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none min-w-0"
                             />
-                            <button type="submit" className="p-1.5 bg-slate-100 dark:bg-slate-700 rounded hover:bg-slate-200">
-                                <Plus size={16} />
-                            </button>
+                            {editingTagId ? (
+                                <div className="flex items-center gap-1 pr-1">
+                                    <button
+                                        type="button"
+                                        onClick={cancelEditing}
+                                        className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                        title="Cancel Edit"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 shadow-sm transition-all"
+                                        title="Save Changes"
+                                    >
+                                        <CheckCircle size={14} strokeWidth={2.5} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="submit"
+                                    disabled={!newTagName.trim()}
+                                    className="p-1.5 bg-white dark:bg-slate-700 text-slate-400 hover:text-primary hover:bg-blue-50 dark:hover:bg-slate-600 rounded-md border border-slate-200 dark:border-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed pr-2"
+                                    title="Add Tag"
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            )}
                         </form>
                     </div>
 
                     {/* Discussion Task Section */}
                     <div className="border rounded-lg dark:border-slate-600">
                         <div
-                            className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${isDiscussion && !task.discussionEnded ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-slate-50 dark:bg-slate-700/50'}`}
+                            className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${isDiscussion && !task.discussionEnded ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-slate-50 dark:bg-slate-700/50'}`}
                             onClick={() => setIsDiscussion(!isDiscussion)}
                         >
                             <div className="flex items-center gap-2">
-                                <MessageCircle size={16} className={isDiscussion ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
-                                <span className={`text-sm font-medium ${isDiscussion ? 'text-purple-600 dark:text-purple-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                                <MessageCircle size={16} className={isDiscussion ? 'text-primary' : 'text-slate-400'} />
+                                <span className={`text-sm font-medium ${isDiscussion ? 'text-primary' : 'text-slate-600 dark:text-slate-300'}`}>
                                     Discussion Task
                                 </span>
                                 {task.isDiscussion && !task.discussionEnded && (
-                                    <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-[10px] rounded-full font-bold uppercase">Active</span>
+                                    <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-primary text-[10px] rounded-full font-bold uppercase">Active</span>
                                 )}
                                 {task.discussionEnded && (
                                     <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 text-[10px] rounded-full font-bold uppercase flex items-center gap-1">
@@ -534,7 +693,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                     </span>
                                 )}
                             </div>
-                            <div className={`w-9 h-5 rounded-full transition-colors ${isDiscussion ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-600'} relative`}>
+                            <div className={`w-9 h-5 rounded-full transition-colors ${isDiscussion ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'} relative`}>
                                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${isDiscussion ? 'translate-x-4' : 'translate-x-0.5'}`} />
                             </div>
                         </div>
@@ -546,10 +705,10 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                     <label className="text-xs font-bold uppercase text-slate-500 mb-1 block flex items-center gap-1.5">
                                         <Users size={12} /> Discussion Participants
                                     </label>
-                                    <div className="relative">
+                                    <div className="relative" ref={discussionDropdownRef}>
                                         <div
                                             onClick={() => setIsDiscussionDropdownOpen(!isDiscussionDropdownOpen)}
-                                            className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-purple-400 transition-colors min-h-[40px]"
+                                            className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-primary transition-colors min-h-[40px]"
                                         >
                                             <div className="flex flex-wrap gap-1.5">
                                                 {discussionUsers.length === 0 ? (
@@ -558,7 +717,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                                     discussionUsers.map(uid => {
                                                         const u = users.find(u => u.id === uid);
                                                         return u ? (
-                                                            <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                                                            <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-primary-dark dark:text-orange-300 text-xs rounded-full">
                                                                 {u.name}
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); setDiscussionUsers(prev => prev.filter(id => id !== uid)); }}
@@ -576,8 +735,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
 
                                         {isDiscussionDropdownOpen && (
                                             <>
-                                                <div className="fixed inset-0 z-50" onClick={() => { setIsDiscussionDropdownOpen(false); setDiscussionSearch(''); }}></div>
-                                                <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-[60] overflow-hidden">
+                                                <div className="mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm z-[60] overflow-hidden">
                                                     {/* Search Input */}
                                                     <div className="p-2 border-b border-slate-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800">
                                                         <input
@@ -586,7 +744,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                                             value={discussionSearch}
                                                             onChange={(e) => setDiscussionSearch(e.target.value)}
                                                             onClick={(e) => e.stopPropagation()}
-                                                            className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:text-white"
+                                                            className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary dark:bg-slate-700 dark:text-white"
                                                             autoFocus
                                                         />
                                                     </div>
@@ -682,6 +840,112 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                         Restart Discussion
                                     </button>
                                 )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Recurring Task Section */}
+                    <div>
+                        <div
+                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors border ${localRecurrence ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30' : 'bg-slate-50 dark:bg-slate-700/50 border-transparent'}`}
+                            onClick={() => {
+                                if (localRecurrence) setLocalRecurrence(null);
+                                else setLocalRecurrence({
+                                    frequency: 'weekly',
+                                    interval: 1,
+                                    nextTriggerAt: Date.now(),
+                                    daysOfWeek: [new Date().getDay()] // Default to today
+                                });
+                            }}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Repeat size={16} className={localRecurrence ? 'text-primary' : 'text-slate-400'} />
+                                <span className={`text-sm font-medium ${localRecurrence ? 'text-primary' : 'text-slate-600 dark:text-slate-300'}`}>
+                                    Recurring Task
+                                </span>
+                                {localRecurrence && (
+                                    <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/50 text-primary text-[10px] rounded-full font-bold uppercase">Active</span>
+                                )}
+                            </div>
+                            <div className={`w-9 h-5 rounded-full transition-colors ${localRecurrence ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'} relative`}>
+                                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${localRecurrence ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                            </div>
+                        </div>
+
+                        {localRecurrence && (
+                            <div className="mt-2 p-3 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Frequency</label>
+                                        <select
+                                            value={localRecurrence.frequency}
+                                            onChange={e => setLocalRecurrence({ ...localRecurrence, frequency: e.target.value as any })}
+                                            className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 text-sm"
+                                        >
+                                            <option value="daily">Daily</option>
+                                            <option value="weekly">Weekly</option>
+                                            <option value="monthly">Monthly</option>
+                                            <option value="custom">Custom (Days)</option>
+                                        </select>
+                                    </div>
+                                    <div className="w-24">
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Interval</label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={localRecurrence.interval}
+                                                onChange={e => setLocalRecurrence({ ...localRecurrence, interval: parseInt(e.target.value) || 1 })}
+                                                className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Weekly Days Selector */}
+                                {localRecurrence.frequency === 'weekly' && (
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Repeat On</label>
+                                        <div className="flex gap-2">
+                                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                                                const isSelected = localRecurrence.daysOfWeek?.includes(idx);
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const currentDays = localRecurrence.daysOfWeek || [];
+                                                            const newDays = currentDays.includes(idx)
+                                                                ? currentDays.filter(d => d !== idx)
+                                                                : [...currentDays, idx];
+                                                            setLocalRecurrence({ ...localRecurrence, daysOfWeek: newDays });
+                                                        }}
+                                                        className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${isSelected ? 'bg-primary text-white shadow-md scale-105' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'}`}
+                                                    >
+                                                        {day}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* End Date */}
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Ends On (Optional)</label>
+                                    <input
+                                        type="date"
+                                        value={localRecurrence.endsAt ? new Date(localRecurrence.endsAt).toISOString().split('T')[0] : ''}
+                                        onChange={e => {
+                                            const date = e.target.value ? new Date(e.target.value).getTime() : undefined;
+                                            setLocalRecurrence({
+                                                ...localRecurrence,
+                                                endsAt: date
+                                            });
+                                        }}
+                                        className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 text-sm"
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>

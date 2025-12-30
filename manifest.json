@@ -15,7 +15,8 @@
     "tabs",
     "activeTab",
     "scripting",
-    "notifications"
+    "notifications",
+    "idle"
   ],
   "host_permissions": [
     "<all_urls>"

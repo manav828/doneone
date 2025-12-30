@@ -112,7 +112,9 @@ interface AppState {
   markNotificationRead: (notificationId: string) => Promise<void>;
   clearNotifications: () => Promise<void>;
   createTag: (projectId: string, name: string, color: string) => Promise<Tag>;
+  updateTag: (tagId: string, name: string, color: string) => Promise<void>;
   deleteTag: (tagId: string) => Promise<void>;
+  checkRecurringTasks: () => Promise<void>;
 
   // Admin Actions
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<void>;
@@ -444,38 +446,78 @@ export const useStore = create<AppState>((set, get) => ({
     (window as any).doneone_sleep_interval = setInterval(async () => {
       const now = Date.now();
       const delta = now - lastTick;
-      lastTick = now; // Update immediately to prevent overlap
+      lastTick = now;
 
-      if (delta > 10000) { // 10 seconds threshold
-        const sleepTime = delta - 5000; // Subtract normal interval
-        console.log(`💤 Sleep Detected! Gap: ${delta}ms. Adjusting timer by ${sleepTime}ms.`);
+      // Logic:
+      // 1. We detect a "time jump" (delta > 60s) where the interval failed to fire.
+      // 2. This could be System Sleep OR Chrome Background Throttling.
+      // 3. We use chrome.idle.queryState to check if the user was actually active on the OS.
 
-        try {
-          const { tasks, currentUser, updateTask } = get();
-          if (tasks && currentUser) {
-            const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
-            if (runningTask && runningTask.timerStartedAt) {
-              const newStart = runningTask.timerStartedAt + sleepTime;
+      if (delta > 60000) {
+        const potentialSleepTime = delta - 30000;
 
-              // Update Local & DB
-              // We don't await this to block the interval, but we do want it to happen.
-              updateTask(runningTask.id, { timerStartedAt: newStart });
+        // If extension context is available, use exact system state
+        if (typeof chrome !== 'undefined' && chrome.idle) {
+          // Check if system was locked or user was idle for at least 60 seconds
+          chrome.idle.queryState(60, (state: string) => {
+            console.log(`⏱️ Time Jump: ${delta}ms. System State: ${state}`);
 
-              // Notify User
-              if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(`Resumed: ${runningTask.title}`, {
-                  body: `Sleep time excluded (${Math.round(sleepTime / 1000 / 60)} mins).`,
-                  icon: 'icon128.png',
-                  tag: 'sleep-resume' // Prevent duplicate notifications stacking
-                });
+            // 'active' means user was moving mouse/typing on OS (e.g. VS Code), so IGNORE jump.
+            // 'locked' or 'idle' means user was away, so ADJUST timer.
+            if (state === 'active') {
+              console.log("✅ User was active system-wide. Ignoring background throttling.");
+              return;
+            }
+
+            // If we reach here, user was away/locked.
+            const { tasks, currentUser, updateTask } = get();
+            if (tasks && currentUser) {
+              const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
+              if (runningTask && runningTask.timerStartedAt) {
+                const newStart = runningTask.timerStartedAt + potentialSleepTime;
+                updateTask(runningTask.id, { timerStartedAt: newStart });
+
+                if (potentialSleepTime > 60000 && 'Notification' in window && Notification.permission === 'granted') {
+                  new Notification(`Resumed: ${runningTask.title}`, {
+                    body: `System sleep detected. Excluded ${Math.round(potentialSleepTime / 1000 / 60)} mins from timer.`,
+                    icon: 'icon128.png',
+                    tag: 'sleep-resume'
+                  });
+                }
               }
             }
+          });
+        } else {
+          // Fallback for non-extension environment (Website/Localhost)
+          // We cannot distinguish "System Active" vs "System Idle".
+          // We rely on the gap duration. 
+          // Chrome "Intensive Throttling" for background tabs runs timers once per minute (60s).
+          // Therefore, a gap > 5 minutes is almost certainly System Sleep, not just throttling.
+
+          if (potentialSleepTime > 300000) { // 5 Minute Threshold
+            console.log(`fallback: Sleep > 5 mins detected (${potentialSleepTime}ms). Adjusting.`);
+            const { tasks, currentUser, updateTask } = get();
+            if (tasks && currentUser) {
+              const runningTask = tasks.find(t => t.timerStartedAt && t.assigneeId === currentUser.id);
+              if (runningTask && runningTask.timerStartedAt) {
+                const newStart = runningTask.timerStartedAt + potentialSleepTime;
+                updateTask(runningTask.id, { timerStartedAt: newStart });
+
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  new Notification(`Resumed: ${runningTask.title}`, {
+                    body: `System sleep detected (>5m). Excluded ${Math.round(potentialSleepTime / 1000 / 60)} mins.`,
+                    icon: 'icon128.png',
+                    tag: 'sleep-resume'
+                  });
+                }
+              }
+            }
+          } else {
+            console.log("fallback: Gap < 5 mins. Assuming background throttling. Ignoring.");
           }
-        } catch (e) {
-          console.error("Error in sleep detection:", e);
         }
       }
-    }, 5000);
+    }, 30000);
   },
 
   initialized: false,
@@ -923,7 +965,6 @@ export const useStore = create<AppState>((set, get) => ({
       id: t.id,
       projectId: t.project_id,
       columnId: t.column_id,
-      column_id: t.column_id,
       title: t.title,
       description: t.description,
       assigneeId: t.assignee_id,
@@ -947,10 +988,134 @@ export const useStore = create<AppState>((set, get) => ({
       // Discussion fields
       isDiscussion: t.is_discussion || false,
       discussionUserIds: t.discussion_user_ids || [],
-      discussionEnded: t.discussion_ended || false
+      discussionEnded: t.discussion_ended || false,
+      // Recurrence
+      recurrence: t.recurrence
     }));
     set({ tasks: processedTasks });
+
+    // Check recurring tasks after fetch (lazy generation)
+    // We call this asynchronously to not block UI render
+    setTimeout(() => {
+      get().checkRecurringTasks();
+    }, 1000);
+
     return processedTasks;
+  },
+
+  // Recurring Tasks Logic
+  checkRecurringTasks: async () => {
+    const { tasks, updateTask } = get();
+    const now = Date.now();
+
+    // Filter master tasks that are due
+    const dueTasks = tasks.filter(t =>
+      t.recurrence &&
+      t.recurrence.nextTriggerAt &&
+      t.recurrence.nextTriggerAt <= now &&
+      (!t.recurrence.endsAt || t.recurrence.nextTriggerAt <= t.recurrence.endsAt)
+    );
+
+    if (dueTasks.length === 0) return;
+
+    console.log(`🔄 Checking Recurring Tasks: Found ${dueTasks.length} due tasks.`);
+
+    for (const masterTask of dueTasks) {
+      if (!masterTask.recurrence) continue;
+
+      const config = masterTask.recurrence;
+      let nextTrigger = config.nextTriggerAt;
+      let generatedCount = 0;
+      const MAX_GENERATE = 5; // Safety break
+
+      // Catch up
+      while (nextTrigger <= now && generatedCount < MAX_GENERATE) {
+        const newTaskData = {
+          ...masterTask,
+          id: crypto.randomUUID(),
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          columnId: 'todo',
+          recurrence: undefined, // Child is not recurring
+          timerStartedAt: undefined,
+          timeTracked: 0,
+          startedAt: undefined,
+          completedAt: undefined,
+          isDiscussion: false,
+          discussionUserIds: [],
+          discussionEnded: false
+        };
+
+        // Optimistic update
+        set(state => ({ tasks: [...state.tasks, newTaskData] }));
+
+        // Save to DB
+        const { error } = await supabase.from('tasks').insert({
+          project_id: newTaskData.projectId,
+          column_id: newTaskData.columnId,
+          title: newTaskData.title,
+          description: newTaskData.description,
+          assignee_id: newTaskData.assigneeId,
+          creator_id: newTaskData.creatorId,
+          tag_ids: newTaskData.tagIds,
+          created_at: new Date(newTaskData.createdAt).toISOString(),
+          updated_at: new Date(newTaskData.updatedAt).toISOString(),
+          order_index: 0
+        });
+
+        if (error) console.error("Failed to create recurring instance", error);
+
+        generatedCount++;
+
+        // Calculate NEXT Trigger
+        const interval = config.interval || 1;
+        const date = new Date(nextTrigger);
+
+        switch (config.frequency) {
+          case 'daily':
+            date.setDate(date.getDate() + interval);
+            break;
+          case 'weekly':
+            if (config.daysOfWeek && config.daysOfWeek.length > 0) {
+              const currentDay = date.getDay();
+              const sortedDays = [...config.daysOfWeek].sort((a, b) => a - b);
+              const nextDaySameWeek = sortedDays.find(d => d > currentDay);
+
+              if (nextDaySameWeek !== undefined) {
+                date.setDate(date.getDate() + (nextDaySameWeek - currentDay));
+              } else {
+                const firstDay = sortedDays[0];
+                const daysToAdd = (7 - currentDay + firstDay) + ((interval - 1) * 7);
+                date.setDate(date.getDate() + daysToAdd);
+              }
+            } else {
+              date.setDate(date.getDate() + (interval * 7));
+            }
+            break;
+          case 'monthly':
+            date.setMonth(date.getMonth() + interval);
+            break;
+          case 'custom':
+            date.setDate(date.getDate() + interval);
+            break;
+        }
+        nextTrigger = date.getTime();
+
+        if (config.endsAt && nextTrigger > config.endsAt) {
+          nextTrigger = 0;
+          break;
+        }
+      }
+
+      if (generatedCount > 0) {
+        const updatedRecurrence = {
+          ...config,
+          lastGeneratedAt: Date.now(),
+          nextTriggerAt: nextTrigger || 0
+        };
+        updateTask(masterTask.id, { recurrence: updatedRecurrence });
+      }
+    }
   },
 
   fetchActivities: async () => {
@@ -2395,6 +2560,13 @@ export const useStore = create<AppState>((set, get) => ({
       return newTag;
     }
     throw new Error("Failed");
+  },
+  updateTag: async (tagId, name, color) => {
+    await supabase.from('tags').update({ name, color }).eq('id', tagId);
+    set(state => ({
+      tags: state.tags.map(t => t.id === tagId ? { ...t, name, color } : t)
+    }));
+    await get().fetchTags();
   },
   deleteTag: async (tagId) => {
     await supabase.from('tags').delete().eq('id', tagId);

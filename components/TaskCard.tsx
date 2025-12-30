@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
 import { useStore } from '../store';
-import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare, MessageCircle } from 'lucide-react';
+import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare, MessageCircle, Repeat } from 'lucide-react';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { TaskEditModal } from './TaskEditModal';
@@ -298,8 +298,13 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                   </button>
                 )}
 
-                {(task.reminderAt || task.updatedAt) && (
+                {(task.reminderAt || task.updatedAt || task.recurrence) && (
                   <div className="flex items-center gap-1.5">
+                    {task.recurrence && (
+                      <div title="Recurring Task" className="text-blue-500 bg-blue-50 dark:bg-blue-900/20 p-0.5 rounded">
+                        <Repeat size={10} />
+                      </div>
+                    )}
                     {/* Stop Animation Button */}
                     {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && !task.isReminderDismissed && (
                       <button
