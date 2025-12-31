@@ -12,6 +12,8 @@ import { Loader2 } from 'lucide-react';
 import { CustomAlert } from './components/CustomAlert';
 import { WelcomeModal } from './components/WelcomeModal';
 import { PricingModal } from './components/PricingModal';
+import { CheckoutPage } from './components/CheckoutPage';
+import BillingPage from './components/BillingPage';
 import LandingPage from './components/landing/LandingPage';
 
 const App: React.FC = () => {
@@ -110,6 +112,8 @@ const App: React.FC = () => {
           <Route path="/guide" element={<Guide />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/billing" element={<BillingPage />} />
         </Routes>
       </Layout>
     </Router>

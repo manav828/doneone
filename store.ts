@@ -170,6 +170,10 @@ interface AppState {
   fetchDailyWorkLogs: (projectId: string, date?: string) => Promise<any[]>;
   fetchWeeklyWorkSummary: (userId: string, projectId?: string) => Promise<any[]>;
 
+  // Transactions
+  transactions: any[]; // Using any to avoid import issues for now, or use Transaction if imported
+  fetchTransactions: () => Promise<void>;
+
   // UI State
   isPricingModalOpen: boolean;
   setPricingModalOpen: (isOpen: boolean) => void;
@@ -277,7 +281,7 @@ const setupRealtimeSubscription = (get: any, set: any) => {
     .subscribe();
 };
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<any>((set, get) => ({
   isLoading: true,
   currentUser: null,
   themeMode: 'light',
@@ -521,6 +525,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   initialized: false,
+  transactions: [],
 
   // Rate Limiting
   rateLimits: {},
@@ -543,6 +548,10 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     set({ rateLimits: { ...rateLimits, [actionType]: [...recent, now] } });
+
+
+
+
     return true;
   },
 
@@ -709,6 +718,11 @@ export const useStore = create<AppState>((set, get) => ({
             createdAt: new Date(profile.created_at).getTime(),
             premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
             isPremium: profile.is_premium, // Load from database
+            planBaseCost: profile.plan_base_cost,
+            perSeatCost: profile.per_seat_cost,
+            extraSeats: profile.extra_seats,
+            isCustomPlan: profile.is_custom_plan,
+            renewalDate: profile.renewal_date ? new Date(profile.renewal_date).getTime() : undefined,
 
             maxProjects: profile.max_projects,
             maxLeads: profile.max_leads,
@@ -745,16 +759,14 @@ export const useStore = create<AppState>((set, get) => ({
             currentUser: {
               ...currentUser,
               maxProjects: activePlan.maxProjects,
-              maxLeads: activePlan.maxMembersPerProject, // Mapping members to leads/resources vaguely or assuming total? The plan says 'max_members_per_project'.
-              // We might need to adjust User type if we want to be strict, but fitting into existing props:
-              imageUploadEnabled: activePlan.canUploadImages,
-              remindersEnabled: activePlan.canSetReminders,
-              notificationsEnabled: activePlan.canUseNotifications,
-              timeTrackingEnabled: true, // Not in plan DB explicitly yet, defaulting true or we can add it. Plan has 'can_export' etc.
-              maxAttachmentsPerTask: activePlan.maxUploadsPerTaskLimit === 0 ? 99 : activePlan.maxUploadsPerTaskLimit,
-              historyRetentionDays: activePlan.historyRetentionDays,
-              canInvite: activePlan.canInviteMembers,
-              canExport: activePlan.canExportData
+              maxLeads: activePlan.maxMembersPerProject,
+              // Boolean Features: OR logic (Profile OR Plan)
+              imageUploadEnabled: currentUser.imageUploadEnabled || activePlan.canUploadImages,
+              remindersEnabled: currentUser.remindersEnabled || activePlan.canSetReminders,
+              notificationsEnabled: currentUser.notificationsEnabled || activePlan.canUseNotifications,
+              canInvite: currentUser.canInvite || activePlan.canInviteMembers,
+              canExport: currentUser.canExport || activePlan.canExportData,
+              timeTrackingEnabled: currentUser.timeTrackingEnabled || true, // Default true
             }
           });
         }
@@ -800,6 +812,11 @@ export const useStore = create<AppState>((set, get) => ({
         createdAt: new Date(p.created_at).getTime(),
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
         isPremium: p.is_premium, // IMPORTANT: Include premium flag
+        planBaseCost: p.plan_base_cost,
+        perSeatCost: p.per_seat_cost,
+        extraSeats: p.extra_seats,
+        isCustomPlan: p.is_custom_plan,
+        renewalDate: p.renewal_date ? new Date(p.renewal_date).getTime() : undefined,
         maxProjects: p.max_projects,
         maxLeads: p.max_leads,
         maxResources: p.max_resources,
@@ -830,7 +847,7 @@ export const useStore = create<AppState>((set, get) => ({
           effectiveUser = {
             ...effectiveUser,
             maxProjects: Math.max(freshMe.maxProjects || 0, activePlan.maxProjects),
-            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.maxLeadsPerProject || 2),
+            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.maxMembersPerProject || 2) + (freshMe.extraSeats || 0),
 
             // Boolean Features: OR logic (If Plan says YES or User says YES -> YES)
             imageUploadEnabled: freshMe.imageUploadEnabled || activePlan.canUploadImages,
@@ -1527,33 +1544,35 @@ export const useStore = create<AppState>((set, get) => ({
       // User said "can not invite any member".
       // If free plan: canInvite = false.
 
-      // Determine Permissions from PLANS table
-      const isPremium = get().canAccessPremium();
-      const plans = get().plans;
-      const planId = isPremium ? 'premium' : 'free';
-      const activePlan = plans.find(p => p.id === planId);
+      const manager = get().users.find(u => u.id === project.managerId);
+      if (manager) {
+        // Determine Plan based on MANAGER's status
+        const isManagerPremium = manager.isPremium;
+        const plans = get().plans;
+        const managerPlan = isManagerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
 
-      if (!activePlan) {
-        // Safety Fallback
-        console.error("Plan not found for id:", planId);
-        return;
-      }
+        // Calculate Effective Limits (Profile > Plan > Default)
+        // Note: manager object here is raw profile, does not have merged plan props like currentUser
+        const planLimit = managerPlan?.maxMembersPerProject || 5;
+        const profileLimit = manager.maxResources || 0; // Using maxResources as generic member/resource limit if needed, or maxMembers if column existed
+        // Actually, we should check what 'activePlan.maxMembersPerProject' maps to.
+        // For now, use the greater of the two.
+        const effectiveLimit = Math.max(profileLimit, planLimit);
 
-      // 1. Check if inviting is allowed
-      if (!activePlan.canInviteMembers && currentUser?.email !== 'manavss828@gmail.com') { // Assuming ADMIN_EMAIL
-        alert("Your current plan does not allow inviting members.");
-        return;
-      }
+        const canInvite = manager.canInvite || (managerPlan?.canInviteMembers ?? false);
 
-      // 2. Check Member Limits
-      const limit = activePlan.maxMembersPerProject;
-      if (totalMembers >= limit && currentUser?.email !== 'manavss828@gmail.com') {
-        alert(`Plan limit reached. Max ${limit} members per project.`);
-        return;
+        // 1. Check if inviting is allowed
+        if (!canInvite && manager.email !== ADMIN_EMAIL) {
+          alert("The Project Owner's plan does not allow inviting members.");
+          return;
+        }
+
+        // 2. Check Member Limits
+        if (totalMembers >= effectiveLimit && manager.email !== ADMIN_EMAIL) {
+          alert(`Project limit reached. The Owner's plan allows max ${effectiveLimit} members.`);
+          return;
+        }
       }
-      // If currentUser is NOT Manager (e.g. Lead), we should ideally check Manager's plan.
-      // But we don't have manager's full plan details here.
-      // For now, we'll skip check for non-managers or assume only Manager adds.
     }
 
     await supabase.from('project_members').insert({ project_id: projectId, user_id: userId, role, status: 'active' });
@@ -1566,18 +1585,16 @@ export const useStore = create<AppState>((set, get) => ({
       const manager = get().users.find(u => u.id === project?.managerId);
       if (manager) {
         const currentLeads = project?.leadIds.length || 0;
-        let limit = manager.maxLeads || 2;
+        // Determine Manager's Effective Lead Limit
+        const isManagerPremium = manager.isPremium;
+        const plans = get().plans;
+        const managerPlan = isManagerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
 
-        if (project.manager?.hasPremiumAccess) {
-          const premiumPlan = get().plans.find(p => p.id === 'premium');
-          if (premiumPlan) {
-            // Assuming separate limit for leads? Plan doesn't specify 'maxLeads'.
-            // We will assume 1/3 of maxMembers or just standard 5?
-            // Let's use 5 for Premium logic or just keep 2 if not strict?
-            // Actually, if premium, let's allow more Leads.
-            limit = Math.max(limit, 5);
-          }
-        }
+        const planLeadLimit = managerPlan?.maxLeadsPerProject || (isManagerPremium ? 5 : 2);
+        const profileLeadLimit = manager.maxLeads || 0;
+
+        const effectiveLeadLimit = Math.max(profileLeadLimit, planLeadLimit);
+        const limit = effectiveLeadLimit;
 
         if (currentLeads >= limit && manager.email !== ADMIN_EMAIL) {
           alert(`Limit reached!`);
@@ -1611,6 +1628,76 @@ export const useStore = create<AppState>((set, get) => ({
 
   removeMember: async (projectId, userId) => {
     await supabase.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId);
+
+    // --- Auto Billing Adjustment Logic ---
+    // After removal, check if the project manager now has unneeded extra seats
+    const { projects, plans, currentUser } = get();
+    const project = projects.find(p => p.id === projectId);
+
+    if (project) {
+      const managerId = project.managerId;
+
+      // Get all projects managed by this user
+      const managerProjects = projects.filter(p => p.managerId === managerId);
+
+      // Calculate total members across all manager's projects (Leads + Resources, not counting manager themselves)
+      let maxMembersInAnyProject = 0;
+      managerProjects.forEach(p => {
+        // Count after removal
+        let memberCount = (p.leadIds?.length || 0) + (p.resourceIds?.length || 0);
+        // If this is the project we removed from, decrement by 1
+        if (p.id === projectId) {
+          memberCount = Math.max(0, memberCount - 1);
+        }
+        if (memberCount > maxMembersInAnyProject) {
+          maxMembersInAnyProject = memberCount;
+        }
+      });
+
+      // Fetch manager's profile to get their limits
+      const { data: manager } = await supabase
+        .from('profiles')
+        .select('id, max_resources, extra_seats, per_seat_cost')
+        .eq('id', managerId)
+        .single();
+
+      if (manager) {
+        const baseLimit = manager.max_resources || 5;
+        const currentExtraSeats = manager.extra_seats || 0;
+        const perSeatCost = manager.per_seat_cost || 5;
+        const PLAN_BASE_PRICE = 19; // Hardcoded, could be from plans
+
+        // Calculate how many extra seats are actually NEEDED
+        const neededExtraSeats = Math.max(0, maxMembersInAnyProject - baseLimit);
+
+        // If we have more extra seats than needed, reduce them
+        if (currentExtraSeats > neededExtraSeats) {
+          const seatsToRemove = currentExtraSeats - neededExtraSeats;
+          const newExtraSeats = neededExtraSeats;
+          const newPlanBaseCost = PLAN_BASE_PRICE + (newExtraSeats * perSeatCost);
+
+          console.log(`🔧 Auto-adjusting billing: Removing ${seatsToRemove} unneeded extra seats.`);
+          console.log(`   New Extra Seats: ${newExtraSeats}, New Monthly Cost: $${newPlanBaseCost}`);
+
+          // Update profile
+          await supabase.from('profiles').update({
+            extra_seats: newExtraSeats,
+            plan_base_cost: newPlanBaseCost
+          }).eq('id', managerId);
+
+          // Log transaction
+          await supabase.from('transactions').insert({
+            user_id: managerId,
+            amount: 0, // No charge for auto-reduction
+            status: 'completed',
+            description: `Auto-reduced ${seatsToRemove} extra seat(s) after member removal. New monthly: $${newPlanBaseCost}.`,
+            currency: 'USD'
+          });
+        }
+      }
+    }
+    // --- End Auto Billing Adjustment Logic ---
+
     get().fetchProjects();
   },
 
@@ -2341,68 +2428,45 @@ export const useStore = create<AppState>((set, get) => ({
 
   uploadFile: async (file) => {
     if (!get().checkRateLimit('uploadFile')) return null;
-    // 1. Check if Image Upload is Enabled Globally (if not admin)
-    // 2. Check if Image Upload is Enabled for this PROJECT (Strict Mode)
-    const { currentUser, projects, activeProjectId, canAccessPremium, tasks } = get();
 
-    // Check Premium Limit (3 uploads per task limit? Or global?)
-    // Assuming limit is enforced before upload logic. 
-    // Wait, uploadFile doesn't have taskId. 
-    // It seems limits must be checked *before calling* uploadFile in component? 
-    // OR uploadFile assumes usage context. 
-    // But without taskId, I can't check per-task limit.
-    // If limit is global (e.g. Total Storage), I can check valid usage.
-    // But the prompt says "limit of 3 by default" (Per task? Per user?). 
-    // Usually "limit of 3" implies per task for attachments.
-    // I will checking calling site (`TaskEditModal` or similar) later.
-    // BUT for now I will enforce "ACCESS" to upload feature itself if Basic? 
-    // No, "user can use ... image upload (give limit of 3)". 
-    // So Basic users CAN upload, but limited.
-    // If I can't check limit here (no taskId), I should just check PERMISSION if I want to gate it completely.
-    // But it's not gated completely.
-
-    // I'll update signature to include taskId if possible?
-    // Or just let it pass here and enforce in UI?
-    // Enforcing in UI is weaker.
-    // I should check `activeProjectId` context?
-
-    // Let's stick to existing logic for now and just add `canAccessPremium` to destructuring for future use.
-    // Wait, if I change signature, I break callers.
-
-    // Actually, I should just enforce the "Is Image Upload Enabled" stricter for Basic users?
-    // The current logic checks `project.manager.imageUploadEnabled`.
-
-    // I'll leave uploadFile mostly alone but just add `canAccessPremium` extraction if I need it.
-    // Actually, I should enforce a GLOBAL limit if I can't do per-task.
-    // But I'll modify signature to `uploadFile: async (file, taskId?)`.
-    // But that breaks interface `AppState`. 
-    // Let's check `types.ts` for AppState definition of `uploadFile`.
-    // I can't easily change signature without updating types.
-
-    // So I will just add the "Premium" check logic.
-
+    const { currentUser, activeProjectId, projects, users, plans } = get();
     if (!currentUser) return null;
 
-    // Admin bypass
-    if (currentUser.email === ADMIN_EMAIL) {
-      // Admin can always upload
-    } else {
-      // Strict Mode: Check Project Manager Settings
-      if (activeProjectId) {
-        const project = projects.find(p => p.id === activeProjectId);
-        if (project && project.manager) {
-          if (!project.manager.imageUploadEnabled) {
-            alert("Image uploads are disabled by the project manager.");
-            return null;
-          }
+    // Determine Context Owner (Project Manager or Current User)
+    // This implements "Owner Inheritance" - uploaded files count against the PROJECT OWNER's limits.
+    let limitOwner = currentUser;
+    let limitOwnerPlan = plans.find(p => p.id === (currentUser.isPremium ? 'premium' : 'free'));
+
+    if (activeProjectId) {
+      const project = projects.find(p => p.id === activeProjectId);
+      if (project) {
+        const manager = users.find(u => u.id === project.managerId);
+        if (manager) {
+          limitOwner = manager;
+          // Note: 'users' array has raw profiles. 'isPremium' is on the profile.
+          limitOwnerPlan = manager.isPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
         }
       }
-      // Fallback: Check user's own setting (though Strict Mode usually overrides this for projects)
-      else if (!currentUser.imageUploadEnabled) {
-        alert("Image uploads are disabled for your account.");
+    }
+
+    // Check Image Upload Permission
+    // Logic: Profile Flag OR Plan Flag matches Store 'init' logic
+    const canUpload = (limitOwner as any).imageUploadEnabled || (limitOwnerPlan?.canUploadImages ?? false);
+
+    if (file.type.startsWith('image/')) {
+      if (!canUpload && limitOwner.email !== 'manavss828@gmail.com') {
+        alert("Image uploads are not enabled for this project's owner.");
         return null;
       }
     }
+
+    // Check Size Limit
+    const maxMb = limitOwnerPlan?.maxUploadSizeMb || 5;
+    if (file.size > maxMb * 1024 * 1024) {
+      alert(`File too large. Limit is ${maxMb}MB.`);
+      return null;
+    }
+
     if (get().isOffline) return null;
 
     try {
@@ -2412,8 +2476,8 @@ export const useStore = create<AppState>((set, get) => ({
       if (file.type.startsWith('image/')) {
         try {
           const options = {
-            maxSizeMB: 1, // Target ~1MB
-            maxWidthOrHeight: undefined, // Keep original resolution
+            maxSizeMB: 1,
+            maxWidthOrHeight: undefined,
             useWebWorker: true,
             initialQuality: 0.8
           };
@@ -2440,9 +2504,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (s) {
       return console.error("Upload error:", s), null;
     }
-  },
-
-  deleteFile: async (url: string) => {
+  }, deleteFile: async (url: string) => {
     try {
       // Extract file path from URL
       const path = url.split('/task-attachments/')[1];
@@ -2589,6 +2651,13 @@ export const useStore = create<AppState>((set, get) => ({
     // if (updates.isPremium !== undefined) dbUpdates.is_premium = updates.isPremium; // No longer valid
     if (updates.premiumUntil !== undefined) dbUpdates.premium_until = updates.premiumUntil ? new Date(updates.premiumUntil).toISOString() : null;
 
+    // Enterprise & Billing
+    if (updates.planBaseCost !== undefined) dbUpdates.plan_base_cost = updates.planBaseCost;
+    if (updates.perSeatCost !== undefined) dbUpdates.per_seat_cost = updates.perSeatCost;
+    if (updates.extraSeats !== undefined) dbUpdates.extra_seats = updates.extraSeats;
+    if (updates.isCustomPlan !== undefined) dbUpdates.is_custom_plan = updates.isCustomPlan;
+    if (updates.renewalDate !== undefined) dbUpdates.renewal_date = updates.renewalDate ? new Date(updates.renewalDate).toISOString() : null;
+
     if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
     if (updates.maxLeads !== undefined) dbUpdates.max_leads = updates.maxLeads;
     if (updates.maxResources !== undefined) dbUpdates.max_resources = updates.maxResources;
@@ -2673,20 +2742,87 @@ export const useStore = create<AppState>((set, get) => ({
       const { error } = await supabase.from('profiles').delete().eq('id', userId);
 
       if (error) {
-        console.error('Error deleting user profile:', error);
-        alert('Failed to delete user. ' + error.message);
-        return;
+        console.error("Delete user error:", error);
+        alert(`Failed to delete user: ${error.message}`);
+      } else {
+        alert('User deleted successfully.');
+        await get().fetchUsers();
+        await get().fetchProjects();
+      }
+    } catch (err) {
+      console.error("Delete user exception:", err);
+      alert('An error occurred while deleting the user.');
+    }
+  },
+
+  fetchTransactions: async () => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      set({ transactions: data });
+    }
+  },
+
+  addSeat: async (seats: number) => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    try {
+      // Fetch current seats first to be safe
+      const { data: profile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('extra_seats, plan_base_cost, max_resources, per_seat_cost') // Added per_seat_cost
+        .eq('id', currentUser.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const currentExtra = profile.extra_seats || 0;
+      const newExtra = currentExtra + seats; // seats can be negative (decrement)
+
+      if (newExtra < 0) {
+        throw new Error("Cannot have negative extra seats.");
       }
 
-      // Refresh data
+      // Update Plan Base Cost
+      const PLAN_BASE = 19;
+      const PER_SEAT = profile.per_seat_cost || 5;
+      const newPlanBaseCost = PLAN_BASE + (newExtra * PER_SEAT);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          extra_seats: newExtra,
+          plan_base_cost: newPlanBaseCost
+        })
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      // Log Transaction
+      const costForThisAction = seats * PER_SEAT;
+      if (costForThisAction !== 0) {
+        await supabase.from('transactions').insert({
+          user_id: currentUser.id,
+          amount: costForThisAction,
+          status: costForThisAction > 0 ? 'completed' : 'refunded',
+          description: seats > 0 ? `Purchased ${seats} Extra Seat(s)` : `Removed ${Math.abs(seats)} Seat(s)`,
+          currency: 'USD'
+        });
+      }
+
       await get().fetchUsers();
-      await get().fetchProjects();
-
-      console.log(`✅ User ${userId} and all associated data deleted successfully.`);
-
-    } catch (err: any) {
-      console.error('Delete user error:', err);
-      alert('Failed to delete user. ' + (err.message || 'Unknown error'));
+      await get().fetchTransactions();
+    } catch (err) {
+      console.error("Add seat error:", err);
+      alert("Failed to add seats. Please try again.");
     }
   },
 
@@ -2885,6 +3021,12 @@ export const useStore = create<AppState>((set, get) => ({
     const project = projects.find(p => p.id === projectId);
     if (!project) return false;
     const manager = users.find(u => u.id === project.managerId);
+
+    // Strict Expiry Check: If manager is expired, NO ONE gets premium features (collaboration blocked)
+    if (manager?.premiumUntil && new Date(manager.premiumUntil).getTime() < Date.now()) {
+      return false;
+    }
+
     return manager?.isPremium === true;
   },
 

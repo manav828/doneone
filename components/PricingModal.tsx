@@ -125,12 +125,17 @@ export const PricingModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
                         <button
                             onClick={() => {
-                                // In a real app, this would trigger Stripe checkout
-                                window.open('https://buy.stripe.com/test_...', '_blank');
+                                onClose();
+                                if (isPremium) {
+                                    // If already premium, go to "Manage" mode (add seats only)
+                                    window.location.hash = '#/checkout?seats=1'; // Default to adding 1 seat view
+                                } else {
+                                    window.location.hash = '#/checkout?plan=premium';
+                                }
                             }}
                             className="w-full py-2.5 rounded-lg bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-white font-bold shadow-lg hover:shadow-xl transition-all active:scale-95"
                         >
-                            {isPremium ? 'Extend Subscription' : 'Start 30-Day Free Trial'}
+                            {isPremium ? 'Manage Subscription & Add Seats' : 'Start 30-Day Free Trial'}
                         </button>
                         <p className="text-[10px] text-center text-slate-400 mt-2">No credit card required for trial.</p>
                     </div>

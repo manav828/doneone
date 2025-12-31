@@ -28,6 +28,12 @@ export interface User {
   email?: string;
   avatar?: string;
   // Admin/Premium Settings
+  // Enterprise / Billing Fields
+  planBaseCost?: number;
+  perSeatCost?: number; // New field for custom per-seat pricing
+  extraSeats?: number;
+  isCustomPlan?: boolean;
+  renewalDate?: number; // Timestamp
   createdAt?: number; // Timestamp
   premiumUntil?: number; // Timestamp or null
   isPremium?: boolean; // Explicit premium flag from database
@@ -172,6 +178,25 @@ export const PERMISSIONS = {
   },
 };
 
+export interface AppState {
+  toggleTaskTimer: (taskId: string) => Promise<void>;
+
+  // Billing
+  addSeat: (seats: number) => Promise<void>;
+
+  // Transactions
+  transactions: Transaction[];
+  fetchTransactions: () => Promise<void>;
+
+  // Local State
+  activeProjectId: string | null;
+  taskData: Task;
+  statusAtArchive: string;
+  timeTaken: number;
+  archivedAt: number;
+  archivedBy?: string;
+}
+
 export interface TaskHistory {
   id: string;
   taskId: string;
@@ -243,3 +268,14 @@ export interface SupportTicket {
   resolved_at?: string;
   resolved_by?: string;
 }
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  currency: string;
+  status: 'completed' | 'failed' | 'refunded';
+  description: string;
+  created_at: string;
+}
+

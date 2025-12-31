@@ -52,7 +52,19 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
   // User fallback might be stale.
   const maxLeads = activePlan ? (activePlan.maxLeadsPerProject || 5) : (manager?.maxLeads || 2);
   // Actually, let's just stick to the Invite Logic for now.
-  const maxRes = activePlan ? activePlan.maxMembersPerProject : (manager?.maxResources || 5);
+  // Fixed: explicitly sum Plan Base + Extra Seats if user has them, OR use max_resources if manually set higher.
+  // The reliable formula is: Plan Limit + Extra Seats.
+  // BUT: admin might have manually set maxResources to something else entirely.
+  // Let's check: if (max_resources > plan_limit + extra_seats) use max_resources (Custom override)
+  // Else use plan_limit + extra_seats.
+
+  const planLimit = activePlan?.maxMembersPerProject || 2;
+  const extra = currentUser.extraSeats || 0;
+  const calculatedTotal = planLimit + extra;
+  const dbMaxRes = manager?.maxResources || 0; // This is what comes from DB
+
+  // Display the larger of the two to be safe (if DB update lagged but calculated is right, or if manual override is larger)
+  const maxRes = Math.max(calculatedTotal, dbMaxRes);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Members: ${project.name}`}>

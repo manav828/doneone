@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock } from 'lucide-react';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
@@ -142,7 +142,11 @@ export const TopBar: React.FC = () => {
       />
       <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors duration-300 relative">
         <div className="flex items-center gap-6">
-          {activeProject ? (
+          {location.pathname === '/checkout' ? (
+            <h2 className="text-xl font-bold text-primary">DoneOne Checkout</h2>
+          ) : location.pathname === '/billing' ? (
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Billing History</h2>
+          ) : activeProject ? (
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-white leading-tight">
                 {activeProject.name}
@@ -175,6 +179,13 @@ export const TopBar: React.FC = () => {
 
               {/* Filters */}
               {/* Removed Member Filter as per request */}
+            </div>
+          )}
+          {location.pathname === '/checkout' && (
+            <div className="hidden md:flex items-center gap-2 pl-6 border-l border-slate-200 dark:border-slate-700 h-8">
+              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-bold flex items-center gap-1">
+                <Lock size={10} /> Secure SSL Connection
+              </span>
             </div>
           )}
         </div>
@@ -431,6 +442,18 @@ export const TopBar: React.FC = () => {
                     View Plan & Billing
                   </button>
                 )}
+
+                {/* Billing History Link */}
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    window.location.hash = '#/billing'; // Using hash router direct manipulation if useNavigate isn't handy or just link
+                  }}
+                  className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                >
+                  <Crown size={16} className="text-blue-500" />
+                  Billing History
+                </button>
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);

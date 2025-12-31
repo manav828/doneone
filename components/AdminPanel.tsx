@@ -44,7 +44,13 @@ export const AdminPanel: React.FC = () => {
         maxLeads: 2,
         maxResources: 5,
         historyRetentionDays: null as number | null,
-        addPremiumDays: 0 // New field for temp premium
+        addPremiumDays: 0, // New field for temp premium
+        // Enterprise Fields
+        planBaseCost: 0,
+        perSeatCost: 5, // Default $5
+        extraSeats: 0,
+        isCustomPlan: false,
+        renewalDate: null as string | null // ISO Date string for input
     });
 
     useEffect(() => {
@@ -144,7 +150,12 @@ export const AdminPanel: React.FC = () => {
             maxLeads: user.maxLeads || 2,
             maxResources: user.maxResources || 5,
             historyRetentionDays: user.historyRetentionDays || null,
-            addPremiumDays: 0
+            addPremiumDays: 0,
+            planBaseCost: user.planBaseCost || 0,
+            perSeatCost: user.perSeatCost || 5,
+            extraSeats: user.extraSeats || 0,
+            isCustomPlan: user.isCustomPlan || false,
+            renewalDate: user.renewalDate ? new Date(user.renewalDate).toISOString().split('T')[0] : null
         });
     };
 
@@ -154,6 +165,12 @@ export const AdminPanel: React.FC = () => {
             maxProjects: editLimits.maxProjects,
             maxLeads: editLimits.maxLeads,
             maxResources: editLimits.maxResources,
+            // Enterprise
+            planBaseCost: editLimits.planBaseCost,
+            perSeatCost: editLimits.perSeatCost,
+            extraSeats: editLimits.extraSeats,
+            isCustomPlan: editLimits.isCustomPlan,
+            renewalDate: editLimits.renewalDate ? new Date(editLimits.renewalDate).getTime() : undefined,
         });
 
         // Handle Premium Extension if set
@@ -486,24 +503,82 @@ export const AdminPanel: React.FC = () => {
                                                     )}
 
                                                     {editingUser === u.id ? (
-                                                        <div className="flex items-center gap-1 mt-1">
-                                                            <input
-                                                                type="number"
-                                                                className="w-12 text-xs p-1 border rounded text-center"
-                                                                placeholder="+Days"
-                                                                value={editLimits.addPremiumDays || ''}
-                                                                onChange={(e) => setEditLimits({ ...editLimits, addPremiumDays: parseInt(e.target.value) })}
-                                                            />
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (editLimits.addPremiumDays) handleAddPremium(u.id, editLimits.addPremiumDays);
-                                                                }}
-                                                                className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"
-                                                                title="Add/Set Premium Days (Overwrite)"
-                                                            >
-                                                                <Check size={12} />
-                                                            </button>
-                                                        </div>
+                                                        <>
+                                                            <div className="flex items-center gap-1 mt-1">
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-12 text-xs p-1 border rounded text-center"
+                                                                    placeholder="+Days"
+                                                                    value={editLimits.addPremiumDays || ''}
+                                                                    onChange={(e) => setEditLimits({ ...editLimits, addPremiumDays: parseInt(e.target.value) })}
+                                                                />
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (editLimits.addPremiumDays) handleAddPremium(u.id, editLimits.addPremiumDays);
+                                                                    }}
+                                                                    className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"
+                                                                    title="Add/Set Premium Days (Overwrite)"
+                                                                >
+                                                                    <Check size={12} />
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Enterprise Config */}
+                                                            <div className="mt-2 text-left border-t border-gray-200 pt-1">
+                                                                <label className="flex items-center gap-1 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={editLimits.isCustomPlan}
+                                                                        onChange={e => setEditLimits({ ...editLimits, isCustomPlan: e.target.checked })}
+                                                                        className="w-3 h-3 text-blue-600 rounded"
+                                                                    />
+                                                                    Enterprise / Custom
+                                                                </label>
+                                                                {editLimits.isCustomPlan && (
+                                                                    <div className="space-y-1 mt-1 pl-1">
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span className="text-[10px] w-8 text-gray-500">Cost:</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editLimits.planBaseCost}
+                                                                                onChange={e => setEditLimits({ ...editLimits, planBaseCost: +e.target.value })}
+                                                                                className="w-16 text-xs p-1 border rounded"
+                                                                                placeholder="$"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span className="text-[10px] w-8 text-gray-500">Seat$:</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editLimits.perSeatCost}
+                                                                                onChange={e => setEditLimits({ ...editLimits, perSeatCost: +e.target.value })}
+                                                                                className="w-16 text-xs p-1 border rounded"
+                                                                                placeholder="$5"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span className="text-[10px] w-8 text-gray-500">Seats:</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                value={editLimits.extraSeats}
+                                                                                onChange={e => setEditLimits({ ...editLimits, extraSeats: +e.target.value })}
+                                                                                className="w-16 text-xs p-1 border rounded"
+                                                                                placeholder="+"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span className="text-[10px] w-8 text-gray-500">Renew:</span>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={editLimits.renewalDate || ''}
+                                                                                onChange={e => setEditLimits({ ...editLimits, renewalDate: e.target.value })}
+                                                                                className="w-auto text-xs p-0 border rounded"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </>
                                                     ) : (
                                                         <button
                                                             className="opacity-0 group-hover:opacity-100 text-xs text-blue-500 hover:underline"
@@ -592,9 +667,16 @@ export const AdminPanel: React.FC = () => {
                                                         <input type="number" className="w-12 p-1 border rounded text-center" value={editLimits.maxResources} onChange={e => setEditLimits({ ...editLimits, maxResources: +e.target.value })} title="Max Resources" />
                                                     </div>
                                                 ) : (
-                                                    <span className="font-mono text-gray-600 dark:text-gray-400">
-                                                        {u.maxProjects} / {u.maxLeads} / {u.maxResources}
-                                                    </span>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-mono text-gray-600 dark:text-gray-400">
+                                                            {u.maxProjects} / {u.maxLeads} / {u.maxResources}
+                                                        </span>
+                                                        {u.extraSeats > 0 && (
+                                                            <span className="text-[10px] text-green-600 font-bold">
+                                                                (+{u.extraSeats} extra seats)
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
