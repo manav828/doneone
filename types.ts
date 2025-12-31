@@ -9,6 +9,7 @@ export interface Plan {
   description: string;
   maxProjects: number;
   maxMembersPerProject: number;
+  maxLeadsPerProject: number;
   maxUploadSizeMb: number;
   maxUploadsPerTaskLimit: number;
   canInviteMembers: boolean;

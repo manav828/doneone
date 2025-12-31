@@ -50,7 +50,7 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   // Use plan limits if available, else user fallback?
   // User fallback might be stale.
-  const maxLeads = activePlan ? 5 : (manager?.maxLeads || 2); // Hardcoded '5' for premium leads if plan doesn't specify 'maxLeads' explicitly? Plan only has maxMembers.
+  const maxLeads = activePlan ? (activePlan.maxLeadsPerProject || 5) : (manager?.maxLeads || 2);
   // Actually, let's just stick to the Invite Logic for now.
   const maxRes = activePlan ? activePlan.maxMembersPerProject : (manager?.maxResources || 5);
 

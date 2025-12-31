@@ -618,16 +618,16 @@ export const useStore = create<AppState>((set, get) => ({
         role: 'Resource',
         email: session.user.email,
         avatar_url: '',
-        max_projects: 10000, // Trial limit
-        max_leads: 10,
-        max_resources: 20,
+        max_projects: 0, // Let Plan dictate limit
+        max_leads: 0,
+        max_resources: 0,
         is_premium: true, // Enable Trial for NEW users only
         premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days
         notifications_enabled: true,
         reminders_enabled: true,
         time_tracking_enabled: true,
         image_upload_enabled: true,
-        max_attachments_per_task: 10
+        max_attachments_per_task: 0
       }).select().single();
 
       console.log('📝 Profile Creation Result:', {
@@ -830,8 +830,7 @@ export const useStore = create<AppState>((set, get) => ({
           effectiveUser = {
             ...effectiveUser,
             maxProjects: Math.max(freshMe.maxProjects || 0, activePlan.maxProjects),
-            // Use maxLeads as proxy for Members Per Project
-            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.maxMembersPerProject),
+            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.maxLeadsPerProject || 2),
 
             // Boolean Features: OR logic (If Plan says YES or User says YES -> YES)
             imageUploadEnabled: freshMe.imageUploadEnabled || activePlan.canUploadImages,
@@ -1143,6 +1142,7 @@ export const useStore = create<AppState>((set, get) => ({
       description: p.description,
       maxProjects: p.max_projects,
       maxMembersPerProject: p.max_members_per_project,
+      maxLeadsPerProject: p.max_leads_per_project || (p.id === 'premium' ? 5 : 2), // Fallback if column missing/null
       maxUploadSizeMb: p.max_upload_size_mb,
       maxUploadsPerTaskLimit: p.max_uploads_per_task_limit,
       canInviteMembers: p.can_invite_members,
@@ -1164,6 +1164,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (updates.priceYearly !== undefined) dbUpdates.price_yearly = updates.priceYearly;
     if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
     if (updates.maxMembersPerProject !== undefined) dbUpdates.max_members_per_project = updates.maxMembersPerProject;
+    if (updates.maxLeadsPerProject !== undefined) dbUpdates.max_leads_per_project = updates.maxLeadsPerProject;
     if (updates.maxUploadsPerTaskLimit !== undefined) dbUpdates.max_uploads_per_task_limit = updates.maxUploadsPerTaskLimit;
     if (updates.canInviteMembers !== undefined) dbUpdates.can_invite_members = updates.canInviteMembers;
     if (updates.canUploadImages !== undefined) dbUpdates.can_upload_images = updates.canUploadImages;

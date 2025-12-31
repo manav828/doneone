@@ -387,6 +387,15 @@ export const AdminPanel: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase">Max Leads/Proj</label>
+                                                <input
+                                                    type="number"
+                                                    value={plan.maxLeadsPerProject}
+                                                    onChange={e => handlePlanChange(plan.id, 'maxLeadsPerProject', parseInt(e.target.value))}
+                                                    className="w-full border rounded p-2"
+                                                />
+                                            </div>
+                                            <div>
                                                 <label className="text-xs font-bold text-gray-500 uppercase">Upload Limit (Count)</label>
                                                 <input
                                                     type="number"

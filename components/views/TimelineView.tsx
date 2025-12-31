@@ -109,117 +109,131 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ tasks, users }) => {
         `}</style>
             <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-lg overflow-auto bg-white dark:bg-slate-800 shadow-sm relative flex flex-col min-h-[500px]">
 
-                <Gantt
-                    tasks={ganttTasks}
-                    viewMode={ViewMode.Day}
-                    listCellWidth="400px"
-                    columnWidth={70}
-                    barBackgroundColor="#3b82f6"
-                    barProgressColor="#2563eb"
-                    locale="en"
-                    TooltipContent={({ task, fontFamily, fontSize }) => {
-                        const t = task as any;
-                        return (
-                            <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-64 text-sm z-50 transform -translate-y-4 -translate-x-4">
-                                <div className="font-bold text-slate-800 dark:text-white mb-1">{t.originalTitle}</div>
-                                <div className="text-slate-500 text-xs mb-3">{t.status}</div>
+                {ganttTasks.length > 0 ? (
+                    <Gantt
+                        tasks={ganttTasks}
+                        viewMode={ViewMode.Day}
+                        listCellWidth="400px"
+                        columnWidth={70}
+                        barBackgroundColor="#3b82f6"
+                        barProgressColor="#2563eb"
+                        locale="en"
+                        TooltipContent={({ task, fontFamily, fontSize }) => {
+                            const t = task as any;
+                            return (
+                                <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-64 text-sm z-50 transform -translate-y-4 -translate-x-4">
+                                    <div className="font-bold text-slate-800 dark:text-white mb-1">{t.originalTitle}</div>
+                                    <div className="text-slate-500 text-xs mb-3">{t.status}</div>
 
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                        <UserIcon size={14} className="text-slate-400" />
-                                        <span>{t.assigneeName}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs text-slate-500">
-                                        <span className="flex items-center gap-1"><Clock size={12} /> Tracked:</span>
-                                        <span className="font-medium text-slate-700 dark:text-slate-300">{t.timeTracked}h</span>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <UserIcon size={14} className="text-slate-400" />
+                                            <span>{t.assigneeName}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs text-slate-500">
+                                            <span className="flex items-center gap-1"><Clock size={12} /> Tracked:</span>
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">{t.timeTracked}h</span>
+                                        </div>
                                     </div>
                                 </div>
+                            );
+                        }}
+                        TaskListHeader={({ headerHeight }) => (
+                            <div
+                                style={{
+                                    height: headerHeight,
+                                    width: "400px",
+                                    minWidth: "400px",
+                                    maxWidth: "400px",
+                                    boxSizing: "border-box",
+                                    fontFamily: "inherit",
+                                    fontWeight: "bold",
+                                    paddingLeft: "10px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    backgroundColor: themeMode === 'dark' ? '#1e293b' : '#f1f5f9',
+                                    color: themeMode === 'dark' ? '#cbd5e1' : '#64748b',
+                                    fontSize: '11px',
+                                    textTransform: 'uppercase'
+                                }}
+                            >
+                                <div className="flex-1 pl-2">Task</div>
+                                <div className="w-16 text-right pr-4">Time</div>
                             </div>
-                        );
-                    }}
-                    TaskListHeader={({ headerHeight }) => (
-                        <div
-                            style={{
-                                height: headerHeight,
+                        )}
+                        TaskListTable={({ rowHeight, tasks, fontFamily, fontSize }) => (
+                            <div className="w-full" style={{
+                                fontFamily,
+                                fontSize,
                                 width: "400px",
                                 minWidth: "400px",
                                 maxWidth: "400px",
-                                boxSizing: "border-box",
-                                fontFamily: "inherit",
-                                fontWeight: "bold",
-                                paddingLeft: "10px",
-                                display: "flex",
-                                alignItems: "center",
-                                backgroundColor: themeMode === 'dark' ? '#1e293b' : '#f1f5f9',
-                                color: themeMode === 'dark' ? '#cbd5e1' : '#64748b',
-                                fontSize: '11px',
-                                textTransform: 'uppercase'
-                            }}
-                        >
-                            <div className="flex-1 pl-2">Task</div>
-                            <div className="w-16 text-right pr-4">Time</div>
-                        </div>
-                    )}
-                    TaskListTable={({ rowHeight, tasks, fontFamily, fontSize }) => (
-                        <div className="w-full" style={{
-                            fontFamily,
-                            fontSize,
-                            width: "400px",
-                            minWidth: "400px",
-                            maxWidth: "400px",
-                            boxSizing: "border-box"
-                        }}>
-                            {tasks.map((t, i) => {
-                                const customT = t as any;
-                                return (
-                                    <div
-                                        key={t.id}
-                                        className="flex items-center pl-4 border-b border-slate-100 dark:border-slate-800 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
-                                        style={{ height: rowHeight, fontFamily: 'inherit' }}
-                                    >
-                                        <div className="flex-1 pr-2 min-w-0 flex items-center gap-2">
-                                            {/* Avatar */}
-                                            <div className="shrink-0">
-                                                {customT.assigneeName !== 'Unassigned' ? (
-                                                    customT.assigneeAvatar ? (
-                                                        <img src={customT.assigneeAvatar} alt="" className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700" title={customT.assigneeName} />
+                                boxSizing: "border-box"
+                            }}>
+                                {tasks.map((t, i) => {
+                                    const customT = t as any;
+                                    return (
+                                        <div
+                                            key={t.id}
+                                            className="flex items-center pl-4 border-b border-slate-100 dark:border-slate-800 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
+                                            style={{ height: rowHeight, fontFamily: 'inherit' }}
+                                        >
+                                            <div className="flex-1 pr-2 min-w-0 flex items-center gap-2">
+                                                {/* Avatar */}
+                                                <div className="shrink-0">
+                                                    {customT.assigneeName !== 'Unassigned' ? (
+                                                        customT.assigneeAvatar ? (
+                                                            <img src={customT.assigneeAvatar} alt="" className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-slate-700" title={customT.assigneeName} />
+                                                        ) : (
+                                                            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold" title={customT.assigneeName}>
+                                                                {customT.assigneeName.charAt(0)}
+                                                            </div>
+                                                        )
                                                     ) : (
-                                                        <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold" title={customT.assigneeName}>
-                                                            {customT.assigneeName.charAt(0)}
+                                                        <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] text-slate-400">
+                                                            -
                                                         </div>
-                                                    )
-                                                ) : (
-                                                    <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] text-slate-400">
-                                                        -
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="min-w-0 flex-1">
-                                                <div
-                                                    className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors cursor-pointer"
-                                                    title={customT.originalTitle}
-                                                >
-                                                    {customT.originalTitle}
+                                                    )}
                                                 </div>
-                                                {customT.status && (
-                                                    <div className="text-[10px] text-slate-400 truncate">
-                                                        {customT.status}
+
+                                                <div className="min-w-0 flex-1">
+                                                    <div
+                                                        className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors cursor-pointer"
+                                                        title={customT.originalTitle}
+                                                    >
+                                                        {customT.originalTitle}
                                                     </div>
-                                                )}
+                                                    {customT.status && (
+                                                        <div className="text-[10px] text-slate-400 truncate">
+                                                            {customT.status}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="w-16 text-right pr-4">
+                                                <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-1.5 py-0.5 rounded">
+                                                    {customT.hoursTakenDisplay}h
+                                                </span>
                                             </div>
                                         </div>
-                                        <div className="w-16 text-right pr-4">
-                                            <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-1.5 py-0.5 rounded">
-                                                {customT.hoursTakenDisplay}h
-                                            </span>
-                                        </div>
-                                    </div>
-                                )
-                            })}
+                                    )
+                                })}
+                            </div>
+                        )}
+                    />
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                        <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                            <Clock className="w-8 h-8 text-slate-400" />
                         </div>
-                    )}
-                />
+                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                            No tasks scheduled
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+                            Create tasks and assign dates to see them appear on the timeline.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );
