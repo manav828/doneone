@@ -103,6 +103,60 @@ export interface RecurrenceConfig {
   lastGeneratedAt?: number;
 }
 
+// ============================================================
+// TEAM-BASED ARCHITECTURE TYPES
+// ============================================================
+
+export interface Team {
+  id: string;
+  ownerId: string;
+  name: string;
+  joinCode: string;
+  createdAt: number;
+  // Computed/Joined
+  owner?: User;
+  memberCount?: number;
+  effectiveLimit?: number; // plan.maxMembers + extraSeats
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  userId: string;
+  roleId?: string;
+  status: 'active' | 'pending' | 'rejected';
+  joinedAt: number;
+  // Computed/Joined
+  user?: User;
+  role?: TeamRole;
+}
+
+export interface TeamRole {
+  id: string;
+  teamId: string;
+  name: string;
+  color?: string;
+  createdAt?: number;
+}
+
+export interface Department {
+  id: string;
+  teamId: string;
+  name: string;
+  color?: string;
+  createdAt?: number;
+  // Computed
+  memberCount?: number;
+}
+
+export interface DepartmentMember {
+  departmentId: string;
+  userId: string;
+  user?: User;
+}
+
+// ============================================================
+
 export interface Column {
   id: string;
   projectId: string;
@@ -116,17 +170,20 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
-  code: string; // 6-char join code
+  code?: string; // DEPRECATED: Join codes now at team level (kept for backward compat)
+  teamId?: string; // NEW: Link to team (null for personal/free projects)
   managerId: string; // The Creator
   leadIds: string[]; // Derived from project_members
   resourceIds: string[]; // Derived from project_members
   pendingJoinRequests: string[]; // Derived from project_members where status = pending
   reportsTo: Record<string, string>; // Map: resourceUserId -> leadUserId
-  themeColor: string; // Hex for primary color
+  // themeColor removed for Unified Design System
   autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
   viewAllReportsEnabled?: boolean; // If true, all members can see all reports (default: false)
   manager?: User & { hasPremiumAccess?: boolean }; // Full manager details including premium status
   logo?: string; // URL to project logo image
+  // Computed
+  team?: Team;
 }
 
 export interface Activity {

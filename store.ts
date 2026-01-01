@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket } from './types';
+import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket, Team, TeamMember, TeamRole, Department, DepartmentMember } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -40,6 +40,14 @@ interface AppState {
   notifications: Notification[];
   tags: Tag[];
   plans: Plan[];
+
+  // Team-Based Architecture (NEW)
+  teams: Team[];
+  teamMembers: TeamMember[];
+  teamRoles: TeamRole[];
+  departments: Department[];
+  departmentMembers: DepartmentMember[];
+  activeTeamId: string | null;
 
   // History Management
   taskHistory: TaskHistory[];
@@ -177,6 +185,53 @@ interface AppState {
   // UI State
   isPricingModalOpen: boolean;
   setPricingModalOpen: (isOpen: boolean) => void;
+
+  // ============================================================
+  // TEAM-BASED ARCHITECTURE ACTIONS (NEW)
+  // ============================================================
+
+  // Team CRUD
+  setActiveTeam: (teamId: string | null) => void;
+  fetchTeams: () => Promise<Team[]>;
+  createTeam: (name: string) => Promise<Team | null>;
+  updateTeam: (teamId: string, updates: Partial<Team>) => Promise<void>;
+  deleteTeam: (teamId: string) => Promise<void>;
+
+  // Team Members
+  fetchTeamMembers: (teamId: string) => Promise<TeamMember[]>;
+  joinTeam: (joinCode: string) => Promise<'requested' | 'already_member' | 'already_pending' | 'not_found' | 'error'>;
+  approveTeamMember: (teamId: string, userId: string) => Promise<void>;
+  rejectTeamMember: (teamId: string, userId: string) => Promise<void>;
+  removeTeamMember: (teamId: string, userId: string) => Promise<void>;
+  getTeamMemberCount: (teamId: string) => number;
+  canAddTeamMember: (teamId: string) => boolean;
+
+  // Team Roles (Custom)
+  fetchTeamRoles: (teamId: string) => Promise<TeamRole[]>;
+  createTeamRole: (teamId: string, name: string, color?: string) => Promise<TeamRole | null>;
+  updateTeamRole: (roleId: string, updates: Partial<TeamRole>) => Promise<void>;
+  deleteTeamRole: (roleId: string) => Promise<void>;
+  assignRoleToMember: (teamId: string, userId: string, roleId: string | null) => Promise<void>;
+
+  // Departments
+  fetchDepartments: (teamId: string) => Promise<Department[]>;
+  createDepartment: (teamId: string, name: string, color?: string) => Promise<Department | null>;
+  updateDepartment: (departmentId: string, updates: Partial<Department>) => Promise<void>;
+  deleteDepartment: (departmentId: string) => Promise<void>;
+
+  // Department Members
+  addMemberToDepartment: (departmentId: string, userId: string) => Promise<void>;
+  removeMemberFromDepartment: (departmentId: string, userId: string) => Promise<void>;
+
+  // Project-Team Assignment
+  assignProjectToTeam: (projectId: string, teamId: string) => Promise<void>;
+  assignMemberToProject: (projectId: string, userId: string, role: Role) => Promise<void>;
+
+  // Helpers
+  getOwnedTeams: () => Team[];
+  getJoinedTeams: () => Team[];
+  getTeamProjects: (teamId: string) => Project[];
+  getPersonalProjects: () => Project[];
 }
 
 
@@ -303,6 +358,14 @@ export const useStore = create<any>((set, get) => ({
   isOffline: !navigator.onLine,
 
   syncQueue: JSON.parse(localStorage.getItem('doneone_sync_queue') || '[]'),
+
+  // Team-Based Architecture State (NEW)
+  teams: [],
+  teamMembers: [],
+  teamRoles: [],
+  departments: [],
+  departmentMembers: [],
+  activeTeamId: null,
 
   // UI State
   isPricingModalOpen: false,
@@ -918,9 +981,9 @@ export const useStore = create<any>((set, get) => ({
         name: p.name,
         description: p.description,
         code: p.code,
+        teamId: p.team_id, // NEW: Link to team
         logo: p.logo,
         managerId: p.manager_id,
-        themeColor: p.theme_color || '#3b82f6',
         autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true,
         leadIds: pMembers.filter((m: any) => m.role === 'Lead' && m.status === 'active').map((m: any) => m.user_id),
         resourceIds: pMembers.filter((m: any) => m.role === 'Resource' && m.status === 'active').map((m: any) => m.user_id),
@@ -1242,22 +1305,23 @@ export const useStore = create<any>((set, get) => ({
       get().fetchTasks(),
       get().fetchActivities(),
       get().fetchNotifications(),
-      get().fetchNotifications(),
       get().fetchTags(),
-      get().fetchPlans()
+      get().fetchPlans(),
+      get().fetchTeams() // NEW: Fetch teams
     ]);
 
     set({ isLoading: false });
 
     // Cache to LocalStorage
-    const { projects, columns, tasks, users, tags } = get();
+    const { projects, columns, tasks, users, tags, teams } = get();
     localStorage.setItem('flowboard_state', JSON.stringify({
       projects,
       columns,
       tasks,
       users,
       currentUser,
-      tags
+      tags,
+      teams // NEW: Cache teams
     }));
   },
 
@@ -1305,7 +1369,7 @@ export const useStore = create<any>((set, get) => ({
   },
 
   // ... (Previous addProject, updateProject, deleteProject, etc. remain unchanged)
-  addProject: async (name, description, color) => {
+  addProject: async (name, description, teamIdParam = null) => {
     if (!get().checkRateLimit('addProject')) return;
     const user = get().currentUser;
     if (!user) return;
@@ -1330,13 +1394,21 @@ export const useStore = create<any>((set, get) => ({
       alert(`Limit reached. You have ${myProjects.length}/${limit} projects.`);
       return;
     }
+
+    // Use provided teamId, or auto-assign to user's first workspace
+    let teamId = teamIdParam;
+    if (!teamId) {
+      const ownedTeams = get().teams.filter(t => t.ownerId === user.id);
+      teamId = ownedTeams.length > 0 ? ownedTeams[0].id : null;
+    }
+
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const { data } = await supabase.from('projects').insert({
       name,
       description,
-      theme_color: color,
       manager_id: user.id,
       code,
+      team_id: teamId, // Use the provided or auto-assigned teamId
       auto_move_enabled: true  // Enable auto-move by default
     }).select().single();
     if (data) {
@@ -1346,8 +1418,9 @@ export const useStore = create<any>((set, get) => ({
         name: data.name,
         description: data.description,
         code: data.code,
+        teamId: data.team_id, // NEW: Include teamId
         managerId: data.manager_id,
-        themeColor: data.theme_color,
+        // themeColor removed
         autoMoveEnabled: data.auto_move_enabled,
         leadIds: [],
         resourceIds: [],
@@ -1366,7 +1439,7 @@ export const useStore = create<any>((set, get) => ({
     }
   },
 
-  addProjectFromTemplate: async (name, description, color, template) => {
+  addProjectFromTemplate: async (name, description, template) => {
     const user = get().currentUser;
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
@@ -1392,7 +1465,6 @@ export const useStore = create<any>((set, get) => ({
     const { data } = await supabase.from('projects').insert({
       name,
       description: description || template.description,
-      theme_color: color,
       manager_id: user.id,
       code
     }).select().single();
@@ -1405,7 +1477,7 @@ export const useStore = create<any>((set, get) => ({
         description: data.description,
         code: data.code,
         managerId: data.manager_id,
-        themeColor: data.theme_color,
+        // themeColor removed
         autoMoveEnabled: true,
         leadIds: [],
         resourceIds: [],
@@ -1443,8 +1515,7 @@ export const useStore = create<any>((set, get) => ({
   updateProject: async (id, updates) => {
     const dbUpdates: any = {
       name: updates.name,
-      description: updates.description,
-      theme_color: updates.themeColor
+      description: updates.description
     };
     if (updates.logo !== undefined) dbUpdates.logo = updates.logo;
     if (updates.viewAllReportsEnabled !== undefined) dbUpdates.view_all_reports_enabled = updates.viewAllReportsEnabled;
@@ -1916,11 +1987,12 @@ export const useStore = create<any>((set, get) => ({
     const newColumnTitle = state.columns.find(c => c.id === newColumnId)?.title;
 
     if (newColumnTitle === 'In Progress') {
-      // Check for multiple tasks allowance
+      // Check for multiple tasks allowance - PER USER, not per project
       if (!user.allowMultipleInProgress) {
         const existingInProgress = state.tasks.filter(t =>
           t.columnId === newColumnId &&
           t.projectId === project.id &&
+          t.assigneeId === user.id && // Only check THIS user's tasks
           t.id !== taskId // Exclude self if already there (though move implies change)
         );
 
@@ -3370,24 +3442,598 @@ export const useStore = create<any>((set, get) => ({
     const { currentUser, tasks, columns, archiveTaskManually } = get();
     if (!currentUser || !currentUser.autoArchiveDays || currentUser.autoArchiveDays <= 0) return;
 
-    const cutoff = Date.now() - (currentUser.autoArchiveDays * 24 * 60 * 60 * 1000);
-
-    const tasksToArchive = tasks.filter(task => {
-      const column = columns.find(c => c.id === task.columnId);
-      if (!column || !column.isArchiveEnabled) return false;
-
-      // Use completedAt if available, else updatedAt (for non-Done columns)
-      const effectiveDate = task.completedAt || task.updatedAt;
-      return effectiveDate < cutoff;
-    });
-
-    if (tasksToArchive.length > 0) {
-      console.log(`Auto-archiving ${tasksToArchive.length} tasks...`);
-      for (const task of tasksToArchive) {
-        await archiveTaskManually(task.id);
-      }
-      get().refreshData();
+    if (currentUser.autoArchiveDays && currentUser.autoArchiveDays > 0) {
+      // Use backend RPC to handle auto-archive atomically
+      // This prevents race conditions and "Task not found" errors
+      supabase.rpc('auto_archive_user_tasks', {
+        p_user_id: currentUser.id
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('Auto-archive failed:', error);
+        } else if (data?.archived_count > 0) {
+          console.log(`Auto-archived ${data.archived_count} tasks`);
+          get().refreshData();
+        }
+      });
     }
   },
 
+  // ============================================================
+  // TEAM-BASED ARCHITECTURE IMPLEMENTATIONS
+  // ============================================================
+
+  setActiveTeam: (teamId) => {
+    set({ activeTeamId: teamId });
+  },
+
+  fetchTeams: async () => {
+    const { currentUser } = get();
+    if (!currentUser) return [];
+
+    // Fetch teams where user is owner
+    const { data: ownedTeams } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('owner_id', currentUser.id);
+
+    // Fetch teams where user is a member
+    const { data: membershipData } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('user_id', currentUser.id)
+      .eq('status', 'active');
+
+    const memberTeamIds = (membershipData || []).map(m => m.team_id);
+
+    let joinedTeams: any[] = [];
+    if (memberTeamIds.length > 0) {
+      const { data } = await supabase
+        .from('teams')
+        .select('*')
+        .in('id', memberTeamIds)
+        .neq('owner_id', currentUser.id); // Exclude owned teams
+      joinedTeams = data || [];
+    }
+
+    const allTeams = [...(ownedTeams || []), ...joinedTeams];
+
+    // Get member counts for each team
+    const processedTeams: Team[] = await Promise.all(allTeams.map(async (t) => {
+      const { count } = await supabase
+        .from('team_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('team_id', t.id)
+        .eq('status', 'active');
+
+      // Get owner's extra_seats for effective limit
+      const { data: owner } = await supabase
+        .from('profiles')
+        .select('max_resources, extra_seats')
+        .eq('id', t.owner_id)
+        .single();
+
+      const baseLimit = owner?.max_resources || 5;
+      const extraSeats = owner?.extra_seats || 0;
+
+      return {
+        id: t.id,
+        ownerId: t.owner_id,
+        name: t.name,
+        joinCode: t.join_code,
+        createdAt: new Date(t.created_at).getTime(),
+        memberCount: count || 0,
+        effectiveLimit: baseLimit + extraSeats
+      };
+    }));
+
+    set({ teams: processedTeams });
+    return processedTeams;
+  },
+
+  createTeam: async (name) => {
+    const { currentUser, canAccessPremium } = get();
+    if (!currentUser) return null;
+
+    // Only premium users can create teams
+    if (!canAccessPremium() && currentUser.email !== ADMIN_EMAIL) {
+      get().showCustomAlert('Upgrade to Premium to create a team and invite members.', 'warning');
+      return null;
+    }
+
+    const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const { data, error } = await supabase
+      .from('teams')
+      .insert({
+        owner_id: currentUser.id,
+        name,
+        join_code: joinCode
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating team:', error);
+      get().showCustomAlert('Failed to create team.', 'error');
+      return null;
+    }
+
+    // Add owner as active member
+    await supabase.from('team_members').insert({
+      team_id: data.id,
+      user_id: currentUser.id,
+      status: 'active'
+    });
+
+    // Create default "General" department
+    await supabase.from('departments').insert({
+      team_id: data.id,
+      name: 'General',
+      color: '#6b7280'
+    });
+
+    await get().fetchTeams();
+
+    const newTeam: Team = {
+      id: data.id,
+      ownerId: data.owner_id,
+      name: data.name,
+      joinCode: data.join_code,
+      createdAt: new Date(data.created_at).getTime(),
+      memberCount: 1,
+      effectiveLimit: currentUser.maxResources || 5
+    };
+
+    return newTeam;
+  },
+
+  updateTeam: async (teamId, updates) => {
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+
+    await supabase.from('teams').update(dbUpdates).eq('id', teamId);
+    await get().fetchTeams();
+  },
+
+  deleteTeam: async (teamId) => {
+    const { currentUser, teams } = get();
+    const team = teams.find(t => t.id === teamId);
+
+    if (!team || team.ownerId !== currentUser?.id) {
+      get().showCustomAlert('Only the team owner can delete the team.', 'error');
+      return;
+    }
+
+    await supabase.from('teams').delete().eq('id', teamId);
+    set(state => ({
+      teams: state.teams.filter(t => t.id !== teamId),
+      activeTeamId: state.activeTeamId === teamId ? null : state.activeTeamId
+    }));
+  },
+
+  // Team Members
+  fetchTeamMembers: async (teamId) => {
+    const { data } = await supabase
+      .from('team_members')
+      .select(`
+        *,
+        user:profiles(*),
+        role:team_roles(*)
+      `)
+      .eq('team_id', teamId);
+
+    const members: TeamMember[] = (data || []).map(m => ({
+      id: m.id,
+      teamId: m.team_id,
+      userId: m.user_id,
+      roleId: m.role_id,
+      status: m.status,
+      joinedAt: new Date(m.joined_at).getTime(),
+      user: m.user ? {
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        role: m.user.role,
+        remindersEnabled: m.user.reminders_enabled,
+        timeTrackingEnabled: m.user.time_tracking_enabled,
+        imageUploadEnabled: m.user.image_upload_enabled,
+        maxAttachmentsPerTask: m.user.max_attachments_per_task || 3
+      } : undefined,
+      role: m.role ? {
+        id: m.role.id,
+        teamId: m.role.team_id,
+        name: m.role.name,
+        color: m.role.color
+      } : undefined
+    }));
+
+    // MERGE: Keep members from other teams, only update this team's members
+    set(state => ({
+      teamMembers: [
+        ...state.teamMembers.filter(m => m.teamId !== teamId),
+        ...members
+      ]
+    }));
+    return members;
+  },
+
+  joinTeam: async (joinCode) => {
+    const { data, error } = await supabase.rpc('join_team_secure', {
+      p_join_code: joinCode.toUpperCase()
+    });
+
+    if (error) {
+      console.error('Error joining team:', error);
+      return 'error';
+    }
+
+    await get().fetchTeams();
+    return data.status as any;
+  },
+
+  approveTeamMember: async (teamId, userId) => {
+    // Check member limit before approving
+    if (!get().canAddTeamMember(teamId)) {
+      get().showCustomAlert('Team member limit reached. Purchase extra seats to add more members.', 'warning');
+      return;
+    }
+
+    await supabase
+      .from('team_members')
+      .update({ status: 'active' })
+      .eq('team_id', teamId)
+      .eq('user_id', userId);
+
+    await get().fetchTeamMembers(teamId);
+    await get().fetchTeams();
+  },
+
+  rejectTeamMember: async (teamId, userId) => {
+    await supabase
+      .from('team_members')
+      .update({ status: 'rejected' })
+      .eq('team_id', teamId)
+      .eq('user_id', userId);
+
+    await get().fetchTeamMembers(teamId);
+  },
+
+  removeTeamMember: async (teamId, userId) => {
+    const { teams, currentUser } = get();
+    const team = teams.find(t => t.id === teamId);
+
+    // Cannot remove owner
+    if (team?.ownerId === userId) {
+      get().showCustomAlert('Cannot remove the team owner.', 'error');
+      return;
+    }
+
+    await supabase
+      .from('team_members')
+      .delete()
+      .eq('team_id', teamId)
+      .eq('user_id', userId);
+
+    // Also remove from all projects under this team
+    const { projects } = get();
+    const teamProjects = projects.filter(p => p.teamId === teamId);
+    for (const project of teamProjects) {
+      await supabase
+        .from('project_members')
+        .delete()
+        .eq('project_id', project.id)
+        .eq('user_id', userId);
+    }
+
+    await get().fetchTeamMembers(teamId);
+    await get().fetchTeams();
+    await get().fetchProjects();
+  },
+
+  getTeamMemberCount: (teamId) => {
+    const { teamMembers } = get();
+    return teamMembers.filter(m => m.teamId === teamId && m.status === 'active').length;
+  },
+
+  canAddTeamMember: (teamId) => {
+    const { teams, teamMembers } = get();
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return false;
+
+    const currentCount = teamMembers.filter(m => m.teamId === teamId && m.status === 'active').length;
+    return currentCount < (team.effectiveLimit || 5);
+  },
+
+  // Team Roles
+  fetchTeamRoles: async (teamId) => {
+    const { data } = await supabase
+      .from('team_roles')
+      .select('*')
+      .eq('team_id', teamId);
+
+    const roles: TeamRole[] = (data || []).map(r => ({
+      id: r.id,
+      teamId: r.team_id,
+      name: r.name,
+      color: r.color,
+      createdAt: new Date(r.created_at).getTime()
+    }));
+
+    // MERGE: Keep roles from other teams, only update this team's roles
+    set(state => ({
+      teamRoles: [
+        ...state.teamRoles.filter(r => r.teamId !== teamId),
+        ...roles
+      ]
+    }));
+    return roles;
+  },
+
+  createTeamRole: async (teamId, name, color = '#6b7280') => {
+    const { data, error } = await supabase
+      .from('team_roles')
+      .insert({ team_id: teamId, name, color })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating role:', error);
+      return null;
+    }
+
+    await get().fetchTeamRoles(teamId);
+    return {
+      id: data.id,
+      teamId: data.team_id,
+      name: data.name,
+      color: data.color
+    };
+  },
+
+  updateTeamRole: async (roleId, updates) => {
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.color) dbUpdates.color = updates.color;
+
+    const { data: role } = await supabase
+      .from('team_roles')
+      .select('team_id')
+      .eq('id', roleId)
+      .single();
+
+    await supabase.from('team_roles').update(dbUpdates).eq('id', roleId);
+
+    if (role) {
+      await get().fetchTeamRoles(role.team_id);
+    }
+  },
+
+  deleteTeamRole: async (roleId) => {
+    const { data: role } = await supabase
+      .from('team_roles')
+      .select('team_id')
+      .eq('id', roleId)
+      .single();
+
+    await supabase.from('team_roles').delete().eq('id', roleId);
+
+    if (role) {
+      await get().fetchTeamRoles(role.team_id);
+    }
+  },
+
+  assignRoleToMember: async (teamId, userId, roleId) => {
+    await supabase
+      .from('team_members')
+      .update({ role_id: roleId })
+      .eq('team_id', teamId)
+      .eq('user_id', userId);
+
+    await get().fetchTeamMembers(teamId);
+  },
+
+  // Departments
+  fetchDepartments: async (teamId) => {
+    const { data } = await supabase
+      .from('departments')
+      .select('*')
+      .eq('team_id', teamId);
+
+    // Get member counts
+    const departments: Department[] = await Promise.all((data || []).map(async (d) => {
+      const { count } = await supabase
+        .from('department_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('department_id', d.id);
+
+      return {
+        id: d.id,
+        teamId: d.team_id,
+        name: d.name,
+        color: d.color,
+        createdAt: new Date(d.created_at).getTime(),
+        memberCount: count || 0
+      };
+    }));
+
+    // MERGE: Keep departments from other teams, only update this team's departments
+    set(state => ({
+      departments: [
+        ...state.departments.filter(d => d.teamId !== teamId),
+        ...departments
+      ]
+    }));
+    return departments;
+  },
+
+  createDepartment: async (teamId, name, color = '#3b82f6') => {
+    const { data, error } = await supabase
+      .from('departments')
+      .insert({ team_id: teamId, name, color })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating department:', error);
+      return null;
+    }
+
+    await get().fetchDepartments(teamId);
+    return {
+      id: data.id,
+      teamId: data.team_id,
+      name: data.name,
+      color: data.color
+    };
+  },
+
+  updateDepartment: async (departmentId, updates) => {
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.color) dbUpdates.color = updates.color;
+
+    const { data: dept } = await supabase
+      .from('departments')
+      .select('team_id')
+      .eq('id', departmentId)
+      .single();
+
+    await supabase.from('departments').update(dbUpdates).eq('id', departmentId);
+
+    if (dept) {
+      await get().fetchDepartments(dept.team_id);
+    }
+  },
+
+  deleteDepartment: async (departmentId) => {
+    const { data: dept } = await supabase
+      .from('departments')
+      .select('team_id')
+      .eq('id', departmentId)
+      .single();
+
+    await supabase.from('departments').delete().eq('id', departmentId);
+
+    if (dept) {
+      await get().fetchDepartments(dept.team_id);
+    }
+  },
+
+  // Department Members
+  addMemberToDepartment: async (departmentId, userId) => {
+    await supabase.from('department_members').insert({
+      department_id: departmentId,
+      user_id: userId
+    });
+
+    const { data: dept } = await supabase
+      .from('departments')
+      .select('team_id')
+      .eq('id', departmentId)
+      .single();
+
+    if (dept) {
+      await get().fetchDepartments(dept.team_id);
+    }
+  },
+
+  removeMemberFromDepartment: async (departmentId, userId) => {
+    await supabase
+      .from('department_members')
+      .delete()
+      .eq('department_id', departmentId)
+      .eq('user_id', userId);
+
+    const { data: dept } = await supabase
+      .from('departments')
+      .select('team_id')
+      .eq('id', departmentId)
+      .single();
+
+    if (dept) {
+      await get().fetchDepartments(dept.team_id);
+    }
+  },
+
+  // Project-Team Assignment
+  assignProjectToTeam: async (projectId, teamId) => {
+    await supabase
+      .from('projects')
+      .update({ team_id: teamId })
+      .eq('id', projectId);
+
+    await get().fetchProjects();
+  },
+
+  assignMemberToProject: async (projectId, userId, role) => {
+    const { projects, teamMembers, teams } = get();
+    const project = projects.find(p => p.id === projectId);
+
+    if (!project) return;
+
+    // If project has a team, verify user is a company employee (member of ANY team owned by same owner)
+    if (project.teamId) {
+      // Get the owner of the project's team
+      const projectTeam = teams.find(t => t.id === project.teamId);
+      if (!projectTeam) return;
+
+      // Get all teams owned by the same owner (all departments in the company)
+      const companyTeamIds = teams
+        .filter(t => t.ownerId === projectTeam.ownerId)
+        .map(t => t.id);
+
+      // Check if user is a member of ANY department in the company
+      const isCompanyEmployee = teamMembers.some(
+        m => companyTeamIds.includes(m.teamId) && m.userId === userId && m.status === 'active'
+      );
+
+      if (!isCompanyEmployee) {
+        get().showCustomAlert('User must be a company employee before being assigned to a project.', 'error');
+        return;
+      }
+    }
+
+    // Add to project_members
+    await supabase.from('project_members').upsert({
+      project_id: projectId,
+      user_id: userId,
+      role,
+      status: 'active'
+    }, { onConflict: 'project_id,user_id' });
+
+    await get().fetchProjects();
+  },
+
+  // Helpers
+  getOwnedTeams: () => {
+    const { teams, currentUser } = get();
+    if (!currentUser) return [];
+    return teams.filter(t => t.ownerId === currentUser.id);
+  },
+
+  getJoinedTeams: () => {
+    const { teams, currentUser } = get();
+    if (!currentUser) return [];
+    return teams.filter(t => t.ownerId !== currentUser.id);
+  },
+
+  getTeamProjects: (teamId) => {
+    const { projects } = get();
+    return projects.filter(p => p.teamId === teamId);
+  },
+
+  getPersonalProjects: () => {
+    const { projects, currentUser } = get();
+    if (!currentUser) return [];
+    // Personal projects: no team AND user is manager, lead, or resource
+    return projects.filter(p =>
+      !p.teamId && (
+        p.managerId === currentUser.id ||
+        p.leadIds?.includes(currentUser.id) ||
+        p.resourceIds?.includes(currentUser.id)
+      )
+    );
+  },
+
 }));
+

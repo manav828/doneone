@@ -1,11 +1,19 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
-import { FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight, Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2, Camera } from 'lucide-react';
+import {
+  FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight,
+  Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2, Camera,
+  Building2, Users, ChevronDown, UserPlus, FolderOpen
+} from 'lucide-react';
 import { Modal } from './Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TemplateSelector } from './TemplateSelector';
 import { BoardTemplate } from '../templates/templates';
+import { TeamSettingsModal } from './TeamSettingsModal';
+import { JoinTeamModal } from './JoinTeamModal';
+import { CreateTeamModal } from './CreateTeamModal';
+import { Team } from '../types';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -15,60 +23,91 @@ export const Sidebar: React.FC = () => {
     addProjectFromTemplate,
     can,
     deleteProject,
-    joinProject,
     getVisibleProjects,
     projects,
     updateProject,
     currentUser,
     canAccessPremium,
-    uploadFile // Add uploadFile
+    uploadFile,
+    // Team-related
+    teams,
+    teamMembers,
+    fetchTeams,
+    getOwnedTeams,
+    getJoinedTeams,
+    getTeamProjects,
+    getPersonalProjects,
+    activeTeamId,
+    setActiveTeam
   } = useStore();
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
+  // Team modals
+  const [isJoinTeamModalOpen, setIsJoinTeamModalOpen] = useState(false);
+  const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
+  const [isTeamSettingsOpen, setIsTeamSettingsOpen] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [creatingForTeamId, setCreatingForTeamId] = useState<string | null>(null);
+
+  // Form states
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
-  const [newProjectColor, setNewProjectColor] = useState('#3b82f6');
   const [selectedTemplate, setSelectedTemplate] = useState<BoardTemplate | null>(null);
 
   const [editProjectId, setEditProjectId] = useState('');
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editColor, setEditColor] = useState('');
   const [editViewAllReports, setEditViewAllReports] = useState(false);
   const [editLogoUrl, setEditLogoUrl] = useState('');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
-
-  const [joinCode, setJoinCode] = useState('');
-  const [joinMessage, setJoinMessage] = useState({ type: '', text: '' });
-
-  const visibleProjects = getVisibleProjects();
+  // Section collapse states
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    ownedTeams: true,
+    joinedTeams: true,
+    personal: true
+  });
 
   const isSuperAdmin = currentUser?.email?.toLowerCase() === 'manavss828@gmail.com';
 
+  // Fetch teams on mount
+  useEffect(() => {
+    if (currentUser) {
+      fetchTeams();
+    }
+  }, [currentUser]);
 
+  const ownedTeams = getOwnedTeams();
+  const joinedTeams = getJoinedTeams();
+  const personalProjects = getPersonalProjects();
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (newProjectName.trim()) {
       if (selectedTemplate) {
-        addProjectFromTemplate(newProjectName, newProjectDesc, newProjectColor, selectedTemplate);
+        addProjectFromTemplate(newProjectName, newProjectDesc, selectedTemplate);
       } else {
-        addProject(newProjectName, newProjectDesc, newProjectColor);
+        addProject(newProjectName, newProjectDesc, creatingForTeamId);
       }
       setIsModalOpen(false);
       setNewProjectName('');
       setNewProjectDesc('');
       setSelectedTemplate(null);
+      setCreatingForTeamId(null);
     }
   };
 
@@ -78,32 +117,15 @@ export const Sidebar: React.FC = () => {
       setNewProjectDesc(template.description);
     }
     setIsTemplateSelectorOpen(false);
-    setIsModalOpen(true); // Re-open the create modal
-  };
-
-  const openCreateModal = () => {
-    setSelectedTemplate(null);
-    setNewProjectName('');
-    setNewProjectDesc('');
     setIsModalOpen(true);
   };
 
-  const handleJoin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (joinCode.trim()) {
-      const result = await joinProject(joinCode.trim().toUpperCase());
-      if (result === 'joined') {
-        setJoinMessage({ type: 'success', text: 'Successfully joined!' });
-        setTimeout(() => { setIsJoinModalOpen(false); setJoinCode(''); setJoinMessage({ type: '', text: '' }); }, 1500);
-      } else if (result === 'requested') {
-        setJoinMessage({ type: 'success', text: 'Request sent to project manager.' });
-        setTimeout(() => { setIsJoinModalOpen(false); setJoinCode(''); setJoinMessage({ type: '', text: '' }); }, 2000);
-      } else if (result === 'already_member') {
-        setJoinMessage({ type: 'error', text: 'You are already a member or pending.' });
-      } else {
-        setJoinMessage({ type: 'error', text: 'Project not found.' });
-      }
-    }
+  const openCreateModal = (teamId: string | null = null) => {
+    setSelectedTemplate(null);
+    setNewProjectName('');
+    setNewProjectDesc('');
+    setCreatingForTeamId(teamId);
+    setIsModalOpen(true);
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
@@ -125,7 +147,6 @@ export const Sidebar: React.FC = () => {
     setEditProjectId(project.id);
     setEditName(project.name);
     setEditDesc(project.description || '');
-    setEditColor(project.themeColor);
     setEditViewAllReports(project.viewAllReportsEnabled || false);
     setEditLogoUrl(project.logo || '');
     setIsEditModalOpen(true);
@@ -137,7 +158,6 @@ export const Sidebar: React.FC = () => {
       updateProject(editProjectId, {
         name: editName,
         description: editDesc,
-        themeColor: editColor,
         viewAllReportsEnabled: editViewAllReports,
         logo: editLogoUrl
       });
@@ -161,18 +181,110 @@ export const Sidebar: React.FC = () => {
     }
   };
 
+  const openTeamSettings = (team: Team) => {
+    setSelectedTeam(team);
+    setIsTeamSettingsOpen(true);
+  };
+
+  // Project card component
+  const ProjectCard = ({ project }: { project: any }) => (
+    <div
+      onClick={() => { setActiveProject(project.id); navigate('/'); }}
+      className={`sidebar-item group flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} 
+        relative px-3 py-1.5 cursor-pointer transition-all duration-200 
+        ${activeProjectId === project.id
+          ? 'bg-[#FF6B35]/10 text-slate-900 dark:text-white font-medium'
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+        }`}
+      title={isCollapsed ? project.name : undefined}
+    >
+      {/* Absolute Indicator Bar - Overlaps tree line */}
+      <div className={`absolute -left-[9px] top-0 bottom-0 w-[3px] rounded-r-sm transition-colors ${activeProjectId === project.id
+        ? 'bg-[#FF6B35]'
+        : 'bg-transparent group-hover:bg-slate-300 dark:group-hover:bg-slate-600'
+        }`}
+      />
+
+      <div className="flex items-center gap-3 truncate">
+        {project.logo ? (
+          <img src={project.logo} alt={project.name} className="w-5 h-5 rounded object-cover bg-white shrink-0" />
+        ) : (
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${activeProjectId === project.id ? 'bg-[#FF6B35]' : 'bg-slate-200 dark:bg-slate-700'}`}
+          />
+        )}
+        {!isCollapsed && <span className="truncate text-sm">{project.name}</span>}
+      </div>
+
+      {!isCollapsed && (
+        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+          {can('editSettings', project.id) && (
+            <button
+              onClick={(e) => openEditModal(e, project)}
+              className={`p-1 rounded transition-colors ${activeProjectId === project.id ? 'text-[#FF6B35] hover:bg-[#FF6B35]/10' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-300 dark:hover:bg-slate-700'}`}
+              title="Edit Project"
+            >
+              <Edit2 size={12} />
+            </button>
+          )}
+          {can('deleteProject', project.id) && (
+            <button
+              onClick={(e) => handleDelete(e, project.id)}
+              className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Delete Project"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Team section component
+  const TeamSection = ({ team, isOwned }: { team: Team; isOwned: boolean }) => {
+    const teamProjects = getTeamProjects(team.id);
+    const [isExpanded, setIsExpanded] = useState(true);
+
+    return (
+      <div className="mb-2">
+        <div
+          className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer group"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <div className="flex items-center gap-2 min-w-0 w-full">
+            <ChevronDown size={12} className={`text-slate-400 transition-transform ${!isExpanded ? '-rotate-90' : ''}`} />
+            {!isCollapsed && (
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">
+                {team.name}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {isExpanded && !isCollapsed && (
+          <div className="ml-4 mt-1 space-y-0.5 border-l border-slate-200 dark:border-slate-700 pl-2">
+            {teamProjects.map(project => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+            {/* Add Project Button Removed - centralized at bottom */}
+            {teamProjects.length === 0 && !isOwned && (
+              <p className="text-xs text-slate-400 py-2 px-2">No projects yet</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <aside className={`${isCollapsed ? 'w-18' : 'w-72'} h-full bg-surface-light dark:bg-surface-dark border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 z-20`}>
+    <aside className={`${isCollapsed ? 'w-18' : 'w-72'} h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 z-20`}>
       {/* Header */}
       <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-4'} border-b border-transparent`}>
         <div className="flex items-center gap-3 text-slate-800 dark:text-slate-100">
           {!isCollapsed ? (
             <div className="flex flex-col pl-3">
-              <img
-                src="/logo.png"
-                alt="DoneOne"
-                className="h-8 w-auto object-contain"
-              />
+              <img src="/logo.png" alt="DoneOne" className="h-8 w-auto object-contain" />
             </div>
           ) : (
             <img src="/logo.png" alt="DoneOne" className="h-8 w-8 object-contain" />
@@ -188,106 +300,166 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-6 space-y-6">
-        {/* Projects Section */}
-        <div className="px-3">
-          {!isCollapsed && (
-            <div className="px-3 mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Projects</span>
-              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">{visibleProjects.length}</span>
-            </div>
-          )}
-
-          <div className="space-y-1">
-            {visibleProjects.map(project => (
-              <div
-                key={project.id}
-                onClick={() => { setActiveProject(project.id); navigate('/'); }}
-                className={`sidebar-item group flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${activeProjectId === project.id
-                  ? 'active bg-primary/10 text-primary font-medium shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                title={isCollapsed ? project.name : undefined}
-              >
-                <div className="flex items-center gap-3 truncate">
-                  {project.logo ? (
-                    <img src={project.logo} alt={project.name} className="w-6 h-6 rounded-md object-cover bg-white shrink-0" title={project.name} />
-                  ) : (
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-sm ${activeProjectId !== project.id ? 'opacity-70' : ''}`}
-                      style={{ backgroundColor: project.themeColor }}
-                    ></span>
-                  )}
-                  {!isCollapsed && <span className="truncate text-sm">{project.name}</span>}
-                </div>
-
-                {!isCollapsed && (
-                  <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                    {can('editSettings', project.id) && (
-                      <button
-                        onClick={(e) => openEditModal(e, project)}
-                        className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded text-slate-400 hover:text-primary transition-colors shadow-sm"
-                        title="Edit Project"
-                      >
-                        <Edit2 size={12} />
-                      </button>
-                    )}
-                    {can('deleteProject', project.id) && (
-                      <button
-                        onClick={(e) => handleDelete(e, project.id)}
-                        className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded text-slate-400 hover:text-red-500 transition-colors shadow-sm"
-                        title="Delete Project"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
+      <div className="flex-1 overflow-y-auto py-4 space-y-4">
+        {/* My Teams Section */}
+        {ownedTeams.length > 0 && (
+          <div className="px-3">
+            <div
+              className="flex items-center justify-between px-2 mb-1 cursor-pointer group"
+              onClick={() => toggleSection('ownedTeams')}
+            >
+              {!isCollapsed && (
+                <>
+                  <span
+                    className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      const newName = prompt('Enter company/teams section name:', 'My Teams');
+                      if (newName && ownedTeams[0]) {
+                        // Store the custom name in localStorage
+                        localStorage.setItem('myTeamsSectionName', newName);
+                        window.location.reload();
+                      }
+                    }}
+                    title="Double-click to rename"
+                  >
+                    {localStorage.getItem('myTeamsSectionName') || 'My Teams'}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
+                      {new Set(teamMembers.filter(m => ownedTeams.some(t => t.id === m.teamId) && m.status === 'active').map(m => m.userId)).size} employees
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate('/workspace'); }}
+                      className="p-1 opacity-0 group-hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-400 hover:text-primary transition-all"
+                      title="My Team Settings"
+                    >
+                      <Settings size={12} />
+                    </button>
                   </div>
-                )}
-              </div>
-            ))}
+                </>
+              )}
+            </div>
 
-            {visibleProjects.length === 0 && !isCollapsed && (
-              <div className="px-3 py-8 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-lg mx-2">
-                <p className="text-xs text-slate-400">No projects yet.</p>
+            {expandedSections.ownedTeams && (
+              <div className="space-y-1">
+                {ownedTeams.map(team => (
+                  <TeamSection key={team.id} team={team} isOwned={true} />
+                ))}
               </div>
             )}
           </div>
-        </div>
+        )}
+
+        {/* Joined Teams Section */}
+        {joinedTeams.length > 0 && (
+          <div className="px-3">
+            <div
+              className="flex items-center justify-between px-2 mb-1 cursor-pointer"
+              onClick={() => toggleSection('joinedTeams')}
+            >
+              {!isCollapsed && (
+                <>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                    Joined Teams
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
+                    {joinedTeams.length}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {expandedSections.joinedTeams && (
+              <div className="space-y-1">
+                {joinedTeams.map(team => (
+                  <TeamSection key={team.id} team={team} isOwned={false} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Personal Projects Section */}
+        {personalProjects.length > 0 && (
+          <div className="px-3">
+            <div
+              className="flex items-center justify-between px-2 mb-1 cursor-pointer"
+              onClick={() => toggleSection('personal')}
+            >
+              {!isCollapsed && (
+                <>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                    Personal Projects
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
+                    {personalProjects.length}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {expandedSections.personal && (
+              <div className="space-y-0.5">
+                {personalProjects.map(project => (
+                  <ProjectCard key={project.id} project={project} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {ownedTeams.length === 0 && joinedTeams.length === 0 && personalProjects.length === 0 && !isCollapsed && (
+          <div className="px-5 py-8 text-center">
+            <div className="w-12 h-12 mx-auto mb-3 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center">
+              <FolderOpen size={24} className="text-slate-400" />
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">No projects yet</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Create a team or project to get started</p>
+          </div>
+        )}
 
         {/* Global Tools Section */}
-        <div className="px-3">
-          {!isCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Workspace</div>}
+        <div className="px-3 pt-4 border-t border-slate-100 dark:border-slate-800 mt-2">
+          {!isCollapsed && <div className="px-2 mb-2 text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">Workspace</div>}
           <div className="space-y-0.5">
             {isSuperAdmin && (
               <button
                 onClick={() => { setActiveProject(''); navigate('/admin'); }}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors`}
               >
-                <Shield size={18} className="text-red-500 opacity-80" />
+                <Shield size={18} className="text-slate-500 text-red-500 opacity-80" />
                 {!isCollapsed && <span className="text-sm font-medium">Admin Panel</span>}
               </button>
             )}
             <button
-              onClick={() => { navigate('/reports'); }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/reports' ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              onClick={() => navigate('/reports')}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/reports'
+                ? 'bg-[#FF6B35]/[0.06] text-slate-900 dark:text-white font-medium border-l-[3px] border-[#FF6B35]'
+                : 'text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 border-l-[3px] border-transparent'
+                }`}
               title={isCollapsed ? "Reports" : undefined}
             >
-              <BarChart2 size={18} />
+              <BarChart2 size={18} className={location.pathname === '/reports' ? 'text-[#FF6B35]' : 'text-slate-500'} />
               {!isCollapsed && <span className="text-sm font-medium">Reports</span>}
             </button>
             <button
-              onClick={() => { navigate('/history'); }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/history' ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              onClick={() => navigate('/history')}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/history'
+                ? 'bg-[#FF6B35]/[0.06] text-slate-900 dark:text-white font-medium border-l-[3px] border-[#FF6B35]'
+                : 'text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 border-l-[3px] border-transparent'
+                }`}
               title={isCollapsed ? "History" : undefined}
             >
-              <Archive size={18} />
+              <Archive size={18} className={location.pathname === '/history' ? 'text-[#FF6B35]' : 'text-slate-500'} />
               {!isCollapsed && <span className="text-sm font-medium">History</span>}
             </button>
             <button
               onClick={() => { setActiveProject(''); navigate('/guide'); }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-l-[3px] border-transparent`}
             >
-              <HelpCircle size={18} />
+              <HelpCircle size={18} className="text-slate-500" />
               {!isCollapsed && <span className="text-sm font-medium">Help Guide</span>}
             </button>
           </div>
@@ -295,18 +467,30 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
-        <button
-          onClick={() => setIsJoinModalOpen(true)}
-          className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-center gap-2'} py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all shadow-sm`}
-          title={isCollapsed ? "Join Project" : undefined}
-        >
-          <Hash size={16} />
-          {!isCollapsed && <span>Join with Code</span>}
-        </button>
+      <div className="p-3 border-t border-slate-100 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
+        {/* Team Actions Row */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsJoinTeamModalOpen(true)}
+            className={`flex-1 flex items-center ${isCollapsed ? 'justify-center' : 'justify-center gap-2'} py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary/50 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all`}
+            title={isCollapsed ? "Join Team" : undefined}
+          >
+            <Users size={14} />
+            {!isCollapsed && <span>Join Team</span>}
+          </button>
+          <button
+            onClick={() => setIsCreateTeamModalOpen(true)}
+            className={`flex-1 flex items-center ${isCollapsed ? 'justify-center' : 'justify-center gap-2'} py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary/50 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 transition-all`}
+            title={isCollapsed ? "Create Team" : undefined}
+          >
+            <Building2 size={14} />
+            {!isCollapsed && <span>New Team</span>}
+          </button>
+        </div>
 
+        {/* New Project Button */}
         <button
-          onClick={openCreateModal}
+          onClick={() => openCreateModal(null)}
           disabled={!can('createProject')}
           className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-center gap-2'} py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-sm font-medium text-white transition-all shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed`}
           title={isCollapsed ? "New Project" : undefined}
@@ -375,18 +559,7 @@ export const Sidebar: React.FC = () => {
               rows={3}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Theme Color</label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="color"
-                className="w-10 h-10 rounded cursor-pointer border-none bg-transparent"
-                value={newProjectColor}
-                onChange={e => setNewProjectColor(e.target.value)}
-              />
-              <span className="text-sm text-slate-500">{newProjectColor}</span>
-            </div>
-          </div>
+
           <div className="flex justify-end gap-3 mt-8">
             <button
               type="button"
@@ -426,18 +599,7 @@ export const Sidebar: React.FC = () => {
               rows={3}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Theme Color</label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="color"
-                className="w-10 h-10 rounded cursor-pointer border-none bg-transparent"
-                value={editColor}
-                onChange={e => setEditColor(e.target.value)}
-              />
-              <span className="text-sm text-slate-500">{editColor}</span>
-            </div>
-          </div>
+
 
           {isSuperAdmin && (
             <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -539,53 +701,18 @@ export const Sidebar: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal isOpen={isJoinModalOpen} onClose={() => setIsJoinModalOpen(false)} title="Join Existing Project">
-        <form onSubmit={handleJoin} className="space-y-6">
-          <div className="text-center">
-            <label className="block text-sm font-medium text-slate-500 mb-3">Enter the 6-character Project Code</label>
-            <input
-              autoFocus
-              type="text"
-              maxLength={6}
-              className="w-full p-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 font-mono text-center uppercase tracking-[0.5em] text-2xl focus:border-primary focus:ring-0 outline-none transition-all"
-              value={joinCode}
-              onChange={e => setJoinCode(e.target.value)}
-              placeholder="••••••"
-              required
-            />
-            {joinMessage.text && (
-              <p className={`text-sm mt-3 font-medium ${joinMessage.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                {joinMessage.text}
-              </p>
-            )}
-          </div>
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsJoinModalOpen(false)}
-              className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 font-medium text-sm transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-lg bg-primary text-white hover:bg-primary-hover shadow-sm hover:shadow font-medium text-sm transition-all"
-            >
-              Request to Join
-            </button>
-          </div>
-        </form>
-      </Modal>
+      {isTemplateSelectorOpen && (
+        <TemplateSelector
+          onSelectTemplate={handleTemplateSelect}
+          onClose={() => { setIsTemplateSelectorOpen(false); setIsModalOpen(true); }}
+          userIsPremium={canAccessPremium()}
+        />
+      )}
 
-      {
-        isTemplateSelectorOpen && (
-          <TemplateSelector
-            onSelectTemplate={handleTemplateSelect}
-            onClose={() => { setIsTemplateSelectorOpen(false); setIsModalOpen(true); }}
-            userIsPremium={canAccessPremium()}
-          />
-        )
-      }
-    </aside >
+      {/* Team Modals */}
+      <JoinTeamModal isOpen={isJoinTeamModalOpen} onClose={() => setIsJoinTeamModalOpen(false)} />
+      <CreateTeamModal isOpen={isCreateTeamModalOpen} onClose={() => setIsCreateTeamModalOpen(false)} />
+      <TeamSettingsModal isOpen={isTeamSettingsOpen} onClose={() => setIsTeamSettingsOpen(false)} team={selectedTeam} />
+    </aside>
   );
 };

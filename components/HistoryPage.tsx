@@ -169,7 +169,7 @@ export const HistoryPage: React.FC = () => {
                                                 ? 'bg-primary/5 text-primary font-medium'
                                                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                                         >
-                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.themeColor }}></span>
+                                            <span className="w-2 h-2 rounded-full shrink-0 bg-primary"></span>
                                             <span className="truncate">{p.name}</span>
                                             {activeProjectId === p.id && <CheckCircle size={14} className="ml-auto opacity-50" />}
                                         </button>

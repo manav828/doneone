@@ -721,7 +721,7 @@ export const AdminPanel: React.FC = () => {
                                     className="border border-gray-200 dark:border-gray-700 p-4 rounded-lg hover:shadow-md cursor-pointer bg-gray-50 dark:bg-gray-800/50 transition-all"
                                 >
                                     <div className="flex items-center gap-2 mb-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.themeColor || p.theme_color }}></div>
+                                        <div className="w-3 h-3 rounded-full bg-primary"></div>
                                         <h4 className="font-bold text-gray-800 dark:text-white truncate">{p.name}</h4>
                                     </div>
                                     <p className="text-xs text-gray-500 mb-2">Manager: {users.find(u => u.id === p.managerId)?.name || p.manager?.name || 'Unknown'}</p>

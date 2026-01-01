@@ -91,12 +91,13 @@ export const TopBar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  React.useEffect(() => {
-    const root = window.document.documentElement;
-    const color = activeProject?.themeColor || '#3b82f6';
-    root.style.setProperty('--color-primary', color);
-    root.style.setProperty('--color-primary-hover', color);
-  }, [activeProject]);
+  // Removed dynamic theme color injection to enforce unified D.One color system
+  // React.useEffect(() => {
+  //   const root = window.document.documentElement;
+  //   const color = activeProject?.themeColor || '#3b82f6';
+  //   root.style.setProperty('--color-primary', color);
+  //   root.style.setProperty('--color-primary-hover', color);
+  // }, [activeProject]);
 
   const handleViewChange = (view: 'board' | 'list' | 'calendar' | 'timeline') => {
     if (view !== 'board' && !canAccessPremium()) {
@@ -146,6 +147,8 @@ export const TopBar: React.FC = () => {
             <h2 className="text-xl font-bold text-primary">DoneOne Checkout</h2>
           ) : location.pathname === '/billing' ? (
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">Billing History</h2>
+          ) : location.pathname === '/workspace' ? (
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Company Settings</h2>
           ) : activeProject ? (
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-white leading-tight">
@@ -244,7 +247,7 @@ export const TopBar: React.FC = () => {
             </>
           )}
 
-          {activeProject && (
+          {activeProject && location.pathname === '/' && (
             <div className="flex items-center gap-1 mr-4 border-r border-slate-200 dark:border-slate-700 pr-4">
               {activeProject.managerId === currentUser.id && (
                 <button

@@ -15,6 +15,7 @@ import { PricingModal } from './components/PricingModal';
 import { CheckoutPage } from './components/CheckoutPage';
 import BillingPage from './components/BillingPage';
 import LandingPage from './components/landing/LandingPage';
+import { WorkspaceSettings } from './components/WorkspaceSettings';
 
 const App: React.FC = () => {
   const { init, currentUser, isLoading, tasks, projects } = useStore();
@@ -114,6 +115,8 @@ const App: React.FC = () => {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/billing" element={<BillingPage />} />
+          <Route path="/workspace" element={<WorkspaceSettings />} />
+          <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />
         </Routes>
       </Layout>
     </Router>
