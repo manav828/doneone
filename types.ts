@@ -51,6 +51,7 @@ export interface User {
   canInvite?: boolean;
   canExport?: boolean;
   allowMultipleInProgress?: boolean;
+  onboardingCompleted?: boolean;
 }
 
 export interface Tag {

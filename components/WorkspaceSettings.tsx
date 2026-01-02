@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import { Modal } from './Modal';
 import {
     Users,
     Building2,
@@ -58,6 +59,11 @@ export const WorkspaceSettings: React.FC = () => {
     const [activeSection, setActiveSection] = useState<'members' | 'roles' | 'projects' | 'settings'>('members');
     const [codeCopied, setCodeCopied] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Rename Modal State
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [itemToRename, setItemToRename] = useState<{ id: string, name: string, type: 'department' | 'company' } | null>(null);
+    const [renameValue, setRenameValue] = useState('');
 
     // Form states
     const [newRoleName, setNewRoleName] = useState('');
@@ -231,67 +237,57 @@ export const WorkspaceSettings: React.FC = () => {
     ];
 
     return (
-        <div className="flex-1 flex bg-slate-50 dark:bg-slate-900 h-full">
-            {/* Left Sidebar Navigation */}
-            <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col">
-                {/* Header */}
-                <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                    <button
-                        onClick={() => navigate('/')}
-                        className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary mb-3"
-                    >
-                        <ArrowLeft size={16} />
-                        Back to Projects
-                    </button>
-                    <h1 className="text-lg font-bold text-slate-900 dark:text-white">Company Settings</h1>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-slate-500">{uniqueEmployeeCount}/{totalMemberLimit} employees</span>
-                    </div>
-                </div>
-
-                {/* Navigation */}
-                <nav className="flex-1 p-3">
-                    <div className="space-y-1">
-                        {navItems.map(item => (
-                            <button
-                                key={item.id}
-                                onClick={() => setActiveSection(item.id as any)}
-                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeSection === item.id
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
+        <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-900 h-full overflow-hidden">
+            {/* Top Navigation Bar */}
+            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm z-10">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* Header & Tabs */}
+                    <div className="flex items-center justify-between h-16">
+                        {/* Tabs */}
+                        <div className="flex items-center space-x-8 h-full overflow-x-auto no-scrollbar">
+                            {navItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveSection(item.id as any)}
+                                    className={`
+                                    flex items-center gap-2 py-4 border-b-2 text-sm font-medium transition-colors whitespace-nowrap
+                                    ${activeSection === item.id
+                                            ? 'border-primary text-primary'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:border-slate-300'
+                                        }
+                                `}
+                                >
                                     <item.icon size={18} />
                                     {item.label}
-                                </div>
-                                {'count' in item && (
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${activeSection === item.id ? 'bg-primary/20' : 'bg-slate-100 dark:bg-slate-700'
-                                        }`}>
-                                        {item.count}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                </nav>
-
-                {/* Pending Requests Badge */}
-                {pendingMembers.length > 0 && (
-                    <div className="p-3 border-t border-slate-200 dark:border-slate-700">
-                        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                                <Clock size={14} />
-                                <span className="text-sm font-medium">{pendingMembers.length} Pending</span>
-                            </div>
+                                    {'count' in item && (
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${activeSection === item.id
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                            }`}>
+                                            {item.count}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
                         </div>
+
+                        {/* Pending Requests Badge */}
+                        {pendingMembers.length > 0 && (
+                            <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-900/50">
+                                <Clock size={14} className="text-amber-600 dark:text-amber-400" />
+                                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">{pendingMembers.length} Pending</span>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-                <div className="max-w-4xl mx-auto">
+            {/* Main Content - Centered */}
+            <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900">
+                <div className="max-w-6xl mx-auto p-6 space-y-8">
+
+                    {/* Main Content */}
+
 
                     {/* Members Section */}
                     {activeSection === 'members' && (
@@ -773,6 +769,30 @@ export const WorkspaceSettings: React.FC = () => {
                             <div className="space-y-6">
                                 <h2 className="text-xl font-bold">Company Settings</h2>
 
+                                {/* Company Name Settings */}
+                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                                    <h3 className="font-semibold mb-2">Company Name</h3>
+                                    <p className="text-sm text-slate-500 mb-4">This name is displayed in your sidebar header</p>
+
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                        <span className="font-medium text-lg">
+                                            {localStorage.getItem('myTeamsSectionName') || 'Company'}
+                                        </span>
+                                        <button
+                                            onClick={() => {
+                                                const currentName = localStorage.getItem('myTeamsSectionName') || 'Company';
+                                                setItemToRename({ id: 'company', name: currentName, type: 'company' });
+                                                setRenameValue(currentName);
+                                                setIsRenameModalOpen(true);
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
+                                            title="Rename Company"
+                                        >
+                                            <Edit2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
                                 {/* Company Join Code - ONE code for all */}
                                 <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
                                     <h3 className="font-semibold mb-2">Company Join Code</h3>
@@ -834,12 +854,10 @@ export const WorkspaceSettings: React.FC = () => {
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <button
-                                                            onClick={async () => {
-                                                                const newName = prompt('Rename department:', team.name);
-                                                                if (newName && newName.trim() && newName !== team.name) {
-                                                                    await updateTeam(team.id, { name: newName.trim() });
-                                                                    fetchTeams();
-                                                                }
+                                                            onClick={() => {
+                                                                setItemToRename({ id: team.id, name: team.name, type: 'department' });
+                                                                setRenameValue(team.name);
+                                                                setIsRenameModalOpen(true);
                                                             }}
                                                             className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
                                                             title="Rename department"
@@ -911,6 +929,54 @@ export const WorkspaceSettings: React.FC = () => {
                             </div>
                         )
                     }
+
+                    {/* Rename Modal */}
+                    <Modal
+                        isOpen={isRenameModalOpen}
+                        onClose={() => setIsRenameModalOpen(false)}
+                        title={itemToRename?.type === 'company' ? 'Rename Company' : 'Rename Department'}
+                    >
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={renameValue}
+                                    onChange={(e) => setRenameValue(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                    placeholder="Enter new name"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setIsRenameModalOpen(false)}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-lg text-sm font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (!itemToRename || !renameValue.trim()) return;
+
+                                        if (itemToRename.type === 'company') {
+                                            localStorage.setItem('myTeamsSectionName', renameValue.trim());
+                                            window.location.reload();
+                                        } else {
+                                            await updateTeam(itemToRename.id, { name: renameValue.trim() });
+                                            await fetchTeams();
+                                        }
+                                        setIsRenameModalOpen(false);
+                                    }}
+                                    className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
 
                 </div >
             </div >

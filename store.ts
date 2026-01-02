@@ -232,6 +232,9 @@ interface AppState {
   getJoinedTeams: () => Team[];
   getTeamProjects: (teamId: string) => Project[];
   getPersonalProjects: () => Project[];
+
+  // Onboarding
+  completeOnboarding: (role: string, workspaceName: string) => Promise<void>;
 }
 
 
@@ -1369,7 +1372,7 @@ export const useStore = create<any>((set, get) => ({
   },
 
   // ... (Previous addProject, updateProject, deleteProject, etc. remain unchanged)
-  addProject: async (name, description, teamIdParam = null) => {
+  addProject: async (name, description, teamIdParam = null, logo = '') => {
     if (!get().checkRateLimit('addProject')) return;
     const user = get().currentUser;
     if (!user) return;
@@ -1409,7 +1412,8 @@ export const useStore = create<any>((set, get) => ({
       manager_id: user.id,
       code,
       team_id: teamId, // Use the provided or auto-assigned teamId
-      auto_move_enabled: true  // Enable auto-move by default
+      auto_move_enabled: true,  // Enable auto-move by default
+      logo: logo || '' // Save Logo
     }).select().single();
     if (data) {
       // Instant Update State
@@ -1427,7 +1431,8 @@ export const useStore = create<any>((set, get) => ({
         pendingJoinRequests: [],
         reportsTo: {},
         viewAllReportsEnabled: data.view_all_reports_enabled,
-        manager: user
+        manager: user,
+        logo: data.logo
       };
 
       set(state => ({ projects: [...state.projects, newProject], activeProjectId: data.id }));
@@ -1439,7 +1444,7 @@ export const useStore = create<any>((set, get) => ({
     }
   },
 
-  addProjectFromTemplate: async (name, description, template) => {
+  addProjectFromTemplate: async (name, description, template, logo = '') => {
     const user = get().currentUser;
     if (!user) return;
     const myProjects = get().projects.filter(p => p.managerId === user.id);
@@ -1466,7 +1471,8 @@ export const useStore = create<any>((set, get) => ({
       name,
       description: description || template.description,
       manager_id: user.id,
-      code
+      code,
+      logo: logo || ''
     }).select().single();
 
     if (data) {
@@ -1484,7 +1490,8 @@ export const useStore = create<any>((set, get) => ({
         pendingJoinRequests: [],
         reportsTo: {},
         viewAllReportsEnabled: false,
-        manager: user
+        manager: user,
+        logo: data.logo
       };
       set(state => ({ projects: [...state.projects, newProject], activeProjectId: data.id }));
 
@@ -4033,6 +4040,75 @@ export const useStore = create<any>((set, get) => ({
         p.resourceIds?.includes(currentUser.id)
       )
     );
+  },
+
+  completeOnboarding: async (role: string, workspaceName: string, departments?: string[]) => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    // 1. Optimistic Update: Save to LocalStorage & Local State immediately
+    localStorage.setItem('myTeamsSectionName', workspaceName); // Company Name is just the Header
+    localStorage.setItem('doneone_onboarding_completed', 'true');
+
+    set((state) => ({
+      currentUser: state.currentUser ? { ...state.currentUser, onboardingCompleted: true } : null
+    }));
+
+    try {
+      const ownedTeams = get().getOwnedTeams();
+      const defaultTeam = ownedTeams.length > 0 ? ownedTeams[0] : null;
+
+      if (role !== 'individual') {
+        // STRATEGY: Departments ARE Workspaces (Teams).
+        // 1. If departments are provided, create them as Teams.
+        // 2. Reuse the default team for the first department to avoid empty duplicates.
+
+        if (departments && departments.length > 0) {
+          // Process first department (Rename default team)
+          const firstDept = departments[0];
+          if (defaultTeam && firstDept.trim()) {
+            await get().updateTeam(defaultTeam.id, { name: firstDept });
+          } else if (firstDept.trim()) {
+            await get().createTeam(firstDept);
+          }
+
+          // Process remaining departments (Create new teams)
+          for (let i = 1; i < departments.length; i++) {
+            const deptName = departments[i];
+            if (deptName.trim()) {
+              await get().createTeam(deptName);
+            }
+          }
+        } else {
+          // Fallback: If no departments listed, rename default team to Workspace Name (e.g. for simple managers)
+          if (defaultTeam && workspaceName.trim()) {
+            await get().updateTeam(defaultTeam.id, { name: workspaceName });
+          } else if (workspaceName.trim()) {
+            await get().createTeam(workspaceName);
+          }
+        }
+      }
+      // Note: We are NO LONGER creating 'Department' sub-entities in the DB, as the user defines Departments = Teams (Workspaces).
+
+      // 3. Update user profile in DB
+      if (currentUser.id) {
+        const updates = { onboardingCompleted: true };
+        const { error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', currentUser.id);
+
+        if (error) {
+          console.warn('Database Error (Non-blocking):', error.message);
+        }
+      }
+
+      // Refresh teams to show changes
+      await get().fetchTeams();
+
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+    }
   },
 
 }));
