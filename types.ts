@@ -1,5 +1,12 @@
 
-export type Role = 'Manager' | 'Lead' | 'Resource';
+export type Role = 'DeptHead' | 'Manager' | 'Lead' | 'Resource';
+
+export interface Company {
+  id: string;
+  name: string;
+  joinCode: string;
+  ownerId: string;
+}
 
 export interface Plan {
   id: string;
@@ -27,6 +34,7 @@ export interface User {
   role: Role;
   email?: string;
   avatar?: string;
+  companyId?: string;
   // Admin/Premium Settings
   // Enterprise / Billing Fields
   planBaseCost?: number;
@@ -114,6 +122,7 @@ export interface Team {
   name: string;
   joinCode: string;
   createdAt: number;
+  managerIds?: string[]; // Team Heads (Department Heads)
   // Computed/Joined
   owner?: User;
   memberCount?: number;
@@ -146,6 +155,7 @@ export interface Department {
   name: string;
   color?: string;
   createdAt?: number;
+  managerIds?: string[]; // Department Heads
   // Computed
   memberCount?: number;
 }
@@ -173,7 +183,9 @@ export interface Project {
   description?: string;
   code?: string; // DEPRECATED: Join codes now at team level (kept for backward compat)
   teamId?: string; // NEW: Link to team (null for personal/free projects)
+  departmentId?: string; // NEW: Link to department
   managerId: string; // The Creator
+  managerIds?: string[]; // NEW: Delegated Project Managers
   leadIds: string[]; // Derived from project_members
   resourceIds: string[]; // Derived from project_members
   pendingJoinRequests: string[]; // Derived from project_members where status = pending
@@ -207,6 +219,17 @@ export interface Notification {
 
 // Permission map
 export const PERMISSIONS = {
+  DeptHead: {
+    createProject: true,
+    deleteProject: true,
+    manageTeam: true,
+    editSettings: true,
+    manageColumns: true,
+    manageTasks: true,
+    manageTags: true,
+    assignProjectManager: true,
+    assignLead: true,
+  },
   Manager: {
     createProject: true,
     deleteProject: true,
@@ -215,6 +238,8 @@ export const PERMISSIONS = {
     manageColumns: true,
     manageTasks: true,
     manageTags: true,
+    assignProjectManager: false,
+    assignLead: true,
   },
   Lead: {
     createProject: true,
@@ -224,6 +249,8 @@ export const PERMISSIONS = {
     manageColumns: true,
     manageTasks: true,
     manageTags: true,
+    assignProjectManager: false,
+    assignLead: false,
   },
   Resource: {
     createProject: true,
@@ -233,6 +260,8 @@ export const PERMISSIONS = {
     manageColumns: true,
     manageTasks: true,
     manageTags: true,
+    assignProjectManager: false,
+    assignLead: false,
   },
 };
 

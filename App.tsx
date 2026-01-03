@@ -8,7 +8,7 @@ import { ReportsPage } from './components/ReportsPage';
 import { Guide } from './components/Guide';
 import { Login } from './Login';
 import { useStore } from './store';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Clock } from 'lucide-react';
 import { CustomAlert } from './components/CustomAlert';
 import { WelcomeModal } from './components/WelcomeModal';
 import { PricingModal } from './components/PricingModal';
@@ -107,17 +107,34 @@ const App: React.FC = () => {
           So I don't need it here.
       */}
       <Layout>
-        <Routes>
-          <Route path="/" element={<Board />} />
-          <Route path="/admin" element={<AdminPanel />} />
-          <Route path="/guide" element={<Guide />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/billing" element={<BillingPage />} />
-          <Route path="/workspace" element={<WorkspaceSettings />} />
-          <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />
-        </Routes>
+        {/* Waiting Screen for Unassigned Users */}
+        {useStore.getState().getJoinedTeams().length === 1 && useStore.getState().getJoinedTeams()[0].name === 'Unassigned' ? (
+          <div className="flex-1 h-full flex items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-900">
+            <div className="max-w-md">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Clock size={32} />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Waiting for Department</h2>
+              <p className="text-slate-500 mb-6">
+                You have joined the company successfully, but haven't been assigned to a department yet.
+                <br /><br />
+                Please contact your administrator to get access to a workspace.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <Routes>
+            <Route path="/" element={<Board />} />
+            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/guide" element={<Guide />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/workspace" element={<WorkspaceSettings />} />
+            <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />
+          </Routes>
+        )}
       </Layout>
     </Router>
   );

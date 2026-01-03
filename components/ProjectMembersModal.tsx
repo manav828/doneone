@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { projects, activeProjectId, removeMember, resolveJoinRequest, changeMemberRole, assignMemberLead, currentUser, users, plans, canAccessPremium } = useStore();
+  const { projects, activeProjectId, removeMember, resolveJoinRequest, changeMemberRole, assignMemberLead, currentUser, users, plans, canAccessPremium, can } = useStore();
   const project = projects.find(p => p.id === activeProjectId);
   const [copied, setCopied] = useState(false);
 
@@ -26,51 +26,34 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const leads = project.leadIds.map(getUser);
   const resources = project.resourceIds.map(getUser);
+  const delegatedManagers = (project.managerIds || []).map(getUser);
   const pendingUsers = (project.pendingJoinRequests || []).map(getUser);
   const manager = getUser(project.managerId);
-  const canManage = currentUser.id === project.managerId;
 
-  // Limits Display
+  const isOwner = currentUser.id === project.managerId;
+  const canManage = can('manageTeam', project.id) || isOwner;
+  const canAssignPM = can('assignProjectManager', project.id);
+  const canAssignLead = can('assignLead', project.id);
+
   // Limits Display
   // Determine Plan Logic
-  const hasPremiumAccess = canAccessPremium(); // Checks currentUser (who is manager if canManage is true)
+  const hasPremiumAccess = canAccessPremium();
   const planId = hasPremiumAccess ? 'premium' : 'free';
   const activePlan = plans.find(p => p.id === planId);
-  const invitesAllowed = activePlan?.canInviteMembers ?? false; // Default false if plan missing
+  const invitesAllowed = activePlan?.canInviteMembers ?? false;
 
-  console.log('🎫 ProjectMembersModal INVITE CHECK:', {
-    hasPremiumAccess,
-    planId,
-    activePlan: activePlan?.name,
-    canInviteMembers: activePlan?.canInviteMembers,
-    invitesAllowed,
-    canManage,
-    allPlans: plans.map(p => ({ id: p.id, name: p.name, canInvite: p.canInviteMembers }))
-  });
-
-  // Use plan limits if available, else user fallback?
-  // User fallback might be stale.
   const maxLeads = activePlan ? (activePlan.maxLeadsPerProject || 5) : (manager?.maxLeads || 2);
-  // Actually, let's just stick to the Invite Logic for now.
-  // Fixed: explicitly sum Plan Base + Extra Seats if user has them, OR use max_resources if manually set higher.
-  // The reliable formula is: Plan Limit + Extra Seats.
-  // BUT: admin might have manually set maxResources to something else entirely.
-  // Let's check: if (max_resources > plan_limit + extra_seats) use max_resources (Custom override)
-  // Else use plan_limit + extra_seats.
-
   const planLimit = activePlan?.maxMembersPerProject || 2;
   const extra = currentUser.extraSeats || 0;
   const calculatedTotal = planLimit + extra;
-  const dbMaxRes = manager?.maxResources || 0; // This is what comes from DB
-
-  // Display the larger of the two to be safe (if DB update lagged but calculated is right, or if manual override is larger)
+  const dbMaxRes = manager?.maxResources || 0;
   const maxRes = Math.max(calculatedTotal, dbMaxRes);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Members: ${project.name}`}>
       <div className="space-y-6">
 
-        {/* Project Code - Locked if not premium? Or always open? Prompt says invite person depends on admin allow */}
+        {/* Project Code */}
         <div className={`p-4 rounded-lg flex items-center justify-between border border-dashed ${!invitesAllowed && canManage ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-300 dark:bg-gray-700/50 dark:border-gray-600'}`}>
           {!invitesAllowed && canManage ? (
             <div className="flex items-center gap-3 text-gray-500 w-full">
@@ -134,13 +117,14 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <div className="flex justify-between items-end mb-3">
             <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">Project Team</h4>
             <div className="text-[10px] text-gray-400 flex flex-col items-end">
+              <span>Managers: {delegatedManagers.length + 1}</span>
               <span>Leads: {leads.length} / {maxLeads}</span>
               <span>Resources: {resources.length} / {maxRes}</span>
             </div>
           </div>
 
           <div className="space-y-2 max-h-80 overflow-y-auto">
-            {/* Manager */}
+            {/* Owner/Primary Manager */}
             {manager && (
               <div className="flex items-center justify-between p-2 rounded bg-primary/5 border border-primary/20">
                 <div className="flex items-center gap-2">
@@ -154,6 +138,39 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
               </div>
             )}
+
+            {/* Delegated Project Managers */}
+            {delegatedManagers.map(member => (
+              <div key={member.id} className="flex items-center justify-between p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
+                    {member.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{member.name}</p>
+                    <p className="text-xs text-blue-500 font-semibold flex items-center gap-1"><Shield size={10} /> Project Manager</p>
+                  </div>
+                </div>
+                {canManage && (
+                  <div className="flex gap-2">
+                    {canAssignPM && (
+                      <button
+                        onClick={() => changeMemberRole(project.id, member.id, 'Lead')}
+                        className="text-gray-400 hover:text-blue-500 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
+                      >
+                        Demote
+                      </button>
+                    )}
+                    <button
+                      onClick={() => removeMember(project.id, member.id)}
+                      className="text-gray-400 hover:text-red-500 p-1"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
 
             {/* Leads */}
             {leads.map(member => (
@@ -169,6 +186,14 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
                 {canManage && (
                   <div className="flex gap-2">
+                    {canAssignPM && (
+                      <button
+                        onClick={() => changeMemberRole(project.id, member.id, 'Manager')}
+                        className="text-gray-400 hover:text-blue-500 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
+                      >
+                        Promote to Manager
+                      </button>
+                    )}
                     <button
                       onClick={() => changeMemberRole(project.id, member.id, 'Resource')}
                       className="text-gray-400 hover:text-orange-500 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
@@ -201,12 +226,14 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </div>
                   {canManage && (
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => changeMemberRole(project.id, member.id, 'Lead')}
-                        className="text-gray-400 hover:text-green-500 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
-                      >
-                        Promote
-                      </button>
+                      {canAssignLead && (
+                        <button
+                          onClick={() => changeMemberRole(project.id, member.id, 'Lead')}
+                          className="text-gray-400 hover:text-green-500 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
+                        >
+                          Promote to Lead
+                        </button>
+                      )}
                       <button
                         onClick={() => removeMember(project.id, member.id)}
                         className="text-gray-400 hover:text-red-500 p-1"
