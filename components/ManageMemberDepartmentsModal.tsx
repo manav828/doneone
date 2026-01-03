@@ -35,7 +35,7 @@ export const ManageMemberDepartmentsModal: React.FC<ManageMemberDepartmentsModal
         setIsSaving(true);
         try {
             const currentMemberships = activeMembers.filter(m => m.userId === userId);
-            const currentTeamIds = new Set(currentMemberships.map(m => m.teamId));
+            const currentTeamIds = new Set<string>(currentMemberships.map(m => m.teamId));
 
             // 1. Add new teams
             const toAdd = Array.from(selectedTeamIds).filter(id => !currentTeamIds.has(id));

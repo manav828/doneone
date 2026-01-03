@@ -260,7 +260,7 @@ export const WorkspaceSettings: React.FC = () => {
     ];
 
     if (primaryTeam?.ownerId === currentUser?.id) {
-        navItems.push({ id: 'settings', label: 'Settings', icon: Settings });
+        navItems.push({ id: 'settings', label: 'Settings', icon: Settings, count: 0 });
     }
 
     return (

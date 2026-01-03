@@ -3148,6 +3148,9 @@ export const useStore = create<any>((set, get) => ({
       isTeamHead = true;
     }
 
+    // Check Project Lead (someone who has members reporting to them in this project)
+    const isLead = project.reportsTo && Object.values(project.reportsTo).includes(currentUser.id);
+
     if (isSuperAdmin || isManager || isTeamHead) {
       allowedTasks = projectTasks;
     } else if (isLead) {
