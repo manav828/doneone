@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
 import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database, Trash2 } from 'lucide-react';
@@ -9,11 +9,9 @@ import { AdminFeedback } from './admin/AdminFeedback';
 import { MessageSquare } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
-    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, plans, updatePlan, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects } = useStore();
+    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, plans, updatePlan, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects, teams, teamMembers } = useStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
-    // Use store data directly for rendering, or keep local state sync if needed (sorting).
-    // Given the sort requirement, we'll sync from storeUsers.
     const [users, setUsers] = useState<User[]>([]);
     const [projects, setProjects] = useState<any[]>([]);
     const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
@@ -21,6 +19,13 @@ export const AdminPanel: React.FC = () => {
     const [regOpen, setRegOpen] = useState(true);
     const [localPlans, setLocalPlans] = useState<Plan[]>([]);
     const [activeTab, setActiveTab] = useState<'overview' | 'feedback'>('overview');
+
+    // Derived Roles
+    const isSuperAdmin = currentUser?.email === 'manavss828@gmail.com';
+    const managedTeamIds = useMemo(() => teams
+        .filter(t => t.managerIds?.includes(currentUser?.id || '') || t.ownerId === currentUser?.id)
+        .map(t => t.id), [teams, currentUser]);
+    const isTeamHead = managedTeamIds.length > 0;
 
     useEffect(() => {
         // Enforce sorted order locally to prevent jumping
@@ -36,7 +41,6 @@ export const AdminPanel: React.FC = () => {
         const plan = localPlans.find(p => p.id === planId);
         if (!plan) return;
         await updatePlan(planId, plan);
-        // alert('Plan updated successfully!'); // Removed alert to be less intrusive
     };
 
     const [editLimits, setEditLimits] = useState({
@@ -44,27 +48,25 @@ export const AdminPanel: React.FC = () => {
         maxLeads: 2,
         maxResources: 5,
         historyRetentionDays: null as number | null,
-        addPremiumDays: 0, // New field for temp premium
-        // Enterprise Fields
+        addPremiumDays: 0,
         planBaseCost: 0,
-        perSeatCost: 5, // Default $5
+        perSeatCost: 5,
         extraSeats: 0,
         isCustomPlan: false,
-        renewalDate: null as string | null // ISO Date string for input
+        renewalDate: null as string | null
     });
 
     useEffect(() => {
-        if (currentUser?.email !== 'manavss828@gmail.com') {
+        // Access Check: Super Admin OR Team Head
+        if (!isSuperAdmin && !isTeamHead) {
             navigate('/');
             return;
         }
 
         const loadAdminData = async () => {
-            // 1. Initial Data check (if store empty)
             if (storeUsers.length === 0) await fetchUsers();
             if (storeProjects.length === 0) await fetchProjects();
 
-            // 2. Fetch Admin specific stats
             const status = await getRegistrationStatus();
             setRegOpen(status);
             const stats = await fetchStorageStats();
@@ -74,17 +76,38 @@ export const AdminPanel: React.FC = () => {
         };
 
         loadAdminData();
-    }, [currentUser, navigate]); // Removed fetchUsers/Projects from dependency to avoid loop if they change reference
+    }, [currentUser, navigate, isSuperAdmin, isTeamHead]);
 
     // Sync from Store to Local State for Display (and Sorting)
     useEffect(() => {
-        const sorted = [...storeUsers].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        let relevantUsers = [...storeUsers];
+
+        // Filter for Team Heads: Only show members of MY teams
+        if (!isSuperAdmin && isTeamHead) {
+            const myTeamMemberIds = teamMembers
+                .filter(tm => managedTeamIds.includes(tm.teamId))
+                .map(tm => tm.userId);
+            // Also include self
+            if (currentUser) myTeamMemberIds.push(currentUser.id);
+
+            relevantUsers = relevantUsers.filter(u => myTeamMemberIds.includes(u.id));
+        }
+
+        const sorted = relevantUsers.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setUsers(sorted);
-    }, [storeUsers]);
+    }, [storeUsers, isSuperAdmin, isTeamHead, managedTeamIds, teamMembers]);
 
     useEffect(() => {
-        setProjects(storeProjects);
-    }, [storeProjects]);
+        let relevantProjects = [...storeProjects];
+
+        // Filter for Team Heads: Only show projects of MY teams
+        if (!isSuperAdmin && isTeamHead) {
+            relevantProjects = relevantProjects.filter(p => p.teamId && managedTeamIds.includes(p.teamId));
+        }
+
+        setProjects(relevantProjects);
+    }, [storeProjects, isSuperAdmin, isTeamHead, managedTeamIds]);
+
 
     const handleToggleReg = async () => {
         await toggleRegistration(!regOpen);

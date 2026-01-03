@@ -9,25 +9,25 @@ interface JoinTeamModalProps {
 }
 
 export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose }) => {
-    const { joinTeam, fetchTeams } = useStore();
+    const { joinCompany, fetchTeams } = useStore();
     const [joinCode, setJoinCode] = useState('');
-    const [status, setStatus] = useState<'idle' | 'loading' | 'requested' | 'already_member' | 'already_pending' | 'not_found' | 'error'>('idle');
+    const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'invalid_code' | 'error'>('idle');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!joinCode.trim()) return;
 
         setStatus('loading');
-        const result = await joinTeam(joinCode.trim());
-        setStatus(result);
+        const result = await joinCompany(joinCode.trim());
+        setStatus(result as any);
 
-        if (result === 'requested') {
+        if (result === 'success') {
             await fetchTeams();
             setTimeout(() => {
                 onClose();
                 setJoinCode('');
                 setStatus('idle');
-            }, 2000);
+            }, 1500);
         }
     };
 
@@ -37,35 +37,42 @@ export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose })
                 return (
                     <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                         <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-                        <span>Joining...</span>
+                        <span>Joining Company...</span>
                     </div>
                 );
-            case 'requested':
+            case 'success':
                 return (
                     <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                         <CheckCircle size={16} />
-                        <span>Request sent! Waiting for owner approval.</span>
+                        <span>Successfully joined the company!</span>
                     </div>
                 );
-            case 'already_member':
+            case 'success_pending':
                 return (
                     <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                        <AlertCircle size={16} />
-                        <span>You're already a member of this team.</span>
+                        <Clock size={16} />
+                        <span>Request sent! Waiting for admin approval.</span>
                     </div>
                 );
             case 'already_pending':
                 return (
-                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                        <Clock size={16} />
-                        <span>You already have a pending request for this team.</span>
+                    <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                        <AlertCircle size={16} />
+                        <span>Join request is already pending.</span>
                     </div>
                 );
-            case 'not_found':
+            case 'already_joined':
+                return (
+                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                        <CheckCircle size={16} />
+                        <span>You are already a member!</span>
+                    </div>
+                );
+            case 'invalid_code':
                 return (
                     <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                         <XCircle size={16} />
-                        <span>Team not found. Check the code and try again.</span>
+                        <span>Invalid Company Code.</span>
                     </div>
                 );
             case 'error':
@@ -89,9 +96,9 @@ export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose })
                 </div>
 
                 {/* Title */}
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Join a Team</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Join Company</h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                    Enter the team code shared by the team owner
+                    Enter the company code shared by the admin
                 </p>
 
                 {/* Form */}
@@ -108,7 +115,7 @@ export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose })
                             }}
                             placeholder="XXXXXX"
                             className="w-full p-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 font-mono text-center uppercase tracking-[0.5em] text-2xl focus:border-primary focus:ring-0 outline-none transition-all"
-                            disabled={status === 'loading' || status === 'requested'}
+                            disabled={status === 'loading' || status === 'success'}
                         />
                     </div>
 
@@ -122,22 +129,22 @@ export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose })
                     {/* Submit Button */}
                     <button
                         type="submit"
-                        disabled={!joinCode.trim() || joinCode.length < 6 || status === 'loading' || status === 'requested'}
+                        disabled={!joinCode.trim() || joinCode.length < 5 || status === 'loading' || status === 'success'}
                         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                         {status === 'loading' ? (
                             <>
                                 <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                                <span>Sending Request...</span>
+                                <span>Joining...</span>
                             </>
-                        ) : status === 'requested' ? (
+                        ) : status === 'success' ? (
                             <>
                                 <CheckCircle size={18} />
-                                <span>Request Sent!</span>
+                                <span>Joined!</span>
                             </>
                         ) : (
                             <>
-                                <span>Request to Join</span>
+                                <span>Join Company</span>
                                 <ArrowRight size={18} />
                             </>
                         )}
@@ -146,7 +153,7 @@ export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose })
 
                 {/* Info */}
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-6">
-                    After requesting, the team owner will review and approve your request.
+                    You will be added to the company roster immediately.
                 </p>
             </div>
         </Modal>

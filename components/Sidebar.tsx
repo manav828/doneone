@@ -168,7 +168,8 @@ export const Sidebar: React.FC = () => {
     getTeamProjects,
     getPersonalProjects,
     activeTeamId,
-    setActiveTeam
+    setActiveTeam,
+    currentCompany
   } = useStore();
 
   const navigate = useNavigate();
@@ -225,6 +226,7 @@ export const Sidebar: React.FC = () => {
 
   const ownedTeams = getOwnedTeams();
   const joinedTeams = getJoinedTeams();
+
   const personalProjects = getPersonalProjects();
 
   const toggleSection = (section: string) => {
@@ -262,7 +264,18 @@ export const Sidebar: React.FC = () => {
     setNewProjectName('');
     setNewProjectDesc('');
     setNewProjectLogoUrl('');
-    setCreatingForTeamId(teamId);
+
+    // Auto-select team for Admins/Heads if not provided
+    if (teamId) {
+      setCreatingForTeamId(teamId);
+    } else {
+      const manageableTeams = ownedTeams.concat(
+        joinedTeams.filter(t => t.managerIds?.includes(currentUser?.id))
+      );
+      // Default to first manageable team, or null (Personal)
+      setCreatingForTeamId(manageableTeams.length > 0 ? manageableTeams[0].id : null);
+    }
+
     setIsModalOpen(true);
   };
 
@@ -352,7 +365,9 @@ export const Sidebar: React.FC = () => {
         <div className="flex items-center gap-3 text-slate-800 dark:text-slate-100">
           {!isCollapsed ? (
             <div className="flex flex-col pl-3">
-              <img src="/logo.png" alt="DoneOne" className="h-8 w-auto object-contain" />
+              <div className="flex items-center gap-2">
+                <img src="/logo.png" alt="DoneOne" className="h-8 w-auto object-contain" />
+              </div>
             </div>
           ) : (
             <img src="/logo.png" alt="DoneOne" className="h-8 w-8 object-contain" />
@@ -380,17 +395,8 @@ export const Sidebar: React.FC = () => {
                 <>
                   <span
                     className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1"
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      const newName = prompt('Enter company/teams section name:', 'Company');
-                      if (newName && ownedTeams[0]) {
-                        localStorage.setItem('myTeamsSectionName', newName);
-                        window.location.reload();
-                      }
-                    }}
-                    title="Double-click to rename"
                   >
-                    {localStorage.getItem('myTeamsSectionName') || 'Company'}
+                    {currentCompany?.name || 'Company'}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
@@ -403,7 +409,7 @@ export const Sidebar: React.FC = () => {
 
             {expandedSections.ownedTeams && (
               <div className="space-y-1">
-                {ownedTeams.map(team => (
+                {ownedTeams.filter(t => t.name !== 'Unassigned').map(team => (
                   <SidebarTeamSection
                     key={team.id}
                     team={team}
@@ -421,8 +427,9 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Joined Teams Section */}
-        {joinedTeams.length > 0 && (
+        {/* Joined Teams Section - Always show if not empty OR if we need to show empty state */}
+        {/* Joined Teams Section - Only show if has actual joined teams */}
+        {joinedTeams.filter(t => t.name !== 'DoneOne' && t.name !== 'Unassigned').length > 0 && (
           <div className="px-3">
             <div
               className="flex items-center justify-between px-2 mb-1 cursor-pointer"
@@ -431,10 +438,20 @@ export const Sidebar: React.FC = () => {
               {!isCollapsed && (
                 <>
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">
-                    Joined Teams
+                    {(() => {
+                      // Extract Company Name from first joined team
+                      const firstTeam = joinedTeams.find(t => t.name !== 'DoneOne' && t.name !== 'Unassigned');
+                      // Use 'companies' prop from store (which now holds 'company' data) OR 'company' if direct from DB
+                      const compData = firstTeam?.companies || firstTeam?.company;
+
+                      const companyName = compData
+                        ? (Array.isArray(compData) ? compData[0]?.name : compData.name)
+                        : null;
+                      return companyName || 'Joined Teams';
+                    })()}
                   </span>
                   <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
-                    {joinedTeams.length}
+                    {joinedTeams.filter(t => t.name !== 'DoneOne' && t.name !== 'Unassigned').length}
                   </span>
                 </>
               )}
@@ -442,7 +459,7 @@ export const Sidebar: React.FC = () => {
 
             {expandedSections.joinedTeams && (
               <div className="space-y-1">
-                {joinedTeams.map(team => (
+                {joinedTeams.filter(t => t.name !== 'DoneOne' && t.name !== 'Unassigned').map(team => (
                   <SidebarTeamSection
                     key={team.id}
                     team={team}
@@ -638,6 +655,40 @@ export const Sidebar: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Workspace Selection Dropdown */}
+          {(() => {
+            const manageableTeams = ownedTeams.concat(
+              joinedTeams.filter(t => t.managerIds?.includes(currentUser?.id))
+            );
+
+            // Only show dropdown if user can manage at least one team
+            if (manageableTeams.length > 0) {
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Workspace / Team</label>
+                  <select
+                    value={creatingForTeamId || ''}
+                    onChange={(e) => setCreatingForTeamId(e.target.value || null)}
+                    className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  >
+                    <option value="">Personal Project</option>
+                    {manageableTeams.map(team => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {creatingForTeamId
+                      ? "Project will be visible to all team members."
+                      : "Only you can see this project (unless you share it)."}
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Project Name</label>

@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket, Team, TeamMember, TeamRole, Department, DepartmentMember } from './types';
+import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket, Team, TeamMember, TeamRole, Department, DepartmentMember, Company } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -48,6 +48,10 @@ interface AppState {
   departments: Department[];
   departmentMembers: DepartmentMember[];
   activeTeamId: string | null;
+  currentCompany: Company | null;
+  fetchCurrentCompany: () => Promise<void>;
+  updateCompany: (updates: Partial<Company>) => Promise<void>;
+  fetchCurrentUser: () => Promise<void>;
 
   // History Management
   taskHistory: TaskHistory[];
@@ -222,13 +226,19 @@ interface AppState {
   // Department Members
   addMemberToDepartment: (departmentId: string, userId: string) => Promise<void>;
   removeMemberFromDepartment: (departmentId: string, userId: string) => Promise<void>;
+  assignDepartmentHead: (departmentId: string, userId: string) => Promise<void>; // NEW
+  removeDepartmentHead: (departmentId: string, userId: string) => Promise<void>; // NEW
 
   // Project-Team Assignment
   assignProjectToTeam: (projectId: string, teamId: string) => Promise<void>;
   assignMemberToProject: (projectId: string, userId: string, role: Role) => Promise<void>;
+  assignProjectManager: (projectId: string, userId: string) => Promise<void>; // NEW
+  removeProjectManager: (projectId: string, userId: string) => Promise<void>; // NEW
 
   // Helpers
   getOwnedTeams: () => Team[];
+  getCompanyEmployees: () => User[]; // NEW: Strictly company members
+  getScopedEmployees: () => User[];
   getJoinedTeams: () => Team[];
   getTeamProjects: (teamId: string) => Project[];
   getPersonalProjects: () => Project[];
@@ -739,6 +749,20 @@ export const useStore = create<any>((set, get) => ({
       profile.email = session.user.email;
     }
 
+    // CHECK BLACKLIST (Deleted Users)
+    const { data: isDeleted } = await supabase
+      .from('deleted_users')
+      .select('user_id')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+
+    if (isDeleted) {
+      await supabase.auth.signOut();
+      set({ currentUser: null, session: null });
+      window.location.href = '/login?deleted=true';
+      return;
+    }
+
     if (profile) {
 
       // REMOVED: Retroactive Trial code that was automatically setting is_premium=true
@@ -780,6 +804,7 @@ export const useStore = create<any>((set, get) => ({
             name: profile.name,
             email: profile.email, // Now stored in profiles table
             role: profile.role,
+            companyId: profile.company_id,
 
             createdAt: new Date(profile.created_at).getTime(),
             premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
@@ -812,6 +837,8 @@ export const useStore = create<any>((set, get) => ({
         } : null,
         adminRetentionSettings
       });
+
+      await get().fetchCurrentCompany();
 
       // Fetch Plans and update user limits based on Plan
       await get().fetchPlans();
@@ -865,6 +892,109 @@ export const useStore = create<any>((set, get) => ({
   },
 
   // Data Fetching
+  fetchCurrentUser: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (profile) {
+      set({
+        currentUser: {
+          ...profile,
+          companyId: profile.company_id
+        }
+      });
+      await get().fetchCurrentCompany();
+    }
+  },
+
+  fetchCurrentCompany: async () => {
+    const { currentUser } = get();
+    if (!currentUser) return;
+
+    // 1. Happy Path: User has companyId
+    if (currentUser.companyId) {
+      const { data } = await supabase.from('companies').select('*').eq('id', currentUser.companyId).maybeSingle();
+      if (data) {
+        set({
+          currentCompany: {
+            id: data.id,
+            name: data.name,
+            joinCode: data.join_code,
+            ownerId: data.owner_id
+          }
+        });
+        return;
+      }
+    }
+
+    // 2. Fallback: User might own a company but profile link is missing
+    const { data: ownedCompanies } = await supabase.from('companies').select('*').eq('owner_id', currentUser.id).limit(1);
+    const ownedCompany = ownedCompanies && ownedCompanies.length > 0 ? ownedCompanies[0] : null;
+
+    if (ownedCompany) {
+      // Heal the link
+      await supabase.from('profiles').update({ company_id: ownedCompany.id }).eq('id', currentUser.id);
+
+      set({
+        currentUser: { ...currentUser, companyId: ownedCompany.id },
+        currentCompany: {
+          id: ownedCompany.id,
+          name: ownedCompany.name,
+          joinCode: ownedCompany.join_code,
+          ownerId: ownedCompany.owner_id
+        }
+      });
+      return;
+    }
+
+    // 3. Legacy Migration: User owns TEAMS but has NO Company record
+    // Check if they own any teams
+    const { data: ownedTeams } = await supabase.from('teams').select('*').eq('owner_id', currentUser.id).limit(1);
+
+    if (ownedTeams && ownedTeams.length > 0) {
+      const primaryTeam = ownedTeams[0];
+      console.log('Migrating Legacy User: Creating Company from Team', primaryTeam.name);
+
+      const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const { data: newCompany, error } = await supabase.from('companies').insert({
+        name: primaryTeam.name,
+        owner_id: currentUser.id,
+        join_code: newJoinCode
+      }).select().single();
+
+      if (newCompany && !error) {
+        // Update profile
+        await supabase.from('profiles').update({ company_id: newCompany.id }).eq('id', currentUser.id);
+
+        set({
+          currentUser: { ...currentUser, companyId: newCompany.id },
+          currentCompany: {
+            id: newCompany.id,
+            name: newCompany.name,
+            joinCode: newCompany.join_code,
+            ownerId: newCompany.owner_id
+          }
+        });
+        return;
+      }
+    }
+
+    set({ currentCompany: null });
+  },
+
+  updateCompany: async (updates) => {
+    const { currentCompany } = get();
+    if (!currentCompany) return;
+
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.joinCode) dbUpdates.join_code = updates.joinCode;
+
+    await supabase.from('companies').update(dbUpdates).eq('id', currentCompany.id);
+    await get().fetchCurrentCompany();
+  },
+
   fetchUsers: async () => {
     const { data: allProfiles } = await supabase.from('profiles').select('*, user_archive_settings(*)').order('created_at');
     const mappedUsers: User[] = (allProfiles || []).map((p: any) => {
@@ -987,6 +1117,8 @@ export const useStore = create<any>((set, get) => ({
         teamId: p.team_id, // NEW: Link to team
         logo: p.logo,
         managerId: p.manager_id,
+        managerIds: p.manager_ids || [],
+        departmentId: p.department_id,
         autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true,
         leadIds: pMembers.filter((m: any) => m.role === 'Lead' && m.status === 'active').map((m: any) => m.user_id),
         resourceIds: pMembers.filter((m: any) => m.role === 'Resource' && m.status === 'active').map((m: any) => m.user_id),
@@ -1012,12 +1144,40 @@ export const useStore = create<any>((set, get) => ({
     });
 
     const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
+    const { teams } = get();
+
+    // Get all team IDs where user is a Team Head (in team.managerIds)
+    const teamHeadTeamIds = new Set(
+      teams
+        .filter(t => t.managerIds?.includes(currentUser.id))
+        .map(t => t.id)
+    );
+
+    console.log('📋 fetchProjects DEBUG:', {
+      currentUserId: currentUser.id,
+      currentUserEmail: currentUser.email,
+      teamsCount: teams.length,
+      teams: teams.map(t => ({ name: t.name, id: t.id, managerIds: t.managerIds })),
+      teamHeadTeamIds: Array.from(teamHeadTeamIds),
+      allProjectTeamIds: processedProjects.map(p => ({ name: p.name, teamId: p.teamId }))
+    });
+
     const validProjects = processedProjects.filter(p =>
       isSuperAdmin ||
       p.managerId === currentUser.id ||
+      p.managerIds?.includes(currentUser.id) ||
       p.leadIds.includes(currentUser.id) ||
-      p.resourceIds.includes(currentUser.id)
+      p.resourceIds.includes(currentUser.id) ||
+      // Team Head can see all projects in their team
+      (p.teamId && teamHeadTeamIds.has(p.teamId))
     );
+
+    console.log('📋 fetchProjects RESULT:', {
+      totalProcessed: processedProjects.length,
+      validCount: validProjects.length,
+      validNames: validProjects.map(p => p.name)
+    });
+
     set({ projects: validProjects });
     syncToChromeStorage('cachedProjects', validProjects);
     return validProjects;
@@ -1301,6 +1461,13 @@ export const useStore = create<any>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return;
 
+    // First fetch teams and departments (projects depend on departments for visibility)
+    await Promise.all([
+      get().fetchTeams(),
+      get().fetchAllDepartments()
+    ]);
+
+    // Then fetch everything else including projects
     await Promise.all([
       get().fetchUsers(),
       get().fetchProjects(),
@@ -1309,8 +1476,7 @@ export const useStore = create<any>((set, get) => ({
       get().fetchActivities(),
       get().fetchNotifications(),
       get().fetchTags(),
-      get().fetchPlans(),
-      get().fetchTeams() // NEW: Fetch teams
+      get().fetchPlans()
     ]);
 
     set({ isLoading: false });
@@ -1658,12 +1824,23 @@ export const useStore = create<any>((set, get) => ({
   },
 
   changeMemberRole: async (projectId, userId, role) => {
+    const project = get().projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    // Handle Project Manager delegation sync
+    const delegatedManagers = project.managerIds || [];
+    const isCurrentlyDelegatedManager = delegatedManagers.includes(userId);
+
+    if (role === 'Manager' && !isCurrentlyDelegatedManager) {
+      await get().assignProjectManager(projectId, userId);
+    } else if (role !== 'Manager' && isCurrentlyDelegatedManager) {
+      await get().removeProjectManager(projectId, userId);
+    }
+
     if (role === 'Lead') {
-      const project = get().projects.find(p => p.id === projectId);
-      const manager = get().users.find(u => u.id === project?.managerId);
+      const manager = get().users.find(u => u.id === project.managerId);
       if (manager) {
-        const currentLeads = project?.leadIds.length || 0;
-        // Determine Manager's Effective Lead Limit
+        const currentLeads = project.leadIds.length || 0;
         const isManagerPremium = manager.isPremium;
         const plans = get().plans;
         const managerPlan = isManagerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
@@ -1672,16 +1849,16 @@ export const useStore = create<any>((set, get) => ({
         const profileLeadLimit = manager.maxLeads || 0;
 
         const effectiveLeadLimit = Math.max(profileLeadLimit, planLeadLimit);
-        const limit = effectiveLeadLimit;
 
-        if (currentLeads >= limit && manager.email !== ADMIN_EMAIL) {
+        if (currentLeads >= effectiveLeadLimit && manager.email !== ADMIN_EMAIL) {
           alert(`Limit reached!`);
           return;
         }
       }
     }
+
     await supabase.from('project_members').update({ role }).eq('project_id', projectId).eq('user_id', userId);
-    get().fetchProjects();
+    await get().fetchProjects();
   },
 
   assignMemberLead: async (projectId, resourceId, leadId) => {
@@ -2781,56 +2958,22 @@ export const useStore = create<any>((set, get) => ({
     }
 
     try {
-      // 1. Delete all tasks created by or assigned to this user
-      await supabase.from('tasks').delete().eq('creator_id', userId);
-      await supabase.from('tasks').delete().eq('assignee_id', userId);
+      const { data, error } = await supabase.rpc('delete_user_secure', { target_user_id: userId });
 
-      // 2. Delete all projects owned by this user
-      const { data: userProjects } = await supabase.from('projects').select('id').eq('manager_id', userId);
-      if (userProjects && userProjects.length > 0) {
-        const projectIds = userProjects.map(p => p.id);
-        // Delete all data related to these projects
-        await supabase.from('tasks').delete().in('project_id', projectIds);
-        await supabase.from('columns').delete().in('project_id', projectIds);
-        await supabase.from('project_members').delete().in('project_id', projectIds);
-        await supabase.from('activities').delete().in('project_id', projectIds);
-        await supabase.from('tags').delete().in('project_id', projectIds);
-        await supabase.from('task_history').delete().in('project_id', projectIds);
-        await supabase.from('projects').delete().in('id', projectIds);
-      }
+      if (error) throw error;
+      if (data && data.status === 'error') throw new Error(data.message);
 
-      // 3. Remove user from all project memberships
-      await supabase.from('project_members').delete().eq('user_id', userId);
+      alert('User deleted successfully.');
 
-      // 4. Delete user's notifications
-      await supabase.from('notifications').delete().eq('recipient_id', userId);
+      // Refresh all data
+      await get().fetchUsers();
+      await get().fetchProjects();
+      await get().fetchTeams();
+      await get().fetchTeamMembers(get().activeTeamId || '');
 
-      // 5. Delete user's activities
-      await supabase.from('activities').delete().eq('user_id', userId);
-
-      // 6. Delete user's support tickets
-      await supabase.from('support_tickets').delete().eq('user_id', userId);
-
-      // 7. Delete user's archive settings
-      await supabase.from('user_archive_settings').delete().eq('user_id', userId);
-
-      // 8. Delete task history archived by this user
-      await supabase.from('task_history').delete().eq('archived_by', userId);
-
-      // 9. Finally, delete the profile
-      const { error } = await supabase.from('profiles').delete().eq('id', userId);
-
-      if (error) {
-        console.error("Delete user error:", error);
-        alert(`Failed to delete user: ${error.message}`);
-      } else {
-        alert('User deleted successfully.');
-        await get().fetchUsers();
-        await get().fetchProjects();
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Delete user exception:", err);
-      alert('An error occurred while deleting the user.');
+      alert(`Failed to delete user: ${err.message || 'Unknown error'}`);
     }
   },
 
@@ -2994,11 +3137,18 @@ export const useStore = create<any>((set, get) => ({
 
     // 1. Determine Base Visibility (What is *possible* to see)
     let allowedTasks = [];
+    const { teams } = get();
     const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
     const isManager = project.managerId === currentUser.id;
-    const isLead = project.leadIds.includes(currentUser.id);
 
-    if (isSuperAdmin || isManager) {
+    // Check Team Head
+    let isTeamHead = false;
+    const projectTeam = teams.find(t => t.id === project.teamId);
+    if (projectTeam?.managerIds?.includes(currentUser.id) || projectTeam?.ownerId === currentUser.id) {
+      isTeamHead = true;
+    }
+
+    if (isSuperAdmin || isManager || isTeamHead) {
       allowedTasks = projectTasks;
     } else if (isLead) {
       // Lead sees: Assigned to self OR Assigned to their team members OR Discussion participant
@@ -3055,13 +3205,42 @@ export const useStore = create<any>((set, get) => ({
   },
 
   getVisibleUsers: () => {
-    const { users, currentUser, activeProjectId, projects } = get();
+    const { users, currentUser, activeProjectId, projects, teams, teamMembers } = get();
     if (!currentUser || !activeProjectId) return [];
 
     const project = projects.find(p => p.id === activeProjectId);
     if (!project) return [];
 
-    // Strictly strictly project members only
+    const ADMIN_EMAIL = 'manavss828@gmail.com';
+    const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
+
+    // Check Team Head Status
+    let isTeamHead = false;
+    const projectTeam = teams.find(t => t.id === project.teamId);
+    if (projectTeam?.managerIds?.includes(currentUser.id)) {
+      isTeamHead = true;
+    }
+    const isTeamOwner = projectTeam?.ownerId === currentUser.id;
+
+    // Team Head / Owner / SuperAdmin sees ALL Team Members
+    if (isSuperAdmin || isTeamOwner || isTeamHead) {
+      if (project.teamId) {
+        // Get all members of this team
+        const memberIds = teamMembers
+          .filter(tm => tm.teamId === project.teamId && tm.status === 'active')
+          .map(tm => tm.userId);
+
+        // Return users who are team members OR project members (safety)
+        return users.filter(u =>
+          memberIds.includes(u.id) ||
+          u.id === project.managerId ||
+          project.leadIds.includes(u.id) ||
+          project.resourceIds.includes(u.id)
+        );
+      }
+    }
+
+    // Strictly strictly project members only (for regular users)
     const projectMembers = users.filter(u =>
       u.id === project.managerId ||
       project.leadIds.includes(u.id) ||
@@ -3070,10 +3249,9 @@ export const useStore = create<any>((set, get) => ({
 
     const isManager = project.managerId === currentUser.id;
     const isLead = project.leadIds.includes(currentUser.id);
-    const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
 
-    // Admin/Manager sees all project members
-    if (isSuperAdmin || isManager) return projectMembers;
+    // Project Manager sees all project members
+    if (isManager) return projectMembers;
 
     // Lead sees: Self + Resources reporting to them
     if (isLead) {
@@ -3120,10 +3298,10 @@ export const useStore = create<any>((set, get) => ({
   },
 
   can: (action, projectId) => {
-    const { currentUser, projects, activeProjectId } = get();
+    const { currentUser, projects, departments, teams, activeProjectId } = get();
     if (!currentUser) return false;
 
-    // 1. Global Actions (No Project Context)
+    // 1. Global Actions
     if (action === 'createProject') return true;
 
     // 2. Determine Context Project
@@ -3135,16 +3313,39 @@ export const useStore = create<any>((set, get) => ({
 
     const ADMIN_EMAIL = 'manavss828@gmail.com';
 
-    // 2. Determine Dynamic Role for this Project
-    let computedRole: Role = 'Resource'; // Default
+    // 3. Determine Dynamic Role via 4-Tier Hierarchy
+    // Tier 1: Company Admin / Super Admin / Team Owner
+    const projectTeam = teams.find(t => t.id === project.teamId);
+    const isTeamOwner = projectTeam?.ownerId === currentUser.id;
+    const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
 
-    if (currentUser.email === ADMIN_EMAIL || project.managerId === currentUser.id) {
+    if (isSuperAdmin || isTeamOwner) {
+      return true; // Full Access
+    }
+
+    // Tier 2: Team Head (formerly Department Head)
+    // Check if user manages the team this project belongs to
+    let isDeptHead = false;
+    if (projectTeam?.managerIds?.includes(currentUser.id)) {
+      isDeptHead = true;
+    }
+
+    // Tier 3: Project Manager (Creator or Delegated)
+    const isProjectCreator = project.managerId === currentUser.id;
+    const isDelegatedPM = project.managerIds?.includes(currentUser.id);
+    const isProjectManager = isProjectCreator || isDelegatedPM;
+
+    let computedRole: Role = 'Resource';
+
+    if (isDeptHead) {
+      computedRole = 'DeptHead';
+    } else if (isProjectManager) {
       computedRole = 'Manager';
     } else if (project.leadIds.includes(currentUser.id)) {
       computedRole = 'Lead';
     }
 
-    // 3. Check Permission
+    // 4. Check Permission
     return PERMISSIONS[computedRole]?.[action] || false;
   },
 
@@ -3480,7 +3681,7 @@ export const useStore = create<any>((set, get) => ({
     // Fetch teams where user is owner
     const { data: ownedTeams } = await supabase
       .from('teams')
-      .select('*')
+      .select('*, companies(name)')
       .eq('owner_id', currentUser.id);
 
     // Fetch teams where user is a member
@@ -3496,13 +3697,35 @@ export const useStore = create<any>((set, get) => ({
     if (memberTeamIds.length > 0) {
       const { data } = await supabase
         .from('teams')
-        .select('*')
+        .select('*, companies(name)')
         .in('id', memberTeamIds)
         .neq('owner_id', currentUser.id); // Exclude owned teams
       joinedTeams = data || [];
     }
 
-    const allTeams = [...(ownedTeams || []), ...joinedTeams];
+    // NEW: Fetch teams where user is a Team Head (in manager_ids)
+    const { data: headTeams, error: headTeamsError } = await supabase
+      .from('teams')
+      .select('*, companies(name)')
+      .contains('manager_ids', [currentUser.id])
+      .neq('owner_id', currentUser.id); // Exclude owned teams
+
+    console.log('🏢 fetchTeams DEBUG:', {
+      currentUserId: currentUser.id,
+      currentUserEmail: currentUser.email,
+      ownedTeamsCount: (ownedTeams || []).length,
+      joinedTeamsCount: joinedTeams.length,
+      headTeamsCount: (headTeams || []).length,
+      headTeamsError,
+      headTeams: headTeams?.map(t => ({ name: t.name, id: t.id, manager_ids: t.manager_ids }))
+    });
+
+    // Combine all teams, avoiding duplicates
+    const allTeamMap = new Map<string, any>();
+    [...(ownedTeams || []), ...joinedTeams, ...(headTeams || [])].forEach(t => {
+      allTeamMap.set(t.id, t);
+    });
+    const allTeams = Array.from(allTeamMap.values());
 
     // Get member counts for each team
     const processedTeams: Team[] = await Promise.all(allTeams.map(async (t) => {
@@ -3528,8 +3751,10 @@ export const useStore = create<any>((set, get) => ({
         name: t.name,
         joinCode: t.join_code,
         createdAt: new Date(t.created_at).getTime(),
+        managerIds: t.manager_ids || [], // NEW: Include manager_ids
         memberCount: count || 0,
-        effectiveLimit: baseLimit + extraSeats
+        effectiveLimit: baseLimit + extraSeats,
+        companies: t.companies // Include Company Info
       };
     }));
 
@@ -3602,6 +3827,72 @@ export const useStore = create<any>((set, get) => ({
     await get().fetchTeams();
   },
 
+  // NEW: Assign Team Head (Department Head)
+  assignTeamHead: async (teamId: string, userId: string) => {
+    const { teams } = get();
+    const team = teams.find(t => t.id === teamId);
+
+    console.log('🎯 assignTeamHead called:', { teamId, userId, teamFound: !!team, teamName: team?.name });
+
+    if (!team) {
+      console.log('🎯 assignTeamHead: Team not found in local state!');
+      return;
+    }
+
+    const currentManagers = team.managerIds || [];
+    if (currentManagers.includes(userId)) {
+      console.log('🎯 assignTeamHead: User already a head, skipping');
+      return;
+    }
+
+    const newManagers = [...currentManagers, userId];
+    console.log('🎯 assignTeamHead: Updating managers', { teamId, currentManagers, newManagers });
+
+    // Update local state optimistically
+    set(state => ({
+      teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: newManagers } : t)
+    }));
+
+    // Update database
+    const { data, error } = await supabase.from('teams').update({ manager_ids: newManagers }).eq('id', teamId).select();
+    console.log('🎯 assignTeamHead DB result:', { data, error });
+
+    if (error) {
+      console.error('🎯 assignTeamHead: Error saving to database:', error);
+      // Rollback on error
+      set(state => ({
+        teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: currentManagers } : t)
+      }));
+    } else {
+      console.log('🎯 assignTeamHead: Successfully saved to database');
+    }
+  },
+
+  // NEW: Remove Team Head (Department Head)
+  removeTeamHead: async (teamId: string, userId: string) => {
+    const { teams } = get();
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+
+    const currentManagers = team.managerIds || [];
+    const newManagers = currentManagers.filter(id => id !== userId);
+
+    // Update local state optimistically
+    set(state => ({
+      teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: newManagers } : t)
+    }));
+
+    // Update database
+    const { error } = await supabase.from('teams').update({ manager_ids: newManagers }).eq('id', teamId);
+    if (error) {
+      console.error('Error removing team head:', error);
+      // Rollback on error
+      set(state => ({
+        teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: currentManagers } : t)
+      }));
+    }
+  },
+
   deleteTeam: async (teamId) => {
     const { currentUser, teams } = get();
     const team = teams.find(t => t.id === teamId);
@@ -3664,18 +3955,44 @@ export const useStore = create<any>((set, get) => ({
     return members;
   },
 
-  joinTeam: async (joinCode) => {
-    const { data, error } = await supabase.rpc('join_team_secure', {
+  addTeamMember: async (teamId, userId, roleId = null) => {
+    // Check member limit before adding
+    if (!get().canAddTeamMember(teamId)) {
+      get().showCustomAlert('Team member limit reached. Purchase extra seats to add more members.', 'warning');
+      return;
+    }
+
+    const { error } = await supabase.from('team_members').insert({
+      team_id: teamId,
+      user_id: userId,
+      role_id: roleId,
+      status: 'active' // Direct add by Admin
+    });
+
+    if (error) {
+      // Ignore duplicate key error silently or log it
+      console.error("Error adding team member:", error);
+      if (error.code !== '23505') { // unique_violation
+        get().showCustomAlert('Error adding member', 'error');
+      }
+    }
+    await get().fetchTeamMembers(teamId);
+  },
+
+  joinCompany: async (joinCode) => {
+    const { data, error } = await supabase.rpc('join_company_secure', {
       p_join_code: joinCode.toUpperCase()
     });
 
     if (error) {
-      console.error('Error joining team:', error);
+      console.error('Error joining company:', error);
       return 'error';
     }
 
+    await get().fetchCurrentUser();
+    // Also fetch teams just in case
     await get().fetchTeams();
-    return data.status as any;
+    return data?.status || 'success';
   },
 
   approveTeamMember: async (teamId, userId) => {
@@ -3859,7 +4176,8 @@ export const useStore = create<any>((set, get) => ({
         name: d.name,
         color: d.color,
         createdAt: new Date(d.created_at).getTime(),
-        memberCount: count || 0
+        memberCount: count || 0,
+        managerIds: d.manager_ids || []
       };
     }));
 
@@ -3870,6 +4188,30 @@ export const useStore = create<any>((set, get) => ({
         ...departments
       ]
     }));
+    return departments;
+  },
+
+  // NEW: Fetch all departments globally (for Department Head visibility)
+  fetchAllDepartments: async () => {
+    console.log('🏢 fetchAllDepartments: Starting...');
+    const { data, error } = await supabase
+      .from('departments')
+      .select('*');
+
+    console.log('🏢 fetchAllDepartments: Raw response', { data, error });
+
+    const departments: Department[] = (data || []).map((d) => ({
+      id: d.id,
+      teamId: d.team_id,
+      name: d.name,
+      color: d.color,
+      createdAt: new Date(d.created_at).getTime(),
+      managerIds: d.manager_ids || []
+    }));
+
+    console.log('🏢 fetchAllDepartments: Processed departments', departments);
+
+    set({ departments });
     return departments;
   },
 
@@ -3962,6 +4304,94 @@ export const useStore = create<any>((set, get) => ({
     }
   },
 
+  assignDepartmentHead: async (departmentId, userId) => {
+    const { departments } = get();
+    const dept = departments.find(d => d.id === departmentId);
+    if (!dept) return;
+
+    const currentManagers = dept.managerIds || [];
+    if (currentManagers.includes(userId)) return;
+
+    const newManagers = [...currentManagers, userId];
+
+    set(state => ({
+      departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: newManagers } : d)
+    }));
+
+    const { error } = await supabase.from('departments').update({ manager_ids: newManagers }).eq('id', departmentId);
+    if (error) {
+      console.error('Failed to assign dept head:', error);
+      set(state => ({
+        departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: currentManagers } : d)
+      }));
+    }
+  },
+
+  removeDepartmentHead: async (departmentId, userId) => {
+    const { departments } = get();
+    const dept = departments.find(d => d.id === departmentId);
+    if (!dept) return;
+
+    const currentManagers = dept.managerIds || [];
+    const newManagers = currentManagers.filter(id => id !== userId);
+
+    set(state => ({
+      departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: newManagers } : d)
+    }));
+
+    const { error } = await supabase.from('departments').update({ manager_ids: newManagers }).eq('id', departmentId);
+    if (error) {
+      console.error('Failed to remove dept head:', error);
+      set(state => ({
+        departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: currentManagers } : d)
+      }));
+    }
+  },
+
+  assignProjectManager: async (projectId, userId) => {
+    const { projects } = get();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const currentManagers = project.managerIds || [];
+    if (currentManagers.includes(userId)) return;
+
+    const newManagers = [...currentManagers, userId];
+
+    set(state => ({
+      projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: newManagers } : p)
+    }));
+
+    const { error } = await supabase.from('projects').update({ manager_ids: newManagers }).eq('id', projectId);
+    if (error) {
+      console.error('Failed to assign project manager:', error);
+      set(state => ({
+        projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: currentManagers } : p)
+      }));
+    }
+  },
+
+  removeProjectManager: async (projectId, userId) => {
+    const { projects } = get();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const currentManagers = project.managerIds || [];
+    const newManagers = currentManagers.filter(id => id !== userId);
+
+    set(state => ({
+      projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: newManagers } : p)
+    }));
+
+    const { error } = await supabase.from('projects').update({ manager_ids: newManagers }).eq('id', projectId);
+    if (error) {
+      console.error('Failed to remove project manager:', error);
+      set(state => ({
+        projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: currentManagers } : p)
+      }));
+    }
+  },
+
   // Project-Team Assignment
   assignProjectToTeam: async (projectId, teamId) => {
     await supabase
@@ -4018,10 +4448,86 @@ export const useStore = create<any>((set, get) => ({
     return teams.filter(t => t.ownerId === currentUser.id);
   },
 
+  getCompanyEmployees: () => {
+    const { users, currentUser } = get();
+    if (currentUser?.companyId) {
+      return users.filter(u => u.companyId === currentUser.companyId);
+    }
+    return users;
+  },
+
+  getScopedEmployees: () => {
+    const { currentUser, teams, departments, projects, teamMembers, users } = get();
+    if (!currentUser) return [];
+
+    const ADMIN_EMAIL = 'manavss828@gmail.com';
+
+    // 1. Super Admin: See everyone
+    if (currentUser.email === ADMIN_EMAIL) {
+      return users;
+    }
+
+    // 2. Team Owner OR Team Head: See everyone in their Teams
+    const relevantTeamIds = teams
+      .filter(t => t.ownerId === currentUser.id || t.managerIds?.includes(currentUser.id))
+      .map(t => t.id);
+
+    if (relevantTeamIds.length > 0) {
+      const memberIds = teamMembers
+        .filter(tm => relevantTeamIds.includes(tm.teamId))
+        .map(tm => tm.userId);
+      // Ensure we include the users themselves if they are not in teamMembers? (Usually they are)
+      // But let's return all matching users.
+      // Also potentially include Project Members if they are not in the team? 
+      // (Flowboard allows adding users to projects without joining team? Maybe not in new model).
+      // Let's stick to Team Members for now as that's the "Employees" definition.
+      return users.filter(u => memberIds.includes(u.id));
+    }
+
+    // 3. Project Manager: See everyone in their projects
+    const managedProjectIds = projects
+      .filter(p => p.managerId === currentUser.id || p.managerIds?.includes(currentUser.id))
+      .map(p => p.id);
+
+    if (managedProjectIds.length > 0) {
+      const relevantUserIds = new Set<string>();
+      projects.forEach(p => {
+        if (managedProjectIds.includes(p.id)) {
+          p.leadIds.forEach(id => relevantUserIds.add(id));
+          p.resourceIds.forEach(id => relevantUserIds.add(id));
+        }
+      });
+      return users.filter(u => relevantUserIds.has(u.id));
+    }
+
+    // 4. Lead: See resources in their projects
+    const leadProjectIds = projects.filter(p => p.leadIds.includes(currentUser.id)).map(p => p.id);
+    if (leadProjectIds.length > 0) {
+      const relevantUserIds = new Set<string>();
+      projects.forEach(p => {
+        if (leadProjectIds.includes(p.id)) {
+          p.resourceIds.forEach(id => relevantUserIds.add(id));
+        }
+      });
+      return users.filter(u => relevantUserIds.has(u.id));
+    }
+
+    return [];
+  },
+
   getJoinedTeams: () => {
     const { teams, currentUser } = get();
     if (!currentUser) return [];
-    return teams.filter(t => t.ownerId !== currentUser.id);
+
+    // Include teams where user is a member (not owner) OR is a Team Head (in managerIds)
+    return teams.filter(t =>
+      t.ownerId !== currentUser.id && (
+        // User is a regular member (fetchTeams already includes these)
+        true ||
+        // OR user is a Team Head
+        t.managerIds?.includes(currentUser.id)
+      )
+    );
   },
 
   getTeamProjects: (teamId) => {

@@ -20,8 +20,11 @@ import {
     UserX,
     AlertTriangle,
     ChevronRight,
-    Search
+    ChevronDown,
+    Search,
+    X
 } from 'lucide-react';
+import { ManageMemberDepartmentsModal } from './ManageMemberDepartmentsModal';
 
 export const WorkspaceSettings: React.FC = () => {
     const navigate = useNavigate();
@@ -32,6 +35,7 @@ export const WorkspaceSettings: React.FC = () => {
         teamRoles,
         departments,
         users,
+        isLoading, // Add isLoading
         fetchTeams,
         fetchTeamMembers,
         fetchTeamRoles,
@@ -46,6 +50,8 @@ export const WorkspaceSettings: React.FC = () => {
         createDepartment,
         updateDepartment,
         deleteDepartment,
+        currentCompany,
+        updateCompany,
         addMemberToDepartment,
         createTeam,
         updateTeam,
@@ -53,10 +59,11 @@ export const WorkspaceSettings: React.FC = () => {
         canAddTeamMember,
         getTeamProjects,
         getOwnedTeams,
-        assignMemberToProject
+        assignMemberToProject,
+        assignTeamHead, removeTeamHead, getScopedEmployees, getCompanyEmployees, addTeamMember
     } = useStore();
 
-    const [activeSection, setActiveSection] = useState<'members' | 'roles' | 'projects' | 'settings'>('members');
+    const [activeSection, setActiveSection] = useState<'members' | 'departments' | 'roles' | 'projects' | 'settings'>('members');
     const [codeCopied, setCodeCopied] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -77,6 +84,8 @@ export const WorkspaceSettings: React.FC = () => {
     const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
     const [editDeptName, setEditDeptName] = useState('');
     const [editDeptColor, setEditDeptColor] = useState('');
+    const [managingDeptId, setManagingDeptId] = useState<string | null>(null);
+    const [headSearch, setHeadSearch] = useState('');
 
     const [expandedProject, setExpandedProject] = useState<string | null>(null);
     const [expandedDept, setExpandedDept] = useState<string | null>(null);
@@ -87,14 +96,25 @@ export const WorkspaceSettings: React.FC = () => {
     const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all');
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+    const [managingMemberDeptsId, setManagingMemberDeptsId] = useState<string | null>(null);
 
-    // Get ALL owned teams (consolidated)
-    const ownedTeams = getOwnedTeams();
-    const primaryTeam = ownedTeams[0]; // Primary workspace for settings
+    // Get ALL manageable teams (Owned by me OR where I am Team Head)
+    // Team Heads need access to Workspace Settings for their teams
+    const manageableTeams = teams.filter(t =>
+        t.ownerId === currentUser?.id ||
+        t.managerIds?.includes(currentUser?.id || '')
+    );
+    // Alias to fix ReferenceErrors while using new logic
+    const ownedTeams = manageableTeams;
+    const primaryTeam = manageableTeams[0]; // Primary workspace for settings
 
-    // Aggregate ALL members across all owned teams
+    // Aggregate ALL members across all owned teams filtered by Access Scope
+    const visibleUsers = getScopedEmployees();
+    const companyEmployees = getCompanyEmployees();
+    const visibleUserIds = new Set(visibleUsers.map(u => u.id));
+
     const allMembers = teamMembers.filter(m =>
-        ownedTeams.some(t => t.id === m.teamId)
+        ownedTeams.some(t => t.id === m.teamId) && visibleUserIds.has(m.userId)
     );
 
     // UNIQUE EMPLOYEES: Deduplicate by userId - one person = one seat regardless of workspaces
@@ -139,8 +159,11 @@ export const WorkspaceSettings: React.FC = () => {
             await fetchTeams();
             // After teams fetch, get all owned teams from store
             const { teams, currentUser } = useStore.getState();
-            const myTeams = teams.filter(t => t.ownerId === currentUser?.id);
-            // Fetch members for ALL owned teams
+            const myTeams = teams.filter(t =>
+                t.ownerId === currentUser?.id ||
+                t.managerIds?.includes(currentUser?.id || '')
+            );
+            // Fetch members for ALL manageable teams
             for (const team of myTeams) {
                 await fetchTeamMembers(team.id);
                 await fetchTeamRoles(team.id);
@@ -231,10 +254,14 @@ export const WorkspaceSettings: React.FC = () => {
 
     const navItems = [
         { id: 'members', label: 'Employees', icon: Users, count: uniqueEmployeeCount },
+        { id: 'departments', label: 'Departments', icon: Building2, count: ownedTeams.filter(t => t.name !== 'DoneOne').length },
         { id: 'roles', label: 'Roles', icon: Tag, count: allRoles.length },
         { id: 'projects', label: 'Projects', icon: FolderKanban, count: allProjects.length },
-        { id: 'settings', label: 'Settings', icon: Settings }
     ];
+
+    if (primaryTeam?.ownerId === currentUser?.id) {
+        navItems.push({ id: 'settings', label: 'Settings', icon: Settings });
+    }
 
     return (
         <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-900 h-full overflow-hidden">
@@ -295,17 +322,32 @@ export const WorkspaceSettings: React.FC = () => {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="text-xl font-bold">Company Employees</h2>
-                                    <p className="text-sm text-slate-500">Your team employees ({uniqueEmployeeCount}/{totalMemberLimit} seats used)</p>
+                                    <p className="text-sm text-slate-500">
+                                        Your team employees
+                                        {primaryTeam?.ownerId === currentUser?.id && ` (${uniqueEmployeeCount}/${totalMemberLimit} seats used)`}
+                                    </p>
                                 </div>
-                                <div className="relative">
-                                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search members..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-9 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-                                    />
+                                <div className="flex items-center gap-2">
+                                    <select
+                                        value={selectedDepartmentFilter}
+                                        onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                                        className="pl-3 pr-8 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="all">All Departments</option>
+                                        {ownedTeams.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="relative">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search members..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="pl-9 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -328,7 +370,7 @@ export const WorkspaceSettings: React.FC = () => {
                                                         </div>
                                                         <div>
                                                             <p className="font-medium">{user?.name || 'Unknown'}</p>
-                                                            <p className="text-xs text-slate-500">{user?.email} • {team?.name}</p>
+                                                            <p className="text-xs text-slate-500">{user?.email}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex gap-2">
@@ -366,10 +408,15 @@ export const WorkspaceSettings: React.FC = () => {
                                 <div className="divide-y divide-slate-100 dark:divide-slate-700">
                                     {uniqueActiveMembers
                                         .filter(m => {
-                                            if (!searchQuery) return true;
                                             const user = users.find(u => u.id === m.userId);
-                                            return user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                            const matchesSearch = !searchQuery ||
+                                                user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                                 user?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+
+                                            const matchesDept = selectedDepartmentFilter === 'all' ||
+                                                activeMembers.some(am => am.userId === m.userId && am.teamId === selectedDepartmentFilter);
+
+                                            return matchesSearch && matchesDept;
                                         })
                                         .map(member => {
                                             const user = users.find(u => u.id === member.userId) || member.user;
@@ -386,8 +433,12 @@ export const WorkspaceSettings: React.FC = () => {
                                             return (
                                                 <div key={member.id} className="grid grid-cols-[1fr_200px_140px_60px] gap-4 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-                                                            {user?.name?.charAt(0) || '?'}
+                                                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary overflow-hidden">
+                                                            {user?.avatar ? (
+                                                                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                user?.name?.charAt(0) || '?'
+                                                            )}
                                                         </div>
                                                         <div>
                                                             <p className="font-medium flex items-center gap-2">
@@ -406,32 +457,45 @@ export const WorkspaceSettings: React.FC = () => {
                                                     </div>
                                                     <div>
                                                         {!isMemberOwner ? (
-                                                            <select
-                                                                value={member.roleId || ''}
-                                                                onChange={(e) => assignRoleToMember(member.teamId, member.userId, e.target.value || null)}
-                                                                className="w-full text-xs px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700"
-                                                            >
-                                                                <option value="">No Role</option>
-                                                                {teamRolesList.map(r => (
-                                                                    <option key={r.id} value={r.id}>{r.name}</option>
-                                                                ))}
-                                                            </select>
+                                                            <div className="relative">
+                                                                <select
+                                                                    value={member.roleId || ''}
+                                                                    onChange={(e) => assignRoleToMember(member.teamId, member.userId, e.target.value || null)}
+                                                                    className="w-full text-xs px-2 py-1.5 pr-8 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 appearance-none bg-none"
+                                                                >
+                                                                    <option value="">No Role</option>
+                                                                    {teamRolesList.map(r => (
+                                                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                                            </div>
                                                         ) : (
                                                             <span className="text-sm text-slate-400">—</span>
                                                         )}
                                                     </div>
                                                     <div>
                                                         {!isMemberOwner && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (confirm(`Remove ${user?.name} from all departments?`)) {
-                                                                        employeeDepts.forEach(dept => removeTeamMember(dept.id, member.userId));
-                                                                    }
-                                                                }}
-                                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
+                                                            <div className="flex items-center gap-1">
+                                                                <button
+                                                                    onClick={() => setManagingMemberDeptsId(member.userId)}
+                                                                    className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
+                                                                    title="Manage Departments"
+                                                                >
+                                                                    <Settings size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm(`Remove ${user?.name} from all departments?`)) {
+                                                                            employeeDepts.forEach(dept => removeTeamMember(dept.id, member.userId));
+                                                                        }
+                                                                    }}
+                                                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                                                                    title="Remove from Company"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
@@ -440,71 +504,234 @@ export const WorkspaceSettings: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    )
+                    }
 
-                    {/* Roles Section */}
-                    {activeSection === 'roles' && (
+                    {/* Department Section - Moved to Top Level */}
+                    {activeSection === 'departments' && (
                         <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-bold">Custom Roles</h2>
-                                <p className="text-sm text-slate-500 mt-1">Create roles to organize your team members</p>
-                            </div>
-
-                            <form onSubmit={handleCreateRole} className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                                <h3 className="font-semibold mb-3">Create New Role</h3>
-                                <div className="flex gap-3">
-                                    <input type="color" value={newRoleColor} onChange={(e) => setNewRoleColor(e.target.value)} className="w-12 h-12 rounded-lg cursor-pointer border-2 border-slate-200" />
-                                    <input
-                                        type="text" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)}
-                                        placeholder="Role name (e.g. Senior Developer, Designer)"
-                                        className="flex-1 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-                                    />
-                                    <button type="submit" disabled={!newRoleName.trim()} className="px-6 py-2 bg-primary text-white rounded-lg font-medium disabled:opacity-50">
-                                        Create
-                                    </button>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-xl font-bold">Departments</h2>
+                                    <p className="text-sm text-slate-500 mt-1">Organize your company into departments (Workspaces)</p>
                                 </div>
-                            </form>
+                                <button
+                                    onClick={async () => {
+                                        const name = prompt('Enter department name:');
+                                        if (name && name.trim()) {
+                                            await createTeam(name.trim());
+                                            fetchTeams();
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                                >
+                                    <Plus size={16} />
+                                    Add Department
+                                </button>
+                            </div>
 
                             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                {allRoles.length === 0 ? (
-                                    <div className="p-8 text-center text-slate-500">
-                                        <Tag size={32} className="mx-auto mb-2 opacity-50" />
-                                        <p>No custom roles created yet</p>
-                                    </div>
-                                ) : (
-                                    <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                                        {allRoles.map(role => (
-                                            <div key={role.id} className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                                                {editingRoleId === role.id ? (
-                                                    <div className="flex-1 flex items-center gap-3">
-                                                        <input type="color" value={editRoleColor} onChange={(e) => setEditRoleColor(e.target.value)} className="w-10 h-10 rounded cursor-pointer" />
-                                                        <input type="text" value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}
-                                                            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700" autoFocus />
-                                                        <button onClick={handleUpdateRole} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">Save</button>
-                                                        <button onClick={() => setEditingRoleId(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm">Cancel</button>
+                                <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                                    {ownedTeams.filter(t => t.name !== 'DoneOne').map(team => {
+                                        const teamProjectCount = getTeamProjects(team.id).length;
+                                        const teamMemberCount = activeMembers.filter(m => m.teamId === team.id).length;
+                                        return (
+                                            <div key={team.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                        <Building2 size={18} className="text-primary" />
                                                     </div>
+                                                    <div>
+                                                        <p className="font-medium">{team.name}</p>
+                                                        <p className="text-xs text-slate-500">{teamProjectCount} projects • {teamMemberCount} members</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => setManagingDeptId(team.id)}
+                                                        className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg"
+                                                        title="Manage Department Heads"
+                                                    >
+                                                        <Users size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setItemToRename({ id: team.id, name: team.name, type: 'department' });
+                                                            setRenameValue(team.name);
+                                                            setIsRenameModalOpen(true);
+                                                        }}
+                                                        className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
+                                                        title="Rename department"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    {ownedTeams.length > 1 && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (confirm(`Delete "${team.name}" department?\n\nThis will remove all projects and members associated with this department.`)) {
+                                                                    await handleDeleteTeam(team.id);
+                                                                }
+                                                            }}
+                                                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                                                            title="Delete department"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Manage Heads Modal */}
+                            {managingDeptId && (() => {
+                                const team = ownedTeams.find(t => t.id === managingDeptId);
+                                if (!team) return null;
+
+                                // Get Team Heads from team.managerIds
+                                const currentHeadIds = team.managerIds || [];
+
+                                const availableEmployees = companyEmployees.filter(u => !currentHeadIds.includes(u.id));
+                                const filteredEmployees = availableEmployees.filter(u =>
+                                    u.name?.toLowerCase().includes(headSearch.toLowerCase()) ||
+                                    u.email?.toLowerCase().includes(headSearch.toLowerCase())
+                                );
+
+                                return (
+                                    <Modal isOpen={true} onClose={() => { setManagingDeptId(null); setHeadSearch(''); }} title="Manage Team Heads">
+                                        <div className="space-y-4">
+                                            <p className="text-sm text-slate-500">
+                                                Assign users who can manage all projects within <strong>{team.name}</strong>.
+                                            </p>
+
+                                            {/* Current Heads */}
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-medium text-slate-700">Current Heads</label>
+                                                {currentHeadIds.length === 0 ? (
+                                                    <p className="text-sm text-slate-400 italic">No heads assigned yet.</p>
                                                 ) : (
-                                                    <>
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: role.color }} />
-                                                            <span className="font-medium">{role.name}</span>
-                                                            <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
-                                                                {activeMembers.filter(m => m.roleId === role.id).length} members
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <button onClick={() => startEditRole(role)} className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"><Edit2 size={16} /></button>
-                                                            <button onClick={() => deleteTeamRole(role.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
-                                                        </div>
-                                                    </>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {currentHeadIds.map(managerId => {
+                                                            const user = users.find(u => u.id === managerId);
+                                                            return (
+                                                                <span key={managerId} className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                                                                    {user?.name || 'Unknown'}
+                                                                    <button onClick={() => removeTeamHead(team.id, managerId)} className="hover:text-red-500">
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 )}
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+
+                                            {/* Searchable Multi-Select */}
+                                            <div className="pt-4 border-t border-slate-100">
+                                                <label className="block text-xs font-medium text-slate-700 mb-2">Add Team Heads</label>
+                                                <div className="relative">
+                                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search employees..."
+                                                        value={headSearch}
+                                                        onChange={(e) => setHeadSearch(e.target.value)}
+                                                        className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                                    />
+                                                </div>
+                                                <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                                                    {filteredEmployees.length === 0 ? (
+                                                        <p className="p-3 text-sm text-slate-400 text-center">No employees found</p>
+                                                    ) : (
+                                                        filteredEmployees.map(user => (
+                                                            <div key={user.id} onClick={() => assignTeamHead(team.id, user.id)} className="flex items-center gap-3 p-2 hover:bg-slate-50 cursor-pointer">
+                                                                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                                                                    {user.name?.charAt(0) || '?'}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium truncate">{user.name}</p>
+                                                                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                                                                </div>
+                                                                <Plus size={16} className="text-primary" />
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Modal>
+                                );
+                            })()}
                         </div>
-                    )
+                    )}
+
+
+                    {/* Roles Section */}
+                    {
+                        activeSection === 'roles' && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h2 className="text-xl font-bold">Custom Roles</h2>
+                                    <p className="text-sm text-slate-500 mt-1">Create roles to organize your team members</p>
+                                </div>
+
+                                <form onSubmit={handleCreateRole} className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                                    <h3 className="font-semibold mb-3">Create New Role</h3>
+                                    <div className="flex gap-3">
+                                        <input type="color" value={newRoleColor} onChange={(e) => setNewRoleColor(e.target.value)} className="w-12 h-12 rounded-lg cursor-pointer border-2 border-slate-200" />
+                                        <input
+                                            type="text" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)}
+                                            placeholder="Role name (e.g. Senior Developer, Designer)"
+                                            className="flex-1 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                                        />
+                                        <button type="submit" disabled={!newRoleName.trim()} className="px-6 py-2 bg-primary text-white rounded-lg font-medium disabled:opacity-50">
+                                            Create
+                                        </button>
+                                    </div>
+                                </form>
+
+                                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    {allRoles.length === 0 ? (
+                                        <div className="p-8 text-center text-slate-500">
+                                            <Tag size={32} className="mx-auto mb-2 opacity-50" />
+                                            <p>No custom roles created yet</p>
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                                            {allRoles.map(role => (
+                                                <div key={role.id} className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                    {editingRoleId === role.id ? (
+                                                        <div className="flex-1 flex items-center gap-3">
+                                                            <input type="color" value={editRoleColor} onChange={(e) => setEditRoleColor(e.target.value)} className="w-10 h-10 rounded cursor-pointer" />
+                                                            <input type="text" value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}
+                                                                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700" autoFocus />
+                                                            <button onClick={handleUpdateRole} className="px-4 py-2 bg-primary text-white rounded-lg text-sm">Save</button>
+                                                            <button onClick={() => setEditingRoleId(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm">Cancel</button>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: role.color }} />
+                                                                <span className="font-medium">{role.name}</span>
+                                                                <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
+                                                                    {activeMembers.filter(m => m.roleId === role.id).length} members
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <button onClick={() => startEditRole(role)} className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"><Edit2 size={16} /></button>
+                                                                <button onClick={() => deleteTeamRole(role.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )
                     }
 
 
@@ -577,10 +804,19 @@ export const WorkspaceSettings: React.FC = () => {
                                             const assignedEmployees = assignableEmployees.filter(m => assignedUserIds.includes(m.userId));
                                             const unassignedEmployees = assignableEmployees.filter(m => !assignedUserIds.includes(m.userId));
                                             const filteredUnassigned = unassignedEmployees.filter(m => {
-                                                if (!employeeSearchQuery) return true;
                                                 const user = users.find(u => u.id === m.userId) || m.user;
-                                                return user?.name?.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
+                                                const matchesSearch = !employeeSearchQuery ||
+                                                    user?.name?.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
                                                     user?.email?.toLowerCase().includes(employeeSearchQuery.toLowerCase());
+
+                                                if (!matchesSearch) return false;
+
+                                                // Department Filter
+                                                if (selectedDepartmentFilter && selectedDepartmentFilter !== 'all') {
+                                                    const isMember = activeMembers.some(am => am.userId === m.userId && am.teamId === selectedDepartmentFilter);
+                                                    if (!isMember) return false;
+                                                }
+                                                return true;
                                             });
 
                                             return (
@@ -776,11 +1012,11 @@ export const WorkspaceSettings: React.FC = () => {
 
                                     <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
                                         <span className="font-medium text-lg">
-                                            {localStorage.getItem('myTeamsSectionName') || 'Company'}
+                                            {currentCompany?.name || 'Company'}
                                         </span>
                                         <button
                                             onClick={() => {
-                                                const currentName = localStorage.getItem('myTeamsSectionName') || 'Company';
+                                                const currentName = currentCompany?.name || 'Company';
                                                 setItemToRename({ id: 'company', name: currentName, type: 'company' });
                                                 setRenameValue(currentName);
                                                 setIsRenameModalOpen(true);
@@ -798,11 +1034,11 @@ export const WorkspaceSettings: React.FC = () => {
                                     <h3 className="font-semibold mb-2">Company Join Code</h3>
                                     <p className="text-sm text-slate-500 mb-4">Share this code with employees to join your company</p>
 
-                                    {primaryTeam && (
+                                    {currentCompany && (
                                         <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
                                             <div className="flex-1">
                                                 <span className="font-mono text-2xl font-bold text-primary tracking-widest">
-                                                    {primaryTeam.joinCode}
+                                                    {currentCompany.joinCode || 'No Code'}
                                                 </span>
                                             </div>
                                             <button
@@ -816,73 +1052,7 @@ export const WorkspaceSettings: React.FC = () => {
                                     )}
                                 </div>
 
-                                {/* Departments (Workspaces) Management */}
-                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div>
-                                            <h3 className="font-semibold">Departments</h3>
-                                            <p className="text-sm text-slate-500">Organize your company into departments (HR, Marketing, Development, etc.)</p>
-                                        </div>
-                                        <button
-                                            onClick={async () => {
-                                                const name = prompt('Enter department name:');
-                                                if (name && name.trim()) {
-                                                    await createTeam(name.trim());
-                                                    fetchTeams();
-                                                }
-                                            }}
-                                            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-                                        >
-                                            <Plus size={16} />
-                                            Add Department
-                                        </button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {ownedTeams.map(team => {
-                                            const teamProjectCount = getTeamProjects(team.id).length;
-                                            const teamMemberCount = activeMembers.filter(m => m.teamId === team.id).length;
-                                            return (
-                                                <div key={team.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                            <Building2 size={18} className="text-primary" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-medium">{team.name}</p>
-                                                            <p className="text-xs text-slate-500">{teamProjectCount} projects • {teamMemberCount} members</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setItemToRename({ id: team.id, name: team.name, type: 'department' });
-                                                                setRenameValue(team.name);
-                                                                setIsRenameModalOpen(true);
-                                                            }}
-                                                            className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg"
-                                                            title="Rename department"
-                                                        >
-                                                            <Edit2 size={14} />
-                                                        </button>
-                                                        {ownedTeams.length > 1 && (
-                                                            <button
-                                                                onClick={async () => {
-                                                                    if (confirm(`Delete "${team.name}" department?\n\nThis will remove all projects and members associated with this department.`)) {
-                                                                        await handleDeleteTeam(team.id);
-                                                                    }
-                                                                }}
-                                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                                                                title="Delete department"
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+
 
                                 {/* Employee Usage */}
                                 <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
@@ -962,8 +1132,8 @@ export const WorkspaceSettings: React.FC = () => {
                                         if (!itemToRename || !renameValue.trim()) return;
 
                                         if (itemToRename.type === 'company') {
-                                            localStorage.setItem('myTeamsSectionName', renameValue.trim());
-                                            window.location.reload();
+                                            await updateCompany({ name: renameValue.trim() });
+                                            setIsRenameModalOpen(false);
                                         } else {
                                             await updateTeam(itemToRename.id, { name: renameValue.trim() });
                                             await fetchTeams();
@@ -977,6 +1147,15 @@ export const WorkspaceSettings: React.FC = () => {
                             </div>
                         </div>
                     </Modal>
+
+                    {/* Manage Member Departments Modal */}
+                    {/* Manage Member Departments Modal */}
+                    {managingMemberDeptsId && (
+                        <ManageMemberDepartmentsModal
+                            userId={managingMemberDeptsId}
+                            onClose={() => setManagingMemberDeptsId(null)}
+                        />
+                    )}
 
                 </div >
             </div >
