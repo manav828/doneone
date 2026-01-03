@@ -11,7 +11,7 @@ interface JoinTeamModalProps {
 export const JoinTeamModal: React.FC<JoinTeamModalProps> = ({ isOpen, onClose }) => {
     const { joinCompany, fetchTeams } = useStore();
     const [joinCode, setJoinCode] = useState('');
-    const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'invalid_code' | 'error'>('idle');
+    const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'success_pending' | 'already_pending' | 'already_joined' | 'invalid_code' | 'error'>('idle');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

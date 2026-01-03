@@ -1,0 +1,22 @@
+# DoneOne Robots.txt
+# https://doneone.in/robots.txt
+
+# Allow all web crawlers
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://doneone.in/sitemap.xml
+
+# Disallow admin and private routes
+Disallow: /admin
+Disallow: /api/
+Disallow: /*.json$
+
+# Allow specific assets
+Allow: /logo.png
+Allow: /og-image.png
+Allow: /guide/
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
