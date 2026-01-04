@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import {
   FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight,
   Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2, Camera,
-  Building2, Users, ChevronDown, UserPlus, FolderOpen
+  Building2, Users, ChevronDown, UserPlus, FolderOpen, CreditCard
 } from 'lucide-react';
 import { Modal } from './Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -578,6 +578,17 @@ export const Sidebar: React.FC = () => {
             >
               <HelpCircle size={18} className="text-slate-500" />
               {!isCollapsed && <span className="text-sm font-medium">Help Guide</span>}
+            </button>
+            <button
+              onClick={() => { setActiveProject(''); navigate('/billing'); }}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-3'} py-2 rounded-lg transition-colors ${location.pathname === '/billing'
+                ? 'bg-[#FF6B35]/[0.06] text-slate-900 dark:text-white font-medium border-l-[3px] border-[#FF6B35]'
+                : 'text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 border-l-[3px] border-transparent'
+                }`}
+              title={isCollapsed ? "Billing & Plans" : undefined}
+            >
+              <CreditCard size={18} className={location.pathname === '/billing' ? 'text-[#FF6B35]' : 'text-slate-500'} />
+              {!isCollapsed && <span className="text-sm font-medium">Billing & Plans</span>}
             </button>
           </div>
         </div>

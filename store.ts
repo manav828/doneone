@@ -58,6 +58,13 @@ interface AppState {
   archiveSettings: ArchiveSettings | null;
   adminRetentionSettings: AdminRetentionSettings | null;
   historyFilters: HistoryFilter;
+
+  // Payment Admin
+  paymentConfigs: any[]; // Using any for simplicity now, ideally PaymentConfig
+  adminTransactions: any[];
+  fetchPaymentConfigs: () => Promise<void>;
+  updatePaymentConfig: (provider: string, updates: any) => Promise<void>;
+  fetchAdminTransactions: (startDate?: string, endDate?: string) => Promise<void>;
   selectedHistoryIds: string[];
 
   // Selection
@@ -362,6 +369,7 @@ export const useStore = create<any>((set, get) => ({
   tags: DEFAULT_TAGS,
   supportTickets: [],
   plans: [],
+  transactions: [],
   activeProjectId: null,
   activeMemberFilter: null,
   activeTagFilter: null,
@@ -601,7 +609,7 @@ export const useStore = create<any>((set, get) => ({
   },
 
   initialized: false,
-  transactions: [],
+
 
   // Rate Limiting
   rateLimits: {},
@@ -703,9 +711,9 @@ export const useStore = create<any>((set, get) => ({
         role: 'Resource',
         email: session.user.email,
         avatar_url: '',
-        max_projects: 0, // Let Plan dictate limit
-        max_leads: 0,
-        max_resources: 0,
+        max_projects: 100, // Trial Limit (Generous)
+        max_leads: 50,
+        max_resources: 50,
         is_premium: true, // Enable Trial for NEW users only
         premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days
         notifications_enabled: true,
@@ -826,7 +834,8 @@ export const useStore = create<any>((set, get) => ({
             imageUploadEnabled: profile.image_upload_enabled,
             maxAttachmentsPerTask: profile.max_attachments_per_task || 3,
             autoArchiveDays: archiveSettings?.auto_archive_days || 0,
-            historyRetentionDays: archiveSettings?.history_retention_days || null
+            historyRetentionDays: archiveSettings?.history_retention_days || null,
+            currency: profile.currency || 'INR'
           } as User,
         archiveSettings: archiveSettings ? {
           userId: archiveSettings.user_id,
@@ -1025,6 +1034,7 @@ export const useStore = create<any>((set, get) => ({
 
         historyRetentionDays: settings?.history_retention_days || null,
         allowMultipleInProgress: p.allow_multiple_in_progress,
+        currency: p.currency || 'INR',
       };
     });
 
@@ -1380,12 +1390,14 @@ export const useStore = create<any>((set, get) => ({
     const mappedPlans: Plan[] = plans.map((p: any) => ({
       id: p.id,
       name: p.name,
+      currency: p.currency || 'USD',
+
+      // CamelCase (Legacy for UI)
       priceMonthly: p.price_monthly,
       priceYearly: p.price_yearly,
-      description: p.description,
       maxProjects: p.max_projects,
       maxMembersPerProject: p.max_members_per_project,
-      maxLeadsPerProject: p.max_leads_per_project || (p.id === 'premium' ? 5 : 2), // Fallback if column missing/null
+      maxLeadsPerProject: p.max_leads_per_project || (p.id.includes('premium') ? 5 : 2),
       maxUploadSizeMb: p.max_upload_size_mb,
       maxUploadsPerTaskLimit: p.max_uploads_per_task_limit,
       canInviteMembers: p.can_invite_members,
@@ -1394,7 +1406,29 @@ export const useStore = create<any>((set, get) => ({
       canUseNotifications: p.can_use_notifications,
       canExportData: p.can_export_data,
       canViewHistory: p.can_view_history,
-      historyRetentionDays: p.history_retention_days
+      historyRetentionDays: p.history_retention_days,
+
+      // Snake_Case (Matches DB & Interface)
+      price_monthly: p.price_monthly,
+      price_yearly: p.price_yearly,
+      max_projects: p.max_projects,
+      max_members_per_project: p.max_members_per_project,
+      max_leads_per_project: p.max_leads_per_project,
+      max_upload_size_mb: p.max_upload_size_mb,
+      max_uploads_per_task_limit: p.max_uploads_per_task_limit,
+      can_invite_members: p.can_invite_members,
+      can_upload_images: p.can_upload_images,
+      can_set_reminders: p.can_set_reminders,
+      can_use_notifications: p.can_use_notifications,
+      can_export_data: p.can_export_data,
+      can_view_history: p.can_view_history,
+      history_retention_days: p.history_retention_days,
+
+      // Per Seat
+      price_per_seat_monthly: p.price_per_seat_monthly || 0,
+      price_per_seat_yearly: p.price_per_seat_yearly || 0,
+
+      description: p.description,
     }));
 
     set({ plans: mappedPlans });
@@ -1443,6 +1477,8 @@ export const useStore = create<any>((set, get) => ({
     set({ notifications: processedNotifs });
     return processedNotifs;
   },
+
+
 
   fetchTags: async () => {
     const { data: tags } = await supabase.from('tags').select('*');
@@ -2913,6 +2949,7 @@ export const useStore = create<any>((set, get) => ({
     if (updates.extraSeats !== undefined) dbUpdates.extra_seats = updates.extraSeats;
     if (updates.isCustomPlan !== undefined) dbUpdates.is_custom_plan = updates.isCustomPlan;
     if (updates.renewalDate !== undefined) dbUpdates.renewal_date = updates.renewalDate ? new Date(updates.renewalDate).toISOString() : null;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
 
     if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
     if (updates.maxLeads !== undefined) dbUpdates.max_leads = updates.maxLeads;
@@ -2930,6 +2967,7 @@ export const useStore = create<any>((set, get) => ({
     const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
     if (error) {
       console.error("Update Profile Error:", error);
+      throw error;
     } else {
       await get().fetchUsers();
       // Force refresh current user if self-update
@@ -2992,6 +3030,145 @@ export const useStore = create<any>((set, get) => ({
     }
   },
 
+  // --- Payment Admin Actions ---
+
+  paymentConfigs: [],
+  adminTransactions: [],
+
+  fetchPaymentConfigs: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('payment_configs')
+        .select('*');
+
+      if (error) throw error;
+      set({ paymentConfigs: data || [] });
+
+      // Also fetch plans when visiting admin section
+      get().fetchPlans();
+    } catch (err) {
+      console.error('Fetch Payment Configs Error:', err);
+    }
+  },
+
+  plans: [],
+
+  fetchPlans: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      set({ plans: data || [] });
+      return data || [];
+    } catch (err) {
+      console.error('Fetch Plans Error:', err);
+      return [];
+    }
+  },
+
+  updatePlan: async (id: string, updates: Partial<Plan>) => {
+    try {
+      const { error } = await supabase
+        .from('plans')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      set((state: AppState) => ({
+        plans: state.plans.map(p => p.id === id ? { ...p, ...updates } : p)
+      }));
+    } catch (err) {
+      console.error('Update Plan Error:', err);
+      throw err;
+    }
+  },
+
+  addPlan: async (plan: Omit<Plan, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('plans')
+        .insert(plan)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set((state: AppState) => ({
+        plans: [...state.plans, data]
+      }));
+    } catch (err) {
+      console.error('Add Plan Error:', err);
+      throw err;
+    }
+  },
+
+  deletePlan: async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('plans')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      set((state: AppState) => ({
+        plans: state.plans.filter(p => p.id !== id)
+      }));
+    } catch (err) {
+      console.error('Delete Plan Error:', err);
+      throw err;
+    }
+  },
+
+  updatePaymentConfig: async (provider: string, updates: any) => {
+    try {
+      const { error } = await supabase
+        .from('payment_configs')
+        .update(updates)
+        .eq('provider', provider);
+
+      if (error) throw error;
+      get().fetchPaymentConfigs(); // Refresh
+    } catch (err) {
+      console.error('Update Payment Config Error:', err);
+      throw err;
+    }
+  },
+
+  fetchAdminTransactions: async (startDate?: string, endDate?: string) => {
+    try {
+      let query = supabase
+        .from('transactions')
+        .select('*, profiles:user_id(name, email)') // Join with profiles to get user info
+        .order('created_at', { ascending: false });
+
+      if (startDate) {
+        query = query.gte('created_at', startDate);
+      }
+      if (endDate) {
+        query = query.lte('created_at', endDate);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Flatten profile data for easier table display if needed
+      const formatted = (data || []).map((tx: any) => ({
+        ...tx,
+        userName: tx.profiles?.name || 'Unknown',
+        userEmail: tx.profiles?.email || 'No Email'
+      }));
+
+      set({ adminTransactions: formatted });
+    } catch (err) {
+      console.error('Fetch Admin Transactions Error:', err);
+    }
+  },
+
   addSeat: async (seats: number) => {
     const { currentUser } = get();
     if (!currentUser) return;
@@ -3029,6 +3206,10 @@ export const useStore = create<any>((set, get) => ({
       if (error) throw error;
 
       // Log Transaction
+      // Transaction Logging is handled by the caller (BillingPage/CheckoutPage)
+      // to avoid duplicates and allow context-specific descriptions.
+
+      /* REMOVED DUPLICATE LOGGING
       const costForThisAction = seats * PER_SEAT;
       if (costForThisAction !== 0) {
         await supabase.from('transactions').insert({
@@ -3039,6 +3220,7 @@ export const useStore = create<any>((set, get) => ({
           currency: 'USD'
         });
       }
+      */
 
       await get().fetchUsers();
       await get().fetchTransactions();

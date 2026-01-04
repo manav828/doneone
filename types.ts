@@ -11,21 +11,31 @@ export interface Company {
 export interface Plan {
   id: string;
   name: string;
-  priceMonthly: number;
-  priceYearly: number;
   description: string;
-  maxProjects: number;
-  maxMembersPerProject: number;
-  maxLeadsPerProject: number;
-  maxUploadSizeMb: number;
-  maxUploadsPerTaskLimit: number;
-  canInviteMembers: boolean;
-  canUploadImages: boolean;
-  canSetReminders: boolean;
-  canUseNotifications: boolean;
-  canExportData: boolean;
-  canViewHistory: boolean;
-  historyRetentionDays: number | null;
+  currency: string;
+  region?: string;
+
+  // Pricing
+  price_monthly: number;
+  price_yearly: number;
+  price_per_seat_monthly: number;
+  price_per_seat_yearly: number;
+
+  // Limits
+  max_projects: number;
+  max_members_per_project: number;
+  max_leads_per_project: number;
+  max_upload_size_mb: number;
+  max_images_per_task: number;
+  history_retention_days: number | null;
+
+  // Features
+  can_invite_members: boolean;
+  can_upload_images: boolean;
+  can_set_reminders: boolean;
+  can_use_notifications: boolean;
+  can_export_data: boolean;
+  can_view_history: boolean;
 }
 
 export interface User {
@@ -60,7 +70,10 @@ export interface User {
   canExport?: boolean;
   allowMultipleInProgress?: boolean;
   onboardingCompleted?: boolean;
+  currency: 'USD' | 'INR';
 }
+
+export type CurrencyType = 'USD' | 'INR';
 
 export interface Tag {
   id: string;

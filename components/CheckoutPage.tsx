@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Shield, CreditCard, Check, ArrowLeft, Users, Lock, Crown, CheckCircle } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export const CheckoutPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { addSeat, currentUser, fetchUsers, fetchProjects, plans, projects, users, removeMember } = useStore() as any;
+    const { addSeat, currentUser, fetchUsers, fetchProjects, plans, projects, users, removeMember, paymentConfigs, fetchPaymentConfigs } = useStore() as any;
 
     // State
     const [quantity, setQuantity] = useState(0);
@@ -20,22 +21,22 @@ export const CheckoutPage: React.FC = () => {
     const [selectedRemovals, setSelectedRemovals] = useState<Record<string, string[]>>({});
     const [missingCountMap, setMissingCountMap] = useState<Record<string, number>>({});
 
-    // Config - Dynamic
-    const premiumPlan = plans.find(p => p.id === 'premium');
-    const PLAN_BASE_PRICE = premiumPlan?.priceMonthly || 19;
-    const PLAN_MEMBERS_LIMIT = premiumPlan?.maxMembersPerProject || 8; // Default 8 if not found, but syncs with store
+    useEffect(() => {
+        if (fetchPaymentConfigs) fetchPaymentConfigs();
+    }, []);
 
     // Per Seat Cost Priority: User Override > Plan Config > Default 5
-    // Note: Plan interface needs 'perSeatCost' if it exists there, otherwise default. 
-    // Assuming for now it logic is: user specific or default. 
-    // Wait, AdminPanel had perSeatCost in 'editLimits' (User). 
-    // Does 'Plan' have it? Not explicitly seen in earlier Interface. 
-    // Safe fallback: currentUser.perSeatCost || 5.
     const PER_SEAT_PRICE = currentUser?.perSeatCost || 5;
+
+    const currency = currentUser?.currency || 'USD';
+    const currencySymbol = currency === 'INR' ? '₹' : '$';
+
+    const premiumPlan = plans.find(p => p.id === 'premium' && p.currency === currency) || plans.find(p => p.id === 'premium');
+    const PLAN_BASE_PRICE = premiumPlan?.price_monthly || (currency === 'INR' ? 899 : 19);
+    const PLAN_MEMBERS_LIMIT = premiumPlan?.max_members_per_project || premiumPlan?.maxMembersPerProject || 8;
 
     // Base Capacity (Included Seats): User's DB Limit (if snapshot) > Plan Config > Default
     const INCLUDED_SEATS = currentUser?.maxResources || PLAN_MEMBERS_LIMIT;
-
 
 
     useEffect(() => {
@@ -43,7 +44,7 @@ export const CheckoutPage: React.FC = () => {
         if (currentUser) {
             fetchProjects();
         }
-    }, [currentUser?.id]); // Refetch when user changes or init
+    }, [currentUser?.id]);
 
     useEffect(() => {
         const planParam = searchParams.get('plan');
@@ -56,10 +57,9 @@ export const CheckoutPage: React.FC = () => {
             setItemType('seats');
             setQuantity(parseInt(seatsParam) || 1);
         }
-    }, [searchParams]); // Removed currentUser from dep to avoid loop if possible, handled above
+    }, [searchParams]);
 
     // Calculate Total
-    // If itemType is 'seats', Base Amount is 0. This solves "paying for plan again".
     const baseAmount = itemType === 'plan' ? PLAN_BASE_PRICE : 0;
     const seatsAmount = quantity * PER_SEAT_PRICE;
     const totalMonthly = baseAmount + seatsAmount;
@@ -68,6 +68,23 @@ export const CheckoutPage: React.FC = () => {
     const currentBase = INCLUDED_SEATS;
     const baseCapacity = itemType === 'plan' ? INCLUDED_SEATS : currentBase;
     const totalCapacity = baseCapacity + quantity;
+
+    // Proration Logic
+    const renewalDate = currentUser?.premiumUntil ? new Date(currentUser.premiumUntil) : new Date();
+    const today = new Date();
+    const isExpired = renewalDate < today;
+
+    // If expired or no date, we charge full month (30 days)
+    // If active, we charge remaining days
+    const diffTime = Math.abs(renewalDate.getTime() - today.getTime());
+    const remainingDays = isExpired ? 30 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Prorated Charge (Due Today)
+    const dailyRate = PER_SEAT_PRICE / 30;
+    const proratedCost = quantity > 0 ? (quantity * dailyRate * remainingDays) : 0;
+
+    // Total Due Today
+    const totalDueToday = itemType === 'plan' ? PLAN_BASE_PRICE : proratedCost;
 
     const handleCheckoutButton = async () => {
         // If reducing seats, check for limits
@@ -140,28 +157,46 @@ export const CheckoutPage: React.FC = () => {
         });
     };
 
-    const handleCheckout = async () => {
-        setIsProcessing(true);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    // Razorpay IntegrationScript
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
 
+    const processProvisioning = async (currency: string = 'USD', provider: string = 'system') => {
         try {
             if (itemType === 'seats') {
+                // Log Seat Transaction (Purchase or Reduction)
+                const isReduction = quantity < 0;
+
+                console.log("Provisioning Seat Transaction:", { quantity, amount: totalDueToday, isReduction });
+                await supabase.from('transactions').insert({
+                    user_id: currentUser.id,
+                    amount: isReduction ? 0 : totalDueToday,
+                    status: isReduction ? 'cancelled' : 'completed',
+                    description: isReduction
+                        ? `Seat Reduction (Removed ${Math.abs(quantity)} seat${Math.abs(quantity) > 1 ? 's' : ''})`
+                        : `Added ${quantity} seat(s) (Prorated for ${remainingDays} days)`,
+                    currency: currency,
+                    provider: provider,
+                    created_at: new Date().toISOString()
+                });
+
                 await addSeat(quantity);
             } else {
-                const { supabase } = useStore.getState() as any;
-
-                // Backdated Renewal Logic:
-                // If expired, renew from LAST expiry date (to charge for gap).
-                // "if user plan exprie today (1 jan) and they renew it after 7 day (7 jan) then renew date is today (1 jan)"
+                // Plan Renewal Logic
                 let newExpiryDate = new Date();
                 const currentExpiry = currentUser?.premiumUntil ? new Date(currentUser.premiumUntil) : null;
 
                 if (currentExpiry && !isNaN(currentExpiry.getTime())) {
-                    // Add 30 days to existing expiry
                     currentExpiry.setDate(currentExpiry.getDate() + 30);
                     newExpiryDate = currentExpiry;
                 } else {
-                    // New subscription or invalid date
                     newExpiryDate.setDate(newExpiryDate.getDate() + 30);
                 }
 
@@ -169,19 +204,19 @@ export const CheckoutPage: React.FC = () => {
                 await supabase.from('profiles').update({
                     is_premium: true,
                     premium_until: newExpiryDate.toISOString(),
-                    // Update Renewal Date too for display consistency
                     renewal_date: newExpiryDate.toISOString()
                 }).eq('id', currentUser.id);
 
-
-
                 // Log Plan Transaction
+                console.log("Provisioning Plan Renewal:", { amount: totalDueToday });
                 await supabase.from('transactions').insert({
                     user_id: currentUser.id,
-                    amount: PLAN_BASE_PRICE,
+                    amount: totalDueToday,
                     status: 'completed',
                     description: `Premium Plan Renewal (until ${newExpiryDate.toLocaleDateString()})`,
-                    currency: 'USD'
+                    currency: currency,
+                    provider: provider,
+                    created_at: new Date().toISOString()
                 });
 
                 if (quantity > (currentUser?.extraSeats || 0)) {
@@ -189,26 +224,104 @@ export const CheckoutPage: React.FC = () => {
                 }
             }
             await fetchUsers();
-            setIsSuccess(true); // Trigger Success View
+            setIsSuccess(true);
             setIsProcessing(false);
         } catch (error) {
-            console.error("Checkout failed:", error);
-            alert("Payment failed. Please try again.");
+            console.error("Provisioning failed:", error);
+            alert("Failed to update account. Please support.");
             setIsProcessing(false);
         }
+    };
+
+    const handleCheckout = async () => {
+        setIsProcessing(true);
+
+        // CASE 1: Seat Reduction (No Payment Needed)
+        if (itemType === 'seats' && quantity < 0) {
+            await processProvisioning('USD', 'system');
+            return;
+        }
+
+        // CASE 2: Payment Required (Purchase)
+
+        // --- Dynamic Gateway Selection ---
+        const razorpayConfig = paymentConfigs?.find((c: any) => c.provider === 'razorpay');
+        const isRazorpayActive = razorpayConfig && razorpayConfig.is_enabled;
+
+        // Default to Razorpay if active (as per user preference flows), otherwise fallback to others
+        // For now, let's assume Razorpay is the primary since we have specific code for it.
+
+        if (!isRazorpayActive) {
+            // Fallback or Lemon Squeezy logic could go here
+            alert("Payment gateway is currently disabled. Please contact support.");
+            setIsProcessing(false);
+            return;
+        }
+
+        const apiKey = razorpayConfig.mode === 'live' ? razorpayConfig.live_key_id : razorpayConfig.test_key_id;
+
+        if (!apiKey) {
+            alert("Payment configuration missing. Please report this to support.");
+            setIsProcessing(false);
+            return;
+        }
+
+        // Strict INR Conversion for Razorpay to support UPI
+        const amountInINR = currency === 'INR'
+            ? Math.ceil(totalDueToday)
+            : Math.ceil(totalDueToday * 84); // Fallback exchange rate for USD->INR
+        const amountInPaise = amountInINR * 100;
+
+        const options = {
+            key: apiKey,
+            amount: amountInPaise,
+            currency: "INR",
+            name: "DoneOne",
+            description: itemType === 'plan'
+                ? `Premium Plan (${currencySymbol}${PLAN_BASE_PRICE})`
+                : `Extra Seats (${currencySymbol}${totalDueToday.toFixed(2)})`,
+            image: "https://doneone.app/logo_icon.png",
+            handler: async function (response: any) {
+                console.log("Payment Successful", response);
+                await processProvisioning();
+            },
+            prefill: {
+                name: currentUser?.name || "",
+                email: currentUser?.email || "",
+                contact: ""
+            },
+            notes: {
+                address: "DoneOne Corporate"
+            },
+            theme: {
+                color: "#f97316"
+            },
+            modal: {
+                ondismiss: function () {
+                    setIsProcessing(false);
+                }
+            }
+        };
+
+        const rzp1 = new (window as any).Razorpay(options);
+        rzp1.open();
     };
 
     if (!currentUser) return <div className="p-10 text-center">Please log in to continue.</div>;
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col">
-            {/* Header Removed - Managed by TopBar now */}
-
+        <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-900 flex flex-col">
             <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-12 grid grid-cols-1 md:grid-cols-12 gap-8">
 
                 {/* Left Column: Order Details */}
                 <div className="md:col-span-7 space-y-6">
                     <div>
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors mb-4"
+                        >
+                            <ArrowLeft size={16} /> Back
+                        </button>
                         <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">
                             {itemType === 'plan' ? 'Upgrade Your Workspace' : 'Add Extra Seats'}
                         </h1>
@@ -239,7 +352,7 @@ export const CheckoutPage: React.FC = () => {
                     </div>
 
                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-                        {/* Base Plan Item - Only show if purchasing the plan */}
+                        {/* Base Plan Item */}
                         {itemType === 'plan' && (
                             <div className="p-6 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-800">
                                 <div className="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 text-white rounded-lg shrink-0 shadow-sm">
@@ -251,7 +364,7 @@ export const CheckoutPage: React.FC = () => {
                                             <h3 className="font-bold text-lg text-slate-800 dark:text-white">Premium Plan Base</h3>
                                             <p className="text-sm text-green-600 font-bold mt-1">Includes {INCLUDED_SEATS} Members</p>
                                         </div>
-                                        <span className="font-bold text-lg text-slate-800 dark:text-white">${PLAN_BASE_PRICE}.00<span className="text-sm font-normal text-slate-400">/mo</span></span>
+                                        <span className="font-bold text-lg text-slate-800 dark:text-white">{currencySymbol}{PLAN_BASE_PRICE}.00<span className="text-sm font-normal text-slate-400">/mo</span></span>
                                     </div>
                                 </div>
                             </div>
@@ -301,7 +414,7 @@ export const CheckoutPage: React.FC = () => {
                                         </div>
                                         <div className="flex flex-col">
                                             <span className="text-xs text-slate-500 uppercase font-bold tracking-wider">Per Extra Seat</span>
-                                            <span className="font-bold text-slate-800 dark:text-white">${PER_SEAT_PRICE}/mo</span>
+                                            <span className="font-bold text-slate-800 dark:text-white">{currencySymbol}{PER_SEAT_PRICE}/mo</span>
                                         </div>
                                     </div>
                                 </div>
@@ -334,7 +447,7 @@ export const CheckoutPage: React.FC = () => {
 
                         <div className="space-y-4 mb-6">
 
-                            {/* Breakdown requested by user: Plan + (Seats * Cost) */}
+                            {/* Breakdown */}
                             <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg border border-slate-100 dark:border-slate-600 mb-4">
                                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Future Recurring Bill</p>
                                 <div className="flex justify-between text-sm mb-1">
@@ -352,39 +465,43 @@ export const CheckoutPage: React.FC = () => {
                                 <div className="border-t border-slate-200 dark:border-slate-600 my-2 pt-2 flex justify-between items-center">
                                     <span className="font-bold text-xs text-slate-500">New Monthly Total</span>
                                     <span className="font-bold text-slate-800 dark:text-white">
-                                        ${(PLAN_BASE_PRICE + (((currentUser?.extraSeats || 0) + quantity) * PER_SEAT_PRICE)).toFixed(2)}
+                                        {currencySymbol}{(PLAN_BASE_PRICE + (((currentUser?.extraSeats || 0) + quantity) * PER_SEAT_PRICE)).toFixed(2)}
                                     </span>
                                 </div>
                             </div>
 
-                            <h3 className="font-bold text-sm text-slate-800 dark:text-white">Due Today</h3>
+                            <h3 className="font-bold text-sm text-slate-800 dark:text-white">Due Today {itemType === 'seats' && quantity > 0 && <span className="text-xs font-normal text-slate-500">(Prorated for {remainingDays} days)</span>}</h3>
                             {itemType === 'plan' && (
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-600 dark:text-slate-400">Premium Plan (Base)</span>
                                     <span className="font-medium text-slate-800 dark:text-white">${PLAN_BASE_PRICE.toFixed(2)}</span>
                                 </div>
                             )}
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-600 dark:text-slate-400">
-                                    {quantity >= 0 ? 'Extra Seats' : 'Seat Reduction'} (x{quantity})
-                                </span>
-                                <span className="font-medium text-slate-800 dark:text-white">${seatsAmount.toFixed(2)}</span>
-                            </div>
+                            {itemType === 'seats' && quantity > 0 && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600 dark:text-slate-400">
+                                        {quantity} Extra Seat{quantity > 1 ? 's' : ''} (x{remainingDays} days)
+                                    </span>
+                                    <span className="font-medium text-slate-800 dark:text-white">${proratedCost.toFixed(2)}</span>
+                                </div>
+                            )}
+                            {itemType === 'seats' && quantity < 0 && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600 dark:text-slate-400">
+                                        Seat Reduction (x{Math.abs(quantity)})
+                                    </span>
+                                    <span className="font-medium text-slate-800 dark:text-white">$0.00</span>
+                                </div>
+                            )}
+
                             <div className="border-t border-slate-100 dark:border-slate-700 my-2 pt-2 flex justify-between items-center">
                                 <span className="font-bold text-slate-800 dark:text-white">Total due today</span>
-                                <span className="font-bold text-2xl text-primary">${totalMonthly.toFixed(2)}</span>
+                                <span className="font-bold text-2xl text-primary">{currencySymbol}{totalDueToday.toFixed(2)}</span>
                             </div>
                         </div>
 
                         <div className="space-y-3">
-                            <div className="p-3 border border-slate-200 dark:border-slate-600 rounded-lg flex items-center gap-3 bg-slate-50 dark:bg-slate-700/50 opacity-70 cursor-not-allowed">
-                                <CreditCard size={20} className="text-slate-400" />
-                                <div className="flex-1">
-                                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300">Visa ending in 4242</div>
-                                    <div className="text-[10px] text-slate-500">Expires 12/28</div>
-                                </div>
-                                <span className="text-xs text-blue-600 font-medium">Default</span>
-                            </div>
+
 
                             <button
                                 onClick={handleCheckoutButton}
@@ -399,8 +516,8 @@ export const CheckoutPage: React.FC = () => {
                             </button>
 
                             <p className="text-[10px] text-center text-slate-400 mt-4">
-                                By confirming, you agree to DoneOne's Terms of Service.
-                                <br />Payments are processed securely by Stripe.
+                                By confirming, you agree to DoneOne's <button onClick={() => window.open('/terms', '_blank')} className="underline hover:text-slate-600 transition-colors cursor-pointer text-slate-500">Terms and Conditions</button>.
+                                <br />Payments are processed securely by Razorpay.
                             </p>
                         </div>
                     </div>
@@ -424,7 +541,6 @@ export const CheckoutPage: React.FC = () => {
                                 const selected = selectedRemovals[p.id] || [];
                                 const remaining = Math.max(0, countToRemove - selected.length);
 
-                                // Get eligible members (Leads + Resources, excluding Owner)
                                 const members = [
                                     ...(p.leadIds || []),
                                     ...(p.resourceIds || [])

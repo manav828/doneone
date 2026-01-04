@@ -74,7 +74,8 @@ export const Login: React.FC = () => {
             reminders_enabled: true,
             time_tracking_enabled: true,
             image_upload_enabled: true,
-            max_attachments_per_task: 0
+            max_attachments_per_task: 0,
+            currency: 'INR' // Default currency for all new users
           });
         } else if (user && !session) {
           setError("Account created! Check your email to confirm.");
