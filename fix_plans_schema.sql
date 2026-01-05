@@ -1,18 +1,21 @@
--- Recreate plans table with camelCase columns to match TypeScript interface exactly
+-- Force schema cache reload and recreate table if needed
+NOTIFY pgrst, 'reload schema';
+
+-- Only drop and recreate if the columns are truly missing or broken
+-- But since the user is getting column not found errors, a full recreate is safest for this dev environment
 DROP TABLE IF EXISTS "plans";
 
 CREATE TABLE "plans" (
   "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   "name" text NOT NULL,
   "description" text, 
-  "currency" text NOT NULL DEFAULT 'USD', -- 'USD', 'INR'
-  "region" text DEFAULT 'global', -- 'global', 'india'
+  "currency" text NOT NULL DEFAULT 'USD', 
+  "region" text DEFAULT 'global',
   
-  -- Method 1: Use Quoted Identifiers to match TS CamelCase
+  -- CamelCase Columns explicitly quoted
   "priceMonthly" numeric NOT NULL DEFAULT 0,
   "priceYearly" numeric NOT NULL DEFAULT 0,
   
-  -- Limits
   "maxProjects" numeric DEFAULT 3,
   "maxMembersPerProject" numeric DEFAULT 5,
   "maxLeadsPerProject" numeric DEFAULT 5,
@@ -20,7 +23,6 @@ CREATE TABLE "plans" (
   "maxUploadsPerTaskLimit" numeric DEFAULT 0,
   "historyRetentionDays" numeric DEFAULT 30,
   
-  -- Feature Flags (Booleans)
   "canInviteMembers" boolean DEFAULT false,
   "canUploadImages" boolean DEFAULT false,
   "canSetReminders" boolean DEFAULT false,
@@ -32,10 +34,9 @@ CREATE TABLE "plans" (
   "updatedAt" timestamptz DEFAULT NOW()
 );
 
--- Check if RLS is enabled, if not enable it
+-- RLS
 ALTER TABLE "plans" ENABLE ROW LEVEL SECURITY;
 
--- Policy: Admin management
 DROP POLICY IF EXISTS "Enable read access for all users" ON "plans";
 CREATE POLICY "Enable read access for all users" ON "plans" FOR SELECT USING (true);
 
@@ -44,7 +45,7 @@ CREATE POLICY "Enable write access for admins" ON "plans" FOR ALL USING (
   auth.role() = 'authenticated'
 );
 
--- Insert Default Data matching the new schema
+-- Insert Default Data
 INSERT INTO "plans" (
     "name", "description", "currency", "region", 
     "priceMonthly", "priceYearly", 

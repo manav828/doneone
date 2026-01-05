@@ -11,21 +11,65 @@ export interface Company {
 export interface Plan {
   id: string;
   name: string;
-  priceMonthly: number;
-  priceYearly: number;
-  description: string;
-  maxProjects: number;
-  maxMembersPerProject: number;
-  maxLeadsPerProject: number;
-  maxUploadSizeMb: number;
-  maxUploadsPerTaskLimit: number;
-  canInviteMembers: boolean;
-  canUploadImages: boolean;
-  canSetReminders: boolean;
-  canUseNotifications: boolean;
-  canExportData: boolean;
-  canViewHistory: boolean;
-  historyRetentionDays: number | null;
+  description?: string;
+  currency: string;
+  region?: string;
+
+  // Pricing (snake_case - primary)
+  price_monthly: number;
+  price_yearly: number;
+  price_per_seat_monthly: number;
+  price_per_seat_yearly: number;
+
+  // Limits (snake_case - primary)
+  max_projects: number;
+  max_members_per_project: number;
+  max_leads_per_project: number;
+  max_upload_size_mb?: number;
+  max_images_per_task: number;
+  history_retention_days: number | null;
+
+  // Features (snake_case - primary)
+  can_invite_members: boolean;
+  can_upload_images: boolean;
+  can_set_reminders: boolean;
+  can_use_notifications: boolean;
+  can_export_data: boolean;
+  can_view_history: boolean;
+
+  // Legacy camelCase (optional for backward compatibility)
+  priceMonthly?: number;
+  priceYearly?: number;
+  maxProjects?: number;
+  maxMembersPerProject?: number;
+  maxLeadsPerProject?: number;
+  maxUploadSizeMb?: number;
+  maxUploadsPerTaskLimit?: number;
+  canInviteMembers?: boolean;
+  canUploadImages?: boolean;
+  canSetReminders?: boolean;
+  canUseNotifications?: boolean;
+  canExportData?: boolean;
+  canViewHistory?: boolean;
+  historyRetentionDays?: number | null;
+}
+
+export interface CustomPlanData {
+  billingInterval?: 'monthly' | 'yearly';
+  baseCost?: number;
+  seatCost?: number;
+  extraSeats?: number;
+  maxProjects?: number;
+  maxLeads?: number;
+  maxResources?: number;
+  maxAttachments?: number;
+  reminders?: boolean;
+  notifications?: boolean;
+  timeTracking?: boolean;
+  imageUpload?: boolean;
+  historyRetentionDays?: number;
+  canExport?: boolean;
+  canInvite?: boolean;
 }
 
 export interface User {
@@ -35,17 +79,22 @@ export interface User {
   email?: string;
   avatar?: string;
   companyId?: string;
-  // Admin/Premium Settings
-  // Enterprise / Billing Fields
-  planBaseCost?: number;
-  perSeatCost?: number; // New field for custom per-seat pricing
-  extraSeats?: number;
-  isCustomPlan?: boolean;
+
+  // NEW: Plan Subscription System
+  planId?: string; // UUID linking to plans table
+  billingInterval?: 'monthly' | 'yearly'; // For standard plans
+  isCustomPlan?: boolean; // If true, use customPlanData
+  customPlanData?: CustomPlanData; // JSONB for custom plan users
+  premiumUntil?: number; // Timestamp - subscription expiry
   renewalDate?: number; // Timestamp
   createdAt?: number; // Timestamp
-  premiumUntil?: number; // Timestamp or null
-  isPremium?: boolean; // Explicit premium flag from database
 
+  // DEPRECATED: These will be removed after migration
+  // Kept for backward compatibility during transition
+  isPremium?: boolean;
+  planBaseCost?: number;
+  perSeatCost?: number;
+  extraSeats?: number;
   maxProjects?: number;
   maxLeads?: number;
   maxResources?: number;
@@ -60,7 +109,10 @@ export interface User {
   canExport?: boolean;
   allowMultipleInProgress?: boolean;
   onboardingCompleted?: boolean;
+  currency: 'USD' | 'INR';
 }
+
+export type CurrencyType = 'USD' | 'INR';
 
 export interface Tag {
   id: string;

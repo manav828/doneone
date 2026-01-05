@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Board } from './components/Board';
 import { AdminPanel } from './components/AdminPanel';
@@ -16,10 +16,14 @@ import { CheckoutPage } from './components/CheckoutPage';
 import BillingPage from './components/BillingPage';
 import LandingPage from './components/landing/LandingPage';
 import { WorkspaceSettings } from './components/WorkspaceSettings';
+import { TermsPage } from './components/TermsPage';
 
 const App: React.FC = () => {
   const { init, currentUser, isLoading, tasks, projects } = useStore();
   const [showLoginForm, setShowLoginForm] = React.useState(false);
+
+  // Super Admin Check (Hardcoded for security, matching AdminPanel)
+  const isSuperAdmin = currentUser?.email === 'manavss828@gmail.com';
 
   useEffect(() => {
     init();
@@ -96,16 +100,6 @@ const App: React.FC = () => {
     <Router>
       <CustomAlert />
       <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
-      {/* PricingModal is also in TopBar, but having it here handles global store state triggers better if TopBar unmounts? TopBar is always mounted in Layout. 
-          However, TopBar has the local import. UseStore state is global.
-          TopBar renders it. Only ONE instance should render. 
-          I added it to TopBar in previous step. 
-          If I add it here, I might duplicate it?
-          Wait, TopBar IS inside Layout.
-          Let's NOT add PricingModal here if TopBar has it.
-          Check Logic: I edited TopBar to render PricingModal based on isPricingModalOpen.
-          So I don't need it here.
-      */}
       <Layout>
         {/* Waiting Screen for Unassigned Users */}
         {useStore.getState().getJoinedTeams().length === 1 && useStore.getState().getJoinedTeams()[0].name === 'Unassigned' ? (
@@ -125,7 +119,8 @@ const App: React.FC = () => {
         ) : (
           <Routes>
             <Route path="/" element={<Board />} />
-            <Route path="/admin" element={<AdminPanel />} />
+            {/* PROTECTED ADMIN ROUTE */}
+            <Route path="/admin" element={isSuperAdmin ? <AdminPanel /> : <Navigate to="/" replace />} />
             <Route path="/guide" element={<Guide />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/reports" element={<ReportsPage />} />
@@ -133,6 +128,7 @@ const App: React.FC = () => {
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/workspace" element={<WorkspaceSettings />} />
             <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />
+            <Route path="/terms" element={<TermsPage />} />
           </Routes>
         )}
       </Layout>

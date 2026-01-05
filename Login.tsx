@@ -65,16 +65,8 @@ export const Login: React.FC = () => {
             email: email, // FIXED: Include email in profile
             role: 'Resource',
             avatar_url: '',
-            is_premium: true, // FIXED: Enable 30-day trial
             premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-            max_projects: 0,
-            max_leads: 0,
-            max_resources: 0,
-            notifications_enabled: true,
-            reminders_enabled: true,
-            time_tracking_enabled: true,
-            image_upload_enabled: true,
-            max_attachments_per_task: 0
+            currency: 'INR' // Default currency for all new users
           });
         } else if (user && !session) {
           setError("Account created! Check your email to confirm.");
