@@ -10,7 +10,7 @@ import { SuperAdminPayments } from './admin/SuperAdminPayments';
 import { SuperAdminPlans } from './admin/SuperAdminPlans';
 import { MessageSquare, CreditCard } from 'lucide-react';
 export const AdminPanel: React.FC = () => {
-    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects, teams, teamMembers } = useStore();
+    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects, teams, teamMembers, plans, fetchPlans } = useStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
@@ -40,7 +40,9 @@ export const AdminPanel: React.FC = () => {
         extraSeats: 0,
         isCustomPlan: false,
         renewalDate: null as string | null,
-        currency: 'USD'
+        currency: 'USD',
+        billingInterval: 'monthly' as 'monthly' | 'yearly',
+        planId: null as string | null
     });
 
     useEffect(() => {
@@ -53,6 +55,7 @@ export const AdminPanel: React.FC = () => {
         const loadAdminData = async () => {
             if (storeUsers.length === 0) await fetchUsers();
             if (storeProjects.length === 0) await fetchProjects();
+            if (plans.length === 0) await fetchPlans();
 
             const status = await getRegistrationStatus();
             setRegOpen(status);
@@ -160,17 +163,19 @@ export const AdminPanel: React.FC = () => {
     const startEdit = (user: User) => {
         setEditingUser(user.id);
         setEditLimits({
-            maxProjects: user.maxProjects || 3,
-            maxLeads: user.maxLeads || 2,
-            maxResources: user.maxResources || 5,
+            maxProjects: user.customPlanData?.maxProjects || user.maxProjects || 3,
+            maxLeads: user.customPlanData?.maxLeads || user.maxLeads || 2,
+            maxResources: user.customPlanData?.maxResources || user.maxResources || 5,
             historyRetentionDays: user.historyRetentionDays || null,
             addPremiumDays: 0,
-            planBaseCost: user.planBaseCost || (user as any).plan_base_cost || 0,
-            perSeatCost: user.perSeatCost || (user as any).per_seat_cost || 5,
-            extraSeats: user.extraSeats || (user as any).extra_seats || 0,
-            isCustomPlan: user.isCustomPlan || (user as any).is_custom_plan || false,
-            renewalDate: user.renewalDate ? new Date(user.renewalDate).toISOString().split('T')[0] : null,
-            currency: user.currency || 'USD'
+            planBaseCost: user.customPlanData?.baseCost || user.planBaseCost || 0,
+            perSeatCost: user.customPlanData?.seatCost || user.perSeatCost || 5,
+            extraSeats: user.customPlanData?.extraSeats || user.extraSeats || 0,
+            isCustomPlan: user.isCustomPlan || false,
+            renewalDate: user.renewalDate ? new Date(user.renewalDate).toISOString().split('T')[0] : (user.premiumUntil ? new Date(user.premiumUntil).toISOString().split('T')[0] : null),
+            currency: user.currency || 'USD',
+            billingInterval: user.customPlanData?.billingInterval || user.billingInterval || 'monthly',
+            planId: user.planId || null
         });
     };
 
@@ -184,6 +189,8 @@ export const AdminPanel: React.FC = () => {
     };
 
     const saveEdit = async (userId: string) => {
+        const renewalTime = editLimits.renewalDate ? new Date(editLimits.renewalDate).getTime() : undefined;
+
         // 1. Update Profile Limits
         await updateUserProfile(userId, {
             maxProjects: editLimits.maxProjects,
@@ -194,8 +201,11 @@ export const AdminPanel: React.FC = () => {
             perSeatCost: editLimits.perSeatCost,
             extraSeats: editLimits.extraSeats,
             isCustomPlan: editLimits.isCustomPlan,
+            billingInterval: editLimits.billingInterval,
             currency: editLimits.currency as any,
-            renewalDate: editLimits.renewalDate ? new Date(editLimits.renewalDate).getTime() : undefined,
+            renewalDate: renewalTime,
+            premiumUntil: renewalTime, // Set both to ensure consistency across UI and backend checks
+            planId: editLimits.planId || undefined
         });
 
         // Handle Premium Extension if set
@@ -230,6 +240,39 @@ export const AdminPanel: React.FC = () => {
 
         setEditingUser(null);
         await fetchUsers();
+    };
+
+    const bulkAssignIndianPlan = async () => {
+        const indianPlan = plans.find((p: any) => p.name === 'Premium Plan (India)');
+        if (!indianPlan) {
+            alert("Premium Plan (India) not found in plans table.");
+            return;
+        }
+
+        const confirmAction = window.confirm(`This will assign the '${indianPlan.name}' to ALL users who currently have no plan. Are you sure?`);
+        if (!confirmAction) return;
+
+        setLoading(true);
+        try {
+            // Find all users who are NOT premium or don't have a planId
+            const usersToUpdate = storeUsers.filter(u => !u.planId || u.planId === (plans.find((p: any) => p.price_monthly === 0 || p.price_monthly === '0')?.id));
+
+            for (const user of usersToUpdate) {
+                await updateUserProfile(user.id, {
+                    planId: indianPlan.id,
+                    isCustomPlan: false,
+                    // Optionally set renewal date to 30 days from now if needed
+                    renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime()
+                });
+            }
+            alert(`Success! Updated ${usersToUpdate.length} users.`);
+            await fetchUsers();
+        } catch (error) {
+            console.error("Bulk update failed:", error);
+            alert("Failed to update some users. Check console.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const openProject = (id: string) => {
@@ -344,14 +387,19 @@ export const AdminPanel: React.FC = () => {
                                                         <td className="px-4 py-4 text-center">
                                                             <div className="flex flex-col text-xs">
                                                                 <span className="font-bold text-gray-700 dark:text-gray-300">
-                                                                    {u.currency === 'INR' ? '₹' : '$'}{u.planBaseCost} base
+                                                                    {u.currency === 'INR' ? '₹' : '$'}{u.customPlanData?.baseCost || 0} base
                                                                 </span>
-                                                                <span className="text-gray-500">+ {u.currency === 'INR' ? '₹' : '$'}{u.perSeatCost} / user</span>
+                                                                <span className="text-gray-500">+ {u.currency === 'INR' ? '₹' : '$'}{u.customPlanData?.seatCost || 0} / user</span>
+                                                                <span className="text-[10px] text-purple-500 font-bold uppercase mt-1">
+                                                                    {u.customPlanData?.billingInterval || 'monthly'}
+                                                                </span>
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 text-center">
-                                                            <div className="font-mono text-xs text-gray-700 dark:text-gray-300">{u.maxProjects} P / {u.maxLeads} L / {u.maxResources} R</div>
-                                                            {u.extraSeats > 0 && <div className="text-[10px] text-green-600 font-bold mt-0.5">+{u.extraSeats} Extra Seats</div>}
+                                                            <div className="font-mono text-xs text-gray-700 dark:text-gray-300">
+                                                                {u.customPlanData?.maxProjects || u.maxProjects || 0} P / {u.customPlanData?.maxLeads || u.maxLeads || 0} L / {u.customPlanData?.maxResources || u.maxResources || 0} R
+                                                            </div>
+                                                            {(u.customPlanData?.extraSeats || 0) > 0 && <div className="text-[10px] text-green-600 font-bold mt-0.5">+{u.customPlanData.extraSeats} Extra Seats</div>}
                                                         </td>
                                                         <td className="px-6 py-4 text-right">
                                                             {editingUser === u.id ? (
@@ -400,6 +448,17 @@ export const AdminPanel: React.FC = () => {
                                                                             <input type="number" className="w-full p-2 text-sm border rounded text-center" value={editLimits.maxLeads} onChange={e => setEditLimits({ ...editLimits, maxLeads: +e.target.value })} title="Max Leads" />
                                                                             <input type="number" className="w-full p-2 text-sm border rounded text-center" value={editLimits.maxResources} onChange={e => setEditLimits({ ...editLimits, maxResources: +e.target.value })} title="Max Resources" />
                                                                         </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Billing Interval</label>
+                                                                        <select
+                                                                            value={editLimits.billingInterval}
+                                                                            onChange={e => setEditLimits({ ...editLimits, billingInterval: e.target.value as any })}
+                                                                            className="w-full p-2 text-sm border rounded focus:ring-2 focus:ring-purple-500 outline-none bg-white font-bold"
+                                                                        >
+                                                                            <option value="monthly">Monthly</option>
+                                                                            <option value="yearly">Yearly</option>
+                                                                        </select>
                                                                     </div>
                                                                     <div className="md:col-span-4 flex justify-between items-center pt-2 border-t border-gray-100 mt-2">
                                                                         <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-purple-700">
@@ -505,8 +564,16 @@ export const AdminPanel: React.FC = () => {
 
 
                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700">
-                                <div className="px-6 py-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
-                                    <h3 className="font-bold text-gray-700 dark:text-gray-200">User Management & Limits</h3>
+                                <div className="px-6 py-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-wrap gap-4 items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <h3 className="font-bold text-gray-700 dark:text-gray-200">User Management & Limits</h3>
+                                        <button
+                                            onClick={bulkAssignIndianPlan}
+                                            className="px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs font-bold rounded-lg border border-orange-200 dark:border-orange-800/50 hover:bg-orange-200 transition-colors"
+                                        >
+                                            Force Premium India for All
+                                        </button>
+                                    </div>
                                     <select
                                         value={currencyFilter}
                                         onChange={e => setCurrencyFilter(e.target.value as 'ALL' | 'USD' | 'INR')}
@@ -538,116 +605,90 @@ export const AdminPanel: React.FC = () => {
                                                     </td>
                                                     <td className="px-4 py-4 text-center">
                                                         <div className="flex flex-col items-center gap-1">
-                                                            {u.premiumUntil && u.premiumUntil > Date.now() ? (
-                                                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                                                    Manual ({Math.ceil((u.premiumUntil - Date.now()) / (1000 * 60 * 60 * 24))}d)
+                                                            {u.planId && plans.find(p => p.id === u.planId) ? (
+                                                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                                    {plans.find(p => p.id === u.planId)?.name}
                                                                 </span>
-                                                            ) : (u.createdAt && (Date.now() - u.createdAt < 30 * 24 * 60 * 60 * 1000)) ? (
-                                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                                                    Trial ({Math.ceil((30 - (Date.now() - u.createdAt) / (1000 * 60 * 60 * 24)))}d)
-                                                                </span>
+                                                            ) : u.premiumUntil && u.premiumUntil > Date.now() ? (
+                                                                (() => {
+                                                                    const isTrial = u.createdAt && (Date.now() - u.createdAt < 30 * 24 * 60 * 60 * 1000);
+                                                                    const daysLeft = Math.ceil((u.premiumUntil - Date.now()) / (1000 * 60 * 60 * 24));
+                                                                    return (
+                                                                        <span className={`text-xs ${isTrial ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'} px-2 py-0.5 rounded-full font-bold flex items-center gap-1`}>
+                                                                            {isTrial ? 'Trial' : 'Premium'} ({daysLeft}d)
+                                                                        </span>
+                                                                    );
+                                                                })()
                                                             ) : (
                                                                 <span className="text-xs text-gray-400 font-mono">Basic</span>
                                                             )}
 
                                                             {editingUser === u.id ? (
-                                                                <>
-                                                                    <div className="flex items-center gap-1 mt-1">
-                                                                        <input
-                                                                            type="number"
-                                                                            className="w-12 text-xs p-1 border rounded text-center"
-                                                                            placeholder="+Days"
-                                                                            value={editLimits.addPremiumDays || ''}
-                                                                            onChange={(e) => setEditLimits({ ...editLimits, addPremiumDays: parseInt(e.target.value) })}
-                                                                        />
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                if (editLimits.addPremiumDays) handleAddPremium(u.id, editLimits.addPremiumDays);
-                                                                            }}
-                                                                            className="bg-green-100 text-green-700 p-1 rounded hover:bg-green-200"
-                                                                            title="Add/Set Premium Days (Overwrite)"
+                                                                <div className="flex flex-col gap-2 mt-2 p-3 bg-white dark:bg-gray-800 border rounded-lg shadow-sm w-64 text-left">
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Assign Plan</label>
+                                                                        <select
+                                                                            value={editLimits.planId || ''}
+                                                                            onChange={e => setEditLimits({ ...editLimits, planId: e.target.value || null })}
+                                                                            className="w-full text-xs p-1.5 border rounded bg-white font-medium"
                                                                         >
-                                                                            <Check size={12} />
-                                                                        </button>
+                                                                            <option value="">No Plan (Basic)</option>
+                                                                            {plans.map(p => (
+                                                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                                                            ))}
+                                                                        </select>
                                                                     </div>
 
-                                                                    {/* Enterprise Config */}
-                                                                    <div className="mt-2 text-left border-t border-gray-200 pt-1">
-                                                                        <label className="flex items-center gap-1 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">End / Renewal Date</label>
+                                                                        <input
+                                                                            type="date"
+                                                                            value={editLimits.renewalDate || ''}
+                                                                            onChange={e => setEditLimits({ ...editLimits, renewalDate: e.target.value })}
+                                                                            className="w-full text-xs p-1.5 border rounded"
+                                                                        />
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between border-t pt-2">
+                                                                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600 cursor-pointer">
                                                                             <input
                                                                                 type="checkbox"
                                                                                 checked={editLimits.isCustomPlan}
                                                                                 onChange={e => setEditLimits({ ...editLimits, isCustomPlan: e.target.checked })}
                                                                                 className="w-3 h-3 text-blue-600 rounded"
                                                                             />
-                                                                            Enterprise / Custom
+                                                                            Custom Plan
                                                                         </label>
-                                                                        {editLimits.isCustomPlan && (
-                                                                            <div className="space-y-1 mt-1 pl-1">
-                                                                                {/* UPDATED LABELS FOR CLARITY */}
-                                                                                <div className="space-y-2 mt-2">
-                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Currency:</span>
-                                                                                        <select
-                                                                                            value={editLimits.currency}
-                                                                                            onChange={e => setEditLimits({ ...editLimits, currency: e.target.value })}
-                                                                                            className="w-20 text-[10px] p-1 border rounded bg-white font-bold"
-                                                                                        >
-                                                                                            <option value="USD">USD</option>
-                                                                                            <option value="INR">INR</option>
-                                                                                        </select>
-                                                                                    </div>
-                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Base Cost ({editLimits.currency === 'INR' ? '₹' : '$'}):</span>
-                                                                                        <input
-                                                                                            type="number"
-                                                                                            value={editLimits.planBaseCost}
-                                                                                            onChange={e => setEditLimits({ ...editLimits, planBaseCost: +e.target.value })}
-                                                                                            className="w-20 text-xs p-1.5 border rounded"
-                                                                                            placeholder="e.g. 199"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Seat Price ({editLimits.currency === 'INR' ? '₹' : '$'}):</span>
-                                                                                        <input
-                                                                                            type="number"
-                                                                                            value={editLimits.perSeatCost}
-                                                                                            onChange={e => setEditLimits({ ...editLimits, perSeatCost: +e.target.value })}
-                                                                                            className="w-20 text-xs p-1.5 border rounded"
-                                                                                            placeholder="e.g. 15"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Extra Seats:</span>
-                                                                                        <input
-                                                                                            type="number"
-                                                                                            value={editLimits.extraSeats}
-                                                                                            onChange={e => setEditLimits({ ...editLimits, extraSeats: +e.target.value })}
-                                                                                            className="w-20 text-xs p-1.5 border rounded"
-                                                                                            placeholder="0"
-                                                                                        />
-                                                                                    </div>
-                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Renewal Date:</span>
-                                                                                        <input
-                                                                                            type="date"
-                                                                                            value={editLimits.renewalDate || ''}
-                                                                                            onChange={e => setEditLimits({ ...editLimits, renewalDate: e.target.value })}
-                                                                                            className="w-auto text-xs p-1 border rounded"
-                                                                                        />
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-
-                                                                        )}
+                                                                        <div className="flex gap-1">
+                                                                            <button
+                                                                                onClick={() => handleSave(u)}
+                                                                                className="bg-green-500 text-white p-1 rounded hover:bg-green-600 transition-colors"
+                                                                                title="Save Changes"
+                                                                            >
+                                                                                <Check size={14} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setEditingUser(null)}
+                                                                                className="bg-gray-200 text-gray-600 p-1 rounded hover:bg-gray-300 transition-colors"
+                                                                                title="Cancel"
+                                                                            >
+                                                                                <X size={14} />
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
-                                                                </>
+
+                                                                    {editLimits.isCustomPlan && (
+                                                                        <div className="mt-2 text-[9px] text-gray-400 italic">
+                                                                            * Further custom details can be edited in the "Custom Users" tab.
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             ) : (
                                                                 <button
-                                                                    className="opacity-0 group-hover:opacity-100 text-xs text-blue-500 hover:underline"
+                                                                    className="opacity-0 group-hover:opacity-100 text-xs text-blue-500 hover:underline font-bold"
                                                                     onClick={() => startEdit(u)}
                                                                 >
-                                                                    Edit
+                                                                    Edit Plan / Status
                                                                 </button>
                                                             )}
                                                         </div>
@@ -780,21 +821,24 @@ export const AdminPanel: React.FC = () => {
                                                         ) : (
                                                             <div className="flex flex-col items-center gap-1">
                                                                 <div className="font-mono text-gray-600 dark:text-gray-400 text-xs">
-                                                                    {u.maxProjects}/{u.maxLeads}/{u.maxResources}
+                                                                    {u.customPlanData?.maxProjects || u.maxProjects || 0}/{u.customPlanData?.maxLeads || u.maxLeads || 0}/{u.customPlanData?.maxResources || u.maxResources || 0}
                                                                 </div>
                                                                 {u.isCustomPlan && (
                                                                     <div className="flex flex-col items-center">
                                                                         <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 text-[10px] uppercase font-bold rounded">
                                                                             Custom ({u.currency || 'USD'})
                                                                         </span>
+                                                                        <span className="text-[9px] text-gray-400 mt-0.5 font-bold uppercase">
+                                                                            {u.customPlanData?.billingInterval || 'monthly'}
+                                                                        </span>
                                                                         <span className="text-[9px] text-gray-400 mt-0.5">
-                                                                            {u.currency === 'INR' ? '₹' : '$'}{u.planBaseCost} + {u.currency === 'INR' ? '₹' : '$'}{u.perSeatCost}/s
+                                                                            {u.currency === 'INR' ? '₹' : '$'}{u.customPlanData?.baseCost || 0} + {u.currency === 'INR' ? '₹' : '$'}{u.customPlanData?.seatCost || 0}/s
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {u.extraSeats > 0 && (
+                                                                {(u.customPlanData?.extraSeats || 0) > 0 && (
                                                                     <span className="text-[10px] text-green-600 font-bold">
-                                                                        (+{u.extraSeats} seats)
+                                                                        (+{u.customPlanData?.extraSeats} seats)
                                                                     </span>
                                                                 )}
                                                             </div>

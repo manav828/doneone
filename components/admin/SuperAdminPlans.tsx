@@ -119,7 +119,9 @@ export const SuperAdminPlans: React.FC = () => {
                                 <th className="px-4 py-3 min-w-[150px]">Plan Name</th>
                                 <th className="px-4 py-3 w-20 text-center">Curr</th>
                                 <th className="px-4 py-3 w-24">Base/Mo</th>
+                                <th className="px-4 py-3 w-24">Base/Yr</th>
                                 <th className="px-4 py-3 w-24">User/Mo</th>
+                                <th className="px-4 py-3 w-24">User/Yr</th>
                                 <th className="px-4 py-3 w-20 text-center" title="Max Projects">Projs</th>
                                 <th className="px-4 py-3 w-20 text-center" title="Max Members per Project">Mem/Pr</th>
                                 <th className="px-4 py-3 w-20 text-center" title="Max Leads per Project">Lead/Pr</th>
@@ -168,11 +170,37 @@ export const SuperAdminPlans: React.FC = () => {
                                             <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
                                             <input
                                                 type="number"
+                                                value={plan.price_yearly}
+                                                onChange={e => handlePlanChange(plan.id, 'price_yearly', parseInt(e.target.value) || 0)}
+                                                className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
+                                                placeholder="Yearly"
+                                                title="Base Yearly Price"
+                                            />
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
+                                            <input
+                                                type="number"
                                                 value={plan.price_per_seat_monthly}
                                                 onChange={e => handlePlanChange(plan.id, 'price_per_seat_monthly', parseInt(e.target.value) || 0)}
                                                 className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
                                                 placeholder="Seat"
                                                 title="Per User Monthly Price"
+                                            />
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
+                                            <input
+                                                type="number"
+                                                value={plan.price_per_seat_yearly}
+                                                onChange={e => handlePlanChange(plan.id, 'price_per_seat_yearly', parseInt(e.target.value) || 0)}
+                                                className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
+                                                placeholder="Yearly"
+                                                title="Per User Yearly Price"
                                             />
                                         </div>
                                     </td>
@@ -319,7 +347,7 @@ export const SuperAdminPlans: React.FC = () => {
                             </div>
 
                             {/* Pricing */}
-                            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
                                 <div className="space-y-1">
                                     <label className="text-xs font-bold uppercase text-gray-500">Base Price (Monthly)</label>
                                     <input
@@ -330,11 +358,29 @@ export const SuperAdminPlans: React.FC = () => {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Per User Price (Monthly)</label>
+                                    <label className="text-xs font-bold uppercase text-gray-500">Base Price (Yearly)</label>
+                                    <input
+                                        type="number"
+                                        value={newPlan.price_yearly}
+                                        onChange={e => setNewPlan({ ...newPlan, price_yearly: parseInt(e.target.value) })}
+                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold uppercase text-gray-500">Per User (Monthly)</label>
                                     <input
                                         type="number"
                                         value={newPlan.price_per_seat_monthly}
                                         onChange={e => setNewPlan({ ...newPlan, price_per_seat_monthly: parseInt(e.target.value) })}
+                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold uppercase text-gray-500">Per User (Yearly)</label>
+                                    <input
+                                        type="number"
+                                        value={newPlan.price_per_seat_yearly}
+                                        onChange={e => setNewPlan({ ...newPlan, price_per_seat_yearly: parseInt(e.target.value) })}
                                         className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>

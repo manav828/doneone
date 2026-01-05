@@ -711,16 +711,7 @@ export const useStore = create<any>((set, get) => ({
         role: 'Resource',
         email: session.user.email,
         avatar_url: '',
-        max_projects: 100, // Trial Limit (Generous)
-        max_leads: 50,
-        max_resources: 50,
-        is_premium: true, // Enable Trial for NEW users only
-        premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days
-        notifications_enabled: true,
-        reminders_enabled: true,
-        time_tracking_enabled: true,
-        image_upload_enabled: true,
-        max_attachments_per_task: 0
+        premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days Trial
       }).select().single();
 
       console.log('📝 Profile Creation Result:', {
@@ -816,23 +807,41 @@ export const useStore = create<any>((set, get) => ({
 
             createdAt: new Date(profile.created_at).getTime(),
             premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
-            isPremium: profile.is_premium, // Load from database
-            planBaseCost: profile.plan_base_cost,
-            perSeatCost: profile.per_seat_cost,
-            extraSeats: profile.extra_seats,
+            isPremium: profile.is_custom_plan ||
+              (!!profile.plan_id && profile.plan_id !== (get().plans.find(p => p.price_monthly === 0 || p.price_monthly === '0')?.id)),
+
+            // NEW: Plan subscription fields
+            planId: profile.plan_id,
+            billingInterval: profile.billing_interval || profile.custom_plan_data?.billingInterval || 'monthly',
             isCustomPlan: profile.is_custom_plan,
+            customPlanData: profile.custom_plan_data,
+
+            // Billing/Enterprise fields
+            // If custom, use custom data. If standard, use the plan's price.
+            planBaseCost: profile.is_custom_plan
+              ? (profile.custom_plan_data?.baseCost || 0)
+              : (get().plans.find(p => p.id === profile.plan_id)?.price_monthly || 0),
+            perSeatCost: profile.is_custom_plan
+              ? (profile.custom_plan_data?.seatCost || 0)
+              : (get().plans.find(p => p.id === profile.plan_id)?.price_per_seat_monthly || 0),
+
+            extraSeats: profile.custom_plan_data?.extraSeats || 0,
             renewalDate: profile.renewal_date ? new Date(profile.renewal_date).getTime() : undefined,
 
-            maxProjects: profile.max_projects,
-            maxLeads: profile.max_leads,
-            maxResources: profile.max_resources,
+            // Limits & Features
+            maxProjects: profile.is_custom_plan
+              ? (profile.custom_plan_data?.maxProjects || 3)
+              : (get().plans.find(p => p.id === profile.plan_id)?.max_projects || 3),
+            maxLeads: profile.is_custom_plan
+              ? (profile.custom_plan_data?.maxLeads || 2)
+              : (get().plans.find(p => p.id === profile.plan_id)?.max_leads_per_project || 2),
+            maxResources: profile.is_custom_plan
+              ? (profile.custom_plan_data?.maxResources || 5)
+              : (get().plans.find(p => p.id === profile.plan_id)?.max_members_per_project || 5),
 
-            notificationsEnabled: profile.notifications_enabled,
-            remindersEnabled: profile.reminders_enabled,
-            timeTrackingEnabled: profile.time_tracking_enabled,
-
-            imageUploadEnabled: profile.image_upload_enabled,
-            maxAttachmentsPerTask: profile.max_attachments_per_task || 3,
+            notificationsEnabled: profile.is_custom_plan ? (profile.custom_plan_data?.notifications || false) : (!!get().plans.find(p => p.id === profile.plan_id)?.can_use_notifications),
+            remindersEnabled: profile.is_custom_plan ? (profile.custom_plan_data?.reminders || false) : (!!get().plans.find(p => p.id === profile.plan_id)?.can_set_reminders),
+            timeTrackingEnabled: profile.is_custom_plan ? (profile.custom_plan_data?.timeTracking || false) : (!!get().plans.find(p => p.id === profile.plan_id)?.is_premium), // fallback check
             autoArchiveDays: archiveSettings?.auto_archive_days || 0,
             historyRetentionDays: archiveSettings?.history_retention_days || null,
             currency: profile.currency || 'INR'
@@ -854,20 +863,23 @@ export const useStore = create<any>((set, get) => ({
       const { plans, currentUser } = get();
       if (currentUser && plans.length > 0) {
         const isPrem = get().canAccessPremium();
-        const activePlan = isPrem ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+        // FIXED: Use helper functions instead of hardcoded plan IDs
+        const activePlan = isPrem
+          ? get().getPremiumPlan(currentUser.currency || 'USD')
+          : get().getFreePlan();
 
         if (activePlan) {
           set({
             currentUser: {
               ...currentUser,
-              maxProjects: activePlan.maxProjects,
-              maxLeads: activePlan.maxMembersPerProject,
+              maxProjects: activePlan.max_projects || activePlan.maxProjects,
+              maxLeads: activePlan.max_members_per_project || activePlan.maxMembersPerProject,
               // Boolean Features: OR logic (Profile OR Plan)
-              imageUploadEnabled: currentUser.imageUploadEnabled || activePlan.canUploadImages,
-              remindersEnabled: currentUser.remindersEnabled || activePlan.canSetReminders,
-              notificationsEnabled: currentUser.notificationsEnabled || activePlan.canUseNotifications,
-              canInvite: currentUser.canInvite || activePlan.canInviteMembers,
-              canExport: currentUser.canExport || activePlan.canExportData,
+              imageUploadEnabled: currentUser.imageUploadEnabled || activePlan.can_upload_images || activePlan.canUploadImages,
+              remindersEnabled: currentUser.remindersEnabled || activePlan.can_set_reminders || activePlan.canSetReminders,
+              notificationsEnabled: currentUser.notificationsEnabled || activePlan.can_use_notifications || activePlan.canUseNotifications,
+              canInvite: currentUser.canInvite || activePlan.can_invite_members || activePlan.canInviteMembers,
+              canExport: currentUser.canExport || activePlan.can_export_data || activePlan.canExportData,
               timeTrackingEnabled: currentUser.timeTrackingEnabled || true, // Default true
             }
           });
@@ -1008,30 +1020,57 @@ export const useStore = create<any>((set, get) => ({
     const { data: allProfiles } = await supabase.from('profiles').select('*, user_archive_settings(*)').order('created_at');
     const mappedUsers: User[] = (allProfiles || []).map((p: any) => {
       const settings = Array.isArray(p.user_archive_settings) ? p.user_archive_settings[0] : p.user_archive_settings;
+
+      // Use custom_plan_data if it exists (for custom plans)
+      const cpd = p.custom_plan_data || {};
+
       return {
         id: p.id,
         name: p.name,
         email: p.email,
         role: p.role,
         avatar: p.avatar_url || p.avatar,
+        companyId: p.company_id,
         createdAt: new Date(p.created_at).getTime(),
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
-        isPremium: p.is_premium, // IMPORTANT: Include premium flag
-        planBaseCost: p.plan_base_cost,
-        perSeatCost: p.per_seat_cost,
-        extraSeats: p.extra_seats,
-        isCustomPlan: p.is_custom_plan,
-        renewalDate: p.renewal_date ? new Date(p.renewal_date).getTime() : undefined,
-        maxProjects: p.max_projects,
-        maxLeads: p.max_leads,
-        maxResources: p.max_resources,
-        notificationsEnabled: p.notifications_enabled,
-        remindersEnabled: p.reminders_enabled,
-        timeTrackingEnabled: p.time_tracking_enabled,
-        imageUploadEnabled: p.image_upload_enabled,
-        maxAttachmentsPerTask: p.max_attachments_per_task || 3,
-        autoArchiveDays: settings?.auto_archive_days || 0,
+        isPremium: p.is_custom_plan ||
+          (!!p.plan_id && p.plan_id !== (get().plans.find(pl => pl.price_monthly === 0 || pl.price_monthly === '0')?.id)),
 
+        // NEW: Plan subscription fields
+        planId: p.plan_id,
+        billingInterval: p.billing_interval || cpd.billingInterval || 'monthly',
+        isCustomPlan: p.is_custom_plan,
+        customPlanData: p.custom_plan_data,
+
+        // Billing/Enterprise fields
+        planBaseCost: p.is_custom_plan
+          ? (cpd.baseCost || 0)
+          : (get().plans.find(pl => pl.id === p.plan_id)?.price_monthly || 0),
+        perSeatCost: p.is_custom_plan
+          ? (cpd.seatCost || 0)
+          : (get().plans.find(pl => pl.id === p.plan_id)?.price_per_seat_monthly || 0),
+
+        extraSeats: cpd.extraSeats || 0,
+        renewalDate: p.renewal_date ? new Date(p.renewal_date).getTime() : undefined,
+
+        // Limits & Features
+        maxProjects: p.is_custom_plan
+          ? (cpd.maxProjects || 3)
+          : (get().plans.find(pl => pl.id === p.plan_id)?.max_projects || 3),
+        maxLeads: p.is_custom_plan
+          ? (cpd.maxLeads || 2)
+          : (get().plans.find(pl => pl.id === p.plan_id)?.max_leads_per_project || 2),
+        maxResources: p.is_custom_plan
+          ? (cpd.maxResources || 5)
+          : (get().plans.find(pl => pl.id === p.plan_id)?.max_members_per_project || 5),
+
+        notificationsEnabled: p.is_custom_plan ? (cpd.notifications || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.can_use_notifications),
+        remindersEnabled: p.is_custom_plan ? (cpd.reminders || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.can_set_reminders),
+        timeTrackingEnabled: p.is_custom_plan ? (cpd.timeTracking || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.price_monthly),
+        imageUploadEnabled: p.is_custom_plan ? (cpd.imageUpload || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.can_upload_images),
+        maxAttachmentsPerTask: p.is_custom_plan ? (cpd.maxAttachments || 3) : (get().plans.find(pl => pl.id === p.plan_id)?.max_uploads_per_task_limit || 3),
+
+        autoArchiveDays: settings?.auto_archive_days || 0,
         historyRetentionDays: settings?.history_retention_days || null,
         allowMultipleInProgress: p.allow_multiple_in_progress,
         currency: p.currency || 'INR',
@@ -1045,28 +1084,30 @@ export const useStore = create<any>((set, get) => ({
       if (freshMe) {
         // Re-apply Plan Limits if Premium (Fixes overwrite issue)
         const isPrem = get().canAccessPremium();
-        const { plans } = get();
-        const activePlan = isPrem ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+        // FIXED: Use helper functions instead of hardcoded plan IDs
+        const activePlan = isPrem
+          ? get().getPremiumPlan(freshMe.currency || 'USD')
+          : get().getFreePlan();
 
         let effectiveUser = { ...freshMe };
         if (activePlan) {
           effectiveUser = {
             ...effectiveUser,
-            maxProjects: Math.max(freshMe.maxProjects || 0, activePlan.maxProjects),
-            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.maxMembersPerProject || 2) + (freshMe.extraSeats || 0),
+            maxProjects: Math.max(freshMe.maxProjects || 0, activePlan.max_projects || activePlan.maxProjects || 0),
+            maxLeads: Math.max(freshMe.maxLeads || 0, activePlan.max_members_per_project || activePlan.maxMembersPerProject || 2) + (freshMe.extraSeats || 0),
 
             // Boolean Features: OR logic (If Plan says YES or User says YES -> YES)
-            imageUploadEnabled: freshMe.imageUploadEnabled || activePlan.canUploadImages,
-            remindersEnabled: freshMe.remindersEnabled || activePlan.canSetReminders,
-            notificationsEnabled: freshMe.notificationsEnabled || activePlan.canUseNotifications,
-            canInvite: activePlan.canInviteMembers, // This is usually plan-only
-            canExport: activePlan.canExportData,
+            imageUploadEnabled: freshMe.imageUploadEnabled || activePlan.can_upload_images || activePlan.canUploadImages,
+            remindersEnabled: freshMe.remindersEnabled || activePlan.can_set_reminders || activePlan.canSetReminders,
+            notificationsEnabled: freshMe.notificationsEnabled || activePlan.can_use_notifications || activePlan.canUseNotifications,
+            canInvite: activePlan.can_invite_members || activePlan.canInviteMembers, // This is usually plan-only
+            canExport: activePlan.can_export_data || activePlan.canExportData,
 
             // Max Attachments
-            maxAttachmentsPerTask: Math.max(freshMe.maxAttachmentsPerTask || 0, activePlan.maxUploadsPerTaskLimit === 0 ? 99 : activePlan.maxUploadsPerTaskLimit),
+            maxAttachmentsPerTask: Math.max(freshMe.maxAttachmentsPerTask || 0, activePlan.max_images_per_task || activePlan.maxUploadsPerTaskLimit === 0 ? 99 : activePlan.maxUploadsPerTaskLimit || 0),
 
             // History (Take max retention)
-            historyRetentionDays: Math.max(freshMe.historyRetentionDays || 0, activePlan.historyRetentionDays || 0)
+            historyRetentionDays: Math.max(freshMe.historyRetentionDays || 0, activePlan.history_retention_days || activePlan.historyRetentionDays || 0)
           };
         }
         set({ currentUser: effectiveUser });
@@ -1098,26 +1139,26 @@ export const useStore = create<any>((set, get) => ({
 
       const managerUser = (managers || []).find((u: any) => u.id === p.manager_id);
 
-      // Determine if Manager has premium logic
       let managerHasPremium = false;
       if (managerUser) {
-        // [MODIFIED] Check DB flag and trial logic
-        if (managerUser.is_premium) managerHasPremium = true;
-        else {
+        const mPremiumUntil = managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : 0;
+        const now = Date.now();
+        if (managerUser.is_custom_plan || mPremiumUntil > now) {
+          managerHasPremium = true;
+        } else {
           const mCreatedAt = new Date(managerUser.created_at).getTime();
-          const mPremiumUntil = managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : 0;
-          const now = Date.now();
-
-          if (mPremiumUntil > now) managerHasPremium = true;
-          else if (mCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) managerHasPremium = true;
+          if (mCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) {
+            managerHasPremium = true;
+          }
         }
       }
 
-      // [NEW LOGIC] Apply Plan Overrides
-      const plans = get().plans; // Ensure plans are loaded
+
+      // FIXED: Use helper functions instead of hardcoded plan IDs
+      const managerCurrency = managerUser?.currency || 'USD';
       const activePlan = managerHasPremium
-        ? plans.find(p => p.id === 'premium')
-        : plans.find(p => p.id === 'free');
+        ? get().getPremiumPlan(managerCurrency)
+        : get().getFreePlan();
 
       return {
         id: p.id,
@@ -1138,18 +1179,19 @@ export const useStore = create<any>((set, get) => ({
         manager: managerUser ? {
           id: managerUser.id,
           name: managerUser.name,
-          role: 'Manager',
+          role: 'Manager' as const,
           email: managerUser.email,
           createdAt: new Date(managerUser.created_at).getTime(),
           premiumUntil: managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : undefined,
           hasPremiumAccess: managerHasPremium,
+          currency: managerUser.currency || 'INR',
 
           // [CHANGED] Use OR logic with Plan limits
-          remindersEnabled: managerUser.reminders_enabled || activePlan?.canSetReminders || false,
-          imageUploadEnabled: managerUser.image_upload_enabled || activePlan?.canUploadImages || false,
+          remindersEnabled: managerUser.reminders_enabled || activePlan?.can_set_reminders || activePlan?.canSetReminders || false,
+          imageUploadEnabled: managerUser.image_upload_enabled || activePlan?.can_upload_images || activePlan?.canUploadImages || false,
           timeTrackingEnabled: managerUser.time_tracking_enabled || true, // Default true
-          maxAttachmentsPerTask: Math.max(managerUser.max_attachments_per_task || 0, activePlan?.maxUploadsPerTaskLimit || 0)
-        } as User : undefined
+          maxAttachmentsPerTask: Math.max(managerUser.max_attachments_per_task || 0, activePlan?.max_images_per_task || activePlan?.maxUploadsPerTaskLimit || 0)
+        } as User & { hasPremiumAccess?: boolean } : undefined
       };
     });
 
@@ -1392,63 +1434,77 @@ export const useStore = create<any>((set, get) => ({
       name: p.name,
       currency: p.currency || 'USD',
 
-      // CamelCase (Legacy for UI)
-      priceMonthly: p.price_monthly,
-      priceYearly: p.price_yearly,
-      maxProjects: p.max_projects,
-      maxMembersPerProject: p.max_members_per_project,
-      maxLeadsPerProject: p.max_leads_per_project || (p.id.includes('premium') ? 5 : 2),
-      maxUploadSizeMb: p.max_upload_size_mb,
-      maxUploadsPerTaskLimit: p.max_uploads_per_task_limit,
-      canInviteMembers: p.can_invite_members,
-      canUploadImages: p.can_upload_images,
-      canSetReminders: p.can_set_reminders,
-      canUseNotifications: p.can_use_notifications,
-      canExportData: p.can_export_data,
-      canViewHistory: p.can_view_history,
-      historyRetentionDays: p.history_retention_days,
+      // CamelCase (Legacy for UI & Database quotes)
+      priceMonthly: p.priceMonthly ?? p.price_monthly,
+      priceYearly: p.priceYearly ?? p.price_yearly,
+      maxProjects: p.maxProjects ?? p.max_projects,
+      maxMembersPerProject: p.maxMembersPerProject ?? p.max_members_per_project,
+      maxLeadsPerProject: p.maxLeadsPerProject ?? p.max_leads_per_project,
+      maxUploadSizeMb: p.maxUploadSizeMb ?? p.max_upload_size_mb,
+      maxUploadsPerTaskLimit: p.maxUploadsPerTaskLimit ?? p.max_uploads_per_task_limit,
+      canInviteMembers: p.canInviteMembers ?? p.can_invite_members,
+      canUploadImages: p.canUploadImages ?? p.can_upload_images,
+      canSetReminders: p.canSetReminders ?? p.can_set_reminders,
+      canUseNotifications: p.canUseNotifications ?? p.can_use_notifications,
+      canExportData: p.canExportData ?? p.can_export_data,
+      canViewHistory: p.canViewHistory ?? p.can_view_history,
+      historyRetentionDays: p.historyRetentionDays ?? p.history_retention_days,
 
       // Snake_Case (Matches DB & Interface)
-      price_monthly: p.price_monthly,
-      price_yearly: p.price_yearly,
-      max_projects: p.max_projects,
-      max_members_per_project: p.max_members_per_project,
-      max_leads_per_project: p.max_leads_per_project,
-      max_upload_size_mb: p.max_upload_size_mb,
-      max_uploads_per_task_limit: p.max_uploads_per_task_limit,
-      can_invite_members: p.can_invite_members,
-      can_upload_images: p.can_upload_images,
-      can_set_reminders: p.can_set_reminders,
-      can_use_notifications: p.can_use_notifications,
-      can_export_data: p.can_export_data,
-      can_view_history: p.can_view_history,
-      history_retention_days: p.history_retention_days,
+      price_monthly: p.priceMonthly ?? p.price_monthly,
+      price_yearly: p.priceYearly ?? p.price_yearly,
+      price_per_seat_monthly: p.pricePerSeatMonthly ?? p.price_per_seat_monthly ?? (p.currency === 'INR' ? 399 : 5),
+      max_projects: p.maxProjects ?? p.max_projects,
+      max_members_per_project: p.maxMembersPerProject ?? p.max_members_per_project,
+      max_leads_per_project: p.maxLeadsPerProject ?? p.max_leads_per_project,
+      max_upload_size_mb: p.maxUploadSizeMb ?? p.max_upload_size_mb,
+      max_uploads_per_task_limit: p.maxUploadsPerTaskLimit ?? p.max_uploads_per_task_limit,
 
-      // Per Seat
-      price_per_seat_monthly: p.price_per_seat_monthly || 0,
-      price_per_seat_yearly: p.price_per_seat_yearly || 0,
-
-      description: p.description,
+      can_invite_members: p.canInviteMembers ?? p.can_invite_members,
+      can_upload_images: p.canUploadImages ?? p.can_upload_images,
+      can_set_reminders: p.canSetReminders ?? p.can_set_reminders,
+      can_use_notifications: p.canUseNotifications ?? p.can_use_notifications,
+      can_export_data: p.canExportData ?? p.can_export_data,
+      can_view_history: p.canViewHistory ?? p.can_view_history,
+      history_retention_days: p.historyRetentionDays ?? p.history_retention_days
     }));
-
     set({ plans: mappedPlans });
     return mappedPlans;
   },
 
   updatePlan: async (id, updates) => {
     const dbUpdates: any = {};
+    // Handle both camelCase and snake_case for compatibility
     if (updates.priceMonthly !== undefined) dbUpdates.price_monthly = updates.priceMonthly;
+    if (updates.price_monthly !== undefined) dbUpdates.price_monthly = updates.price_monthly;
     if (updates.priceYearly !== undefined) dbUpdates.price_yearly = updates.priceYearly;
+    if (updates.price_yearly !== undefined) dbUpdates.price_yearly = updates.price_yearly;
+    if (updates.price_per_seat_monthly !== undefined) dbUpdates.price_per_seat_monthly = updates.price_per_seat_monthly;
+    if (updates.price_per_seat_yearly !== undefined) dbUpdates.price_per_seat_yearly = updates.price_per_seat_yearly;
     if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
+    if (updates.max_projects !== undefined) dbUpdates.max_projects = updates.max_projects;
     if (updates.maxMembersPerProject !== undefined) dbUpdates.max_members_per_project = updates.maxMembersPerProject;
+    if (updates.max_members_per_project !== undefined) dbUpdates.max_members_per_project = updates.max_members_per_project;
     if (updates.maxLeadsPerProject !== undefined) dbUpdates.max_leads_per_project = updates.maxLeadsPerProject;
+    if (updates.max_leads_per_project !== undefined) dbUpdates.max_leads_per_project = updates.max_leads_per_project;
+    if (updates.max_images_per_task !== undefined) dbUpdates.max_images_per_task = updates.max_images_per_task;
     if (updates.maxUploadsPerTaskLimit !== undefined) dbUpdates.max_uploads_per_task_limit = updates.maxUploadsPerTaskLimit;
     if (updates.canInviteMembers !== undefined) dbUpdates.can_invite_members = updates.canInviteMembers;
+    if (updates.can_invite_members !== undefined) dbUpdates.can_invite_members = updates.can_invite_members;
     if (updates.canUploadImages !== undefined) dbUpdates.can_upload_images = updates.canUploadImages;
+    if (updates.can_upload_images !== undefined) dbUpdates.can_upload_images = updates.can_upload_images;
     if (updates.canSetReminders !== undefined) dbUpdates.can_set_reminders = updates.canSetReminders;
+    if (updates.can_set_reminders !== undefined) dbUpdates.can_set_reminders = updates.can_set_reminders;
     if (updates.canUseNotifications !== undefined) dbUpdates.can_use_notifications = updates.canUseNotifications;
+    if (updates.can_use_notifications !== undefined) dbUpdates.can_use_notifications = updates.can_use_notifications;
     if (updates.canExportData !== undefined) dbUpdates.can_export_data = updates.canExportData;
+    if (updates.can_export_data !== undefined) dbUpdates.can_export_data = updates.can_export_data;
     if (updates.historyRetentionDays !== undefined) dbUpdates.history_retention_days = updates.historyRetentionDays;
+    if (updates.history_retention_days !== undefined) dbUpdates.history_retention_days = updates.history_retention_days;
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.can_view_history !== undefined) dbUpdates.can_view_history = updates.can_view_history;
 
     const { error } = await supabase.from('plans').update(dbUpdates).eq('id', id);
     if (!error) {
@@ -1582,15 +1638,15 @@ export const useStore = create<any>((set, get) => ({
 
     // Determine Effective Limit from PLANS table
     const isPremium = get().canAccessPremium();
-    const plans = get().plans;
-    // Find relevant plan: if premium, look for 'premium', else 'free'
-    const planId = isPremium ? 'premium' : 'free';
-    const activePlan = plans.find(p => p.id === planId);
+    // FIXED: Use helper functions instead of hardcoded plan IDs
+    const activePlan = isPremium
+      ? get().getPremiumPlan(user.currency || 'USD')
+      : get().getFreePlan();
 
     // Default fallback: 3 for free, 10000 for premium if plan missing
     let limit = 3;
     if (activePlan) {
-      limit = activePlan.maxProjects;
+      limit = activePlan.max_projects || activePlan.maxProjects || 3;
     } else if (isPremium) {
       limit = 10000;
     }
@@ -2940,29 +2996,46 @@ export const useStore = create<any>((set, get) => ({
   },
   updateUserProfile: async (userId, updates) => {
     const dbUpdates: any = {};
-    // if (updates.isPremium !== undefined) dbUpdates.is_premium = updates.isPremium; // No longer valid
-    if (updates.premiumUntil !== undefined) dbUpdates.premium_until = updates.premiumUntil ? new Date(updates.premiumUntil).toISOString() : null;
 
-    // Enterprise & Billing
-    if (updates.planBaseCost !== undefined) dbUpdates.plan_base_cost = updates.planBaseCost;
-    if (updates.perSeatCost !== undefined) dbUpdates.per_seat_cost = updates.perSeatCost;
-    if (updates.extraSeats !== undefined) dbUpdates.extra_seats = updates.extraSeats;
-    if (updates.isCustomPlan !== undefined) dbUpdates.is_custom_plan = updates.isCustomPlan;
-    if (updates.renewalDate !== undefined) dbUpdates.renewal_date = updates.renewalDate ? new Date(updates.renewalDate).toISOString() : null;
-    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
-
-    if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
-    if (updates.maxLeads !== undefined) dbUpdates.max_leads = updates.maxLeads;
-    if (updates.maxResources !== undefined) dbUpdates.max_resources = updates.maxResources;
-    if (updates.notificationsEnabled !== undefined) dbUpdates.notifications_enabled = updates.notificationsEnabled;
-    if (updates.remindersEnabled !== undefined) dbUpdates.reminders_enabled = updates.remindersEnabled;
-    if (updates.timeTrackingEnabled !== undefined) dbUpdates.time_tracking_enabled = updates.timeTrackingEnabled;
-    if (updates.imageUploadEnabled !== undefined) dbUpdates.image_upload_enabled = updates.imageUploadEnabled;
-    if (updates.maxAttachmentsPerTask !== undefined) dbUpdates.max_attachments_per_task = updates.maxAttachmentsPerTask;
-
-    if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
-    if (updates.allowMultipleInProgress !== undefined) dbUpdates.allow_multiple_in_progress = updates.allowMultipleInProgress;
+    // Core Columns
     if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
+    if (updates.role !== undefined) dbUpdates.role = updates.role;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
+    if (updates.planId !== undefined) dbUpdates.plan_id = updates.planId;
+    if (updates.billingInterval !== undefined) dbUpdates.billing_interval = updates.billingInterval;
+    if (updates.isCustomPlan !== undefined) dbUpdates.is_custom_plan = updates.isCustomPlan;
+    if (updates.premiumUntil !== undefined) dbUpdates.premium_until = updates.premiumUntil ? new Date(updates.premiumUntil).toISOString() : null;
+    if (updates.renewalDate !== undefined) dbUpdates.renewal_date = updates.renewalDate ? new Date(updates.renewalDate).toISOString() : null;
+    if (updates.allowMultipleInProgress !== undefined) dbUpdates.allow_multiple_in_progress = updates.allowMultipleInProgress;
+
+    // Handle customPlanData (limits, costs, feature flags)
+    const { users } = get();
+    const existingUser = users.find(u => u.id === userId);
+
+    if (updates.isCustomPlan || existingUser?.isCustomPlan) {
+      // Create or merge custom_plan_data
+      const currentCPD = existingUser?.customPlanData || {};
+      const newCPD: CustomPlanData = {
+        ...currentCPD,
+        baseCost: updates.planBaseCost !== undefined ? updates.planBaseCost : currentCPD.baseCost,
+        seatCost: updates.perSeatCost !== undefined ? updates.perSeatCost : currentCPD.seatCost,
+        extraSeats: updates.extraSeats !== undefined ? updates.extraSeats : currentCPD.extraSeats,
+        maxProjects: updates.maxProjects !== undefined ? updates.maxProjects : currentCPD.maxProjects,
+        maxLeads: updates.maxLeads !== undefined ? updates.maxLeads : currentCPD.maxLeads,
+        maxResources: updates.maxResources !== undefined ? updates.maxResources : currentCPD.maxResources,
+        billingInterval: updates.billingInterval !== undefined ? updates.billingInterval : currentCPD.billingInterval,
+        reminders: updates.remindersEnabled !== undefined ? updates.remindersEnabled : currentCPD.reminders,
+        notifications: updates.notificationsEnabled !== undefined ? updates.notificationsEnabled : currentCPD.notifications,
+        timeTracking: updates.timeTrackingEnabled !== undefined ? updates.timeTrackingEnabled : currentCPD.timeTracking,
+        imageUpload: updates.imageUploadEnabled !== undefined ? updates.imageUploadEnabled : currentCPD.imageUpload,
+        maxAttachments: updates.maxAttachmentsPerTask !== undefined ? updates.maxAttachmentsPerTask : currentCPD.maxAttachments,
+        historyRetentionDays: updates.historyRetentionDays !== undefined ? updates.historyRetentionDays : currentCPD.historyRetentionDays,
+      };
+
+      dbUpdates.custom_plan_data = newCPD;
+    }
 
     const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', userId);
     if (error) {
@@ -2970,12 +3043,6 @@ export const useStore = create<any>((set, get) => ({
       throw error;
     } else {
       await get().fetchUsers();
-      // Force refresh current user if self-update
-      const { currentUser } = get();
-      if (currentUser && currentUser.id === userId) {
-        // fetchUsers already syncs currentUser now, but purely to be safe:
-        // (Handled by fetchUsers change above)
-      }
     }
   },
 
@@ -3048,42 +3115,6 @@ export const useStore = create<any>((set, get) => ({
       get().fetchPlans();
     } catch (err) {
       console.error('Fetch Payment Configs Error:', err);
-    }
-  },
-
-  plans: [],
-
-  fetchPlans: async () => {
-    try {
-      const { data, error } = await supabase
-        .from('plans')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      set({ plans: data || [] });
-      return data || [];
-    } catch (err) {
-      console.error('Fetch Plans Error:', err);
-      return [];
-    }
-  },
-
-  updatePlan: async (id: string, updates: Partial<Plan>) => {
-    try {
-      const { error } = await supabase
-        .from('plans')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-
-      set((state: AppState) => ({
-        plans: state.plans.map(p => p.id === id ? { ...p, ...updates } : p)
-      }));
-    } catch (err) {
-      console.error('Update Plan Error:', err);
-      throw err;
     }
   },
 
@@ -3454,22 +3485,103 @@ export const useStore = create<any>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return false;
 
-    // Only return true if explicitly true
-    return currentUser.isPremium === true;
+    // isPremium is pre-computed in mapping logic (fetchUsers / init)
+    return !!currentUser.isPremium;
+  },
+
+  // NEW: Get Free Plan (finds plan with price_monthly = 0)
+  getFreePlan: () => {
+    const { plans } = get();
+    return plans.find(p => p.price_monthly === 0 || p.price_monthly === '0') || null;
+  },
+
+  // NEW: Get Premium Plan for user's currency
+  getPremiumPlan: (currency: 'USD' | 'INR' = 'USD') => {
+    const { plans } = get();
+    // Find a premium plan (price > 0) matching the user's currency
+    return plans.find(p =>
+      (p.price_monthly > 0 || Number(p.price_monthly) > 0) &&
+      p.currency === currency
+    ) || plans.find(p => p.price_monthly > 0 || Number(p.price_monthly) > 0) || null;
+  },
+
+  // NEW: Get Effective Plan for a Project (checks Company Owner's plan for org projects)
+  getEffectivePlanForProject: (projectId: string) => {
+    const { projects, teams, users, plans, currentUser } = get();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return get().getFreePlan();
+
+    // Determine the "Authority" - whose plan applies
+    let authorityId: string | null = null;
+
+    if (project.teamId) {
+      // Organization Project: Find the Team Owner (Company Admin)
+      const team = teams.find(t => t.id === project.teamId);
+      if (team) {
+        authorityId = team.ownerId;
+      }
+    }
+
+    if (!authorityId) {
+      // Personal Project OR no team found: Use Project Manager
+      authorityId = project.managerId;
+    }
+
+    // Get Authority's profile
+    const authority = users.find(u => u.id === authorityId);
+    if (!authority) return get().getFreePlan();
+
+    // Check if authority's subscription is valid
+    const now = Date.now();
+    const premiumValid = authority.premiumUntil && authority.premiumUntil > now;
+
+    // Case 1: Custom Plan - use profile's custom data
+    if (authority.isCustomPlan && premiumValid) {
+      // Return a "virtual plan" from customPlanData
+      return {
+        id: 'custom',
+        name: 'Custom Plan',
+        currency: authority.currency || 'USD',
+        price_monthly: authority.customPlanData?.baseCost || authority.planBaseCost || 0,
+        price_yearly: 0,
+        price_per_seat_monthly: authority.customPlanData?.seatCost || authority.perSeatCost || 0,
+        price_per_seat_yearly: 0,
+        max_projects: authority.customPlanData?.maxProjects || authority.maxProjects || 999,
+        max_members_per_project: authority.customPlanData?.maxResources || authority.maxResources || 50,
+        max_leads_per_project: authority.customPlanData?.maxLeads || authority.maxLeads || 50,
+        max_upload_size_mb: 100,
+        max_images_per_task: authority.customPlanData?.maxAttachments || authority.maxAttachmentsPerTask || 10,
+        history_retention_days: authority.customPlanData?.historyRetentionDays || 365,
+        can_invite_members: authority.customPlanData?.canInvite ?? true,
+        can_upload_images: authority.customPlanData?.imageUpload ?? true,
+        can_set_reminders: authority.customPlanData?.reminders ?? true,
+        can_use_notifications: authority.customPlanData?.notifications ?? true,
+        can_export_data: authority.customPlanData?.canExport ?? true,
+        can_view_history: true,
+      } as any;
+    }
+
+    // Case 2: Standard Plan - use linked plan from plans table
+    if (authority.planId && premiumValid) {
+      const linkedPlan = plans.find(p => p.id === authority.planId);
+      if (linkedPlan) return linkedPlan;
+    }
+
+    // Case 3: Legacy check - isPremium flag
+    if (authority.isPremium === true) {
+      return get().getPremiumPlan(authority.currency || 'USD') || get().getFreePlan();
+    }
+
+    // Default: Free Plan
+    return get().getFreePlan();
   },
 
   canProjectUsePremium: (projectId) => {
-    const { projects, users } = get();
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return false;
-    const manager = users.find(u => u.id === project.managerId);
+    const plan = get().getEffectivePlanForProject(projectId);
+    if (!plan) return false;
 
-    // Strict Expiry Check: If manager is expired, NO ONE gets premium features (collaboration blocked)
-    if (manager?.premiumUntil && new Date(manager.premiumUntil).getTime() < Date.now()) {
-      return false;
-    }
-
-    return manager?.isPremium === true;
+    // A project has premium if the effective plan has a positive price
+    return plan.price_monthly > 0 || Number(plan.price_monthly) > 0 || plan.id === 'custom';
   },
 
   getVisibleProjects: () => {
@@ -4117,11 +4229,12 @@ export const useStore = create<any>((set, get) => ({
         name: m.user.name,
         email: m.user.email,
         role: m.user.role,
+        currency: m.user.currency || 'INR',
         remindersEnabled: m.user.reminders_enabled,
         timeTrackingEnabled: m.user.time_tracking_enabled,
         imageUploadEnabled: m.user.image_upload_enabled,
         maxAttachmentsPerTask: m.user.max_attachments_per_task || 3
-      } : undefined,
+      } as User : undefined,
       role: m.role ? {
         id: m.role.id,
         teamId: m.role.team_id,

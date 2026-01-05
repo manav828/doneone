@@ -202,7 +202,6 @@ export const CheckoutPage: React.FC = () => {
 
                 // Update Premium Status & Expiry
                 await supabase.from('profiles').update({
-                    is_premium: true,
                     premium_until: newExpiryDate.toISOString(),
                     renewal_date: newExpiryDate.toISOString()
                 }).eq('id', currentUser.id);
