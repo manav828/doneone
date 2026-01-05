@@ -1,7 +1,7 @@
 
 
 import { create } from 'zustand';
-import { Project, Column, Task, User, Plan, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket, Team, TeamMember, TeamRole, Department, DepartmentMember, Company } from './types';
+import { Project, Column, Task, User, Plan, CustomPlanData, Activity, Tag, PERMISSIONS, Role, TaskHistory, ArchiveSettings, AdminRetentionSettings, HistoryFilter, StorageStats, syncToChromeStorage, SupportTicket, Team, TeamMember, TeamRole, Department, DepartmentMember, Company } from './types';
 import type { Notification } from './types';
 import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
@@ -1454,11 +1454,12 @@ export const useStore = create<any>((set, get) => ({
       price_monthly: p.priceMonthly ?? p.price_monthly,
       price_yearly: p.priceYearly ?? p.price_yearly,
       price_per_seat_monthly: p.pricePerSeatMonthly ?? p.price_per_seat_monthly ?? (p.currency === 'INR' ? 399 : 5),
+      price_per_seat_yearly: p.pricePerSeatYearly ?? p.price_per_seat_yearly ?? (p.currency === 'INR' ? 3990 : 50),
       max_projects: p.maxProjects ?? p.max_projects,
       max_members_per_project: p.maxMembersPerProject ?? p.max_members_per_project,
       max_leads_per_project: p.maxLeadsPerProject ?? p.max_leads_per_project,
       max_upload_size_mb: p.maxUploadSizeMb ?? p.max_upload_size_mb,
-      max_uploads_per_task_limit: p.maxUploadsPerTaskLimit ?? p.max_uploads_per_task_limit,
+      max_images_per_task: p.maxUploadsPerTaskLimit ?? p.max_uploads_per_task_limit ?? 3,
 
       can_invite_members: p.canInviteMembers ?? p.can_invite_members,
       can_upload_images: p.canUploadImages ?? p.can_upload_images,
