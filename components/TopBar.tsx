@@ -146,7 +146,7 @@ export const TopBar: React.FC = () => {
           {location.pathname === '/checkout' ? (
             <h2 className="text-xl font-bold text-primary">DoneOne Checkout</h2>
           ) : location.pathname === '/billing' ? (
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Billing & Plans</h2>
+            <h2 className="text-xl font-bold text-primary">DoneOne Billing</h2>
           ) : location.pathname === '/workspace' ? (
             <h2 className="text-lg font-bold text-slate-800 dark:text-white">Workspace Settings</h2>
           ) : activeProject ? (

@@ -835,6 +835,9 @@ export const useStore = create<any>((set, get) => ({
             maxLeads: profile.is_custom_plan
               ? (profile.custom_plan_data?.maxLeads || 2)
               : (get().plans.find(p => p.id === profile.plan_id)?.max_leads_per_project || 2),
+            maxMembersPerProject: profile.is_custom_plan
+              ? (profile.custom_plan_data?.maxResources || 5)
+              : (get().plans.find(p => p.id === profile.plan_id)?.max_members_per_project || 5),
             maxResources: profile.is_custom_plan
               ? (profile.custom_plan_data?.maxResources || 5)
               : (get().plans.find(p => p.id === profile.plan_id)?.max_members_per_project || 5),
@@ -873,7 +876,9 @@ export const useStore = create<any>((set, get) => ({
             currentUser: {
               ...currentUser,
               maxProjects: activePlan.max_projects || activePlan.maxProjects,
-              maxLeads: activePlan.max_members_per_project || activePlan.maxMembersPerProject,
+              maxLeads: activePlan.max_leads_per_project || activePlan.maxLeadsPerProject || 2,
+              maxMembersPerProject: activePlan.max_members_per_project || activePlan.maxMembersPerProject || 5,
+              maxResources: activePlan.max_members_per_project || activePlan.maxMembersPerProject || 5,
               // Boolean Features: OR logic (Profile OR Plan)
               imageUploadEnabled: currentUser.imageUploadEnabled || activePlan.can_upload_images || activePlan.canUploadImages,
               remindersEnabled: currentUser.remindersEnabled || activePlan.can_set_reminders || activePlan.canSetReminders,
@@ -1554,13 +1559,16 @@ export const useStore = create<any>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return;
 
-    // First fetch teams and departments (projects depend on departments for visibility)
+    // 1. Fetch Plans first (needed for team limit calculations)
+    await get().fetchPlans();
+
+    // 2. Fetch teams and departments
     await Promise.all([
       get().fetchTeams(),
       get().fetchAllDepartments()
     ]);
 
-    // Then fetch everything else including projects
+    // 3. Fetch everything else
     await Promise.all([
       get().fetchUsers(),
       get().fetchProjects(),
@@ -1568,8 +1576,7 @@ export const useStore = create<any>((set, get) => ({
       get().fetchTasks(),
       get().fetchActivities(),
       get().fetchNotifications(),
-      get().fetchTags(),
-      get().fetchPlans()
+      get().fetchTags()
     ]);
 
     set({ isLoading: false });
@@ -4033,14 +4040,19 @@ export const useStore = create<any>((set, get) => ({
         .eq('team_id', t.id)
         .eq('status', 'active');
 
-      // Get owner's extra_seats for effective limit
+      // Get owner's plan limits for effective limit
       const { data: owner } = await supabase
         .from('profiles')
-        .select('max_resources, extra_seats')
+        .select('max_resources, extra_seats, plan_id, is_custom_plan, custom_plan_data')
         .eq('id', t.owner_id)
         .single();
 
-      const baseLimit = owner?.max_resources || 5;
+      // Find plan for owner to get correct base limit
+      const ownerPlan = get().plans.find(p => p.id === owner?.plan_id);
+      const baseLimit = owner?.is_custom_plan
+        ? (owner.custom_plan_data?.maxResources || 5)
+        : (ownerPlan?.max_members_per_project || owner?.max_resources || 5);
+
       const extraSeats = owner?.extra_seats || 0;
 
       return {

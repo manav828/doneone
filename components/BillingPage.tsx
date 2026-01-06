@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { RefreshCw, Download, CheckCircle, XCircle, Crown, CreditCard, Users, Clock, ArrowUpRight, Plus, Minus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { RefreshCw, Download, CheckCircle, XCircle, Crown, CreditCard, Users, Clock, Plus, Minus, Search, Filter, MoreHorizontal, MessageSquare, Send, Info, Check, Image, ShieldCheck, FileText, Zap } from 'lucide-react';
 
 const BillingPage: React.FC = () => {
     const { currentUser, transactions, fetchTransactions, addSeat, projects, users, removeMember, fetchUsers, fetchProjects, teams, teamMembers, fetchTeams, fetchTeamMembers, plans, fetchPlans } = useStore() as any;
@@ -16,6 +17,40 @@ const BillingPage: React.FC = () => {
 
     // Confirmation Modal State (Only for valid reductions)
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+
+    // Enterprise Contact Form State
+    const [isEnterpriseModalOpen, setIsEnterpriseModalOpen] = useState(false);
+    const [enterpriseRequirements, setEnterpriseRequirements] = useState('');
+    const [isSendingMessage, setIsSendingMessage] = useState(false);
+    const [allCardsFlipped, setAllCardsFlipped] = useState(false);
+    const [annual, setAnnual] = useState(true);
+
+    const handleSendEnterpriseRequest = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!enterpriseRequirements.trim()) return;
+
+        setIsSendingMessage(true);
+        try {
+            // Log interaction as a special transaction or "contact request"
+            await supabase.from('transactions').insert({
+                user_id: currentUser.id,
+                amount: 0,
+                status: 'pending',
+                description: `Enterprise Inquiry: ${enterpriseRequirements.substring(0, 100)}...`,
+                currency: currencyCode
+            });
+
+            // In a real app, you'd send an email via Edge Function here.
+
+            setEnterpriseRequirements('');
+            setIsEnterpriseModalOpen(false);
+            alert("Requirements received! Our team will contact you within 24 hours.");
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSendingMessage(false);
+        }
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -81,7 +116,8 @@ const BillingPage: React.FC = () => {
     }
 
     // Derived State
-    const planName = currentUser.isPremium ? 'Premium Plan' : 'Free Plan';
+    const currentPlan = plans.find((p: any) => p.id === currentUser.planId);
+    const planName = currentPlan?.name || (currentUser.isPremium ? 'Premium Core' : 'Free Tier');
     const baseSeats = currentUser.maxResources || 0;
     const extraSeats = currentUser.extraSeats || 0;
     const totalSeats = baseSeats + extraSeats;
@@ -138,7 +174,7 @@ const BillingPage: React.FC = () => {
 
     const uniqueEmployeeCount = getUniqueEmployeeCount();
 
-    const handleSeatReduction = async () => {
+    const handleConfirmReduction = async () => {
         setIsProcessing(true);
         try {
             // 1. Log Transaction (Cancelled/Reduction)
@@ -183,7 +219,7 @@ const BillingPage: React.FC = () => {
 
         // CASE 1: Adding Seats -> Go to Checkout
         if (seatAdjustment > 0) {
-            navigate(`/checkout?seats=${seatAdjustment}`);
+            navigate(`/checkout?seats=${seatAdjustment}${annual ? '&billing=annual' : '&billing=monthly'}`);
             return;
         }
 
@@ -209,293 +245,517 @@ const BillingPage: React.FC = () => {
     };
 
     return (
-        <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 p-6 md:p-12">
-            <div className="max-w-6xl mx-auto space-y-8 pb-12">
-
-                {/* Main Dashboard Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                    {/* Left Column: Subscription & Usage */}
-                    <div className="lg:col-span-2 space-y-6">
-
-                        {/* Current Plan Card */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-
-                            <div className="flex justify-between items-start mb-6 relative">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-3 rounded-lg ${currentUser.isPremium ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white' : 'bg-slate-100 text-slate-500'} shadow-sm`}>
-                                        <Crown size={24} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                            {planName}
-                                            {isExpired && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Expired</span>}
-                                        </h2>
-                                        <p className="text-sm text-slate-500">
-                                            {currentUser.isPremium
-                                                ? `Renews on ${renewalDate?.toLocaleDateString()}`
-                                                : 'Upgrade to unlock premium features'}
-                                        </p>
-                                    </div>
-                                </div>
+        <div className="h-full overflow-y-auto bg-slate-50 text-slate-800">
+            {/* Settings Header - Simplified */}
+            <div className="max-w-6xl mx-auto w-full px-6 pt-8 pb-4">
+                <div className="flex justify-between items-center mb-0 border-b border-slate-200 pb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900">Billing</h1>
+                        <p className="text-sm text-slate-500 mt-1">Manage your plan, seats, and view transaction history.</p>
+                    </div>
+                    <div className="hidden md:flex -space-x-2">
+                        {users.slice(0, 3).map((u: any) => (
+                            <div key={u.id} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 overflow-hidden shadow-sm">
+                                {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name?.charAt(0)}
                             </div>
-                            {/* Billing Breakdown */}
-                            <div className="text-right w-full md:w-auto mt-4 md:mt-0 bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 min-w-[280px]">
-                                <div className="space-y-2 text-sm">
-                                    {/* Row 1: Base Plan */}
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-500 dark:text-slate-400">Plan Base</span>
-                                        <span className="font-medium text-slate-900 dark:text-white">{currencySymbol}{BASE_PRICE.toFixed(2)}</span>
-                                    </div>
+                        ))}
+                        {users.length > 3 && (
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shadow-sm">
+                                +{users.length - 3}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
 
-                                    {/* Row 2: Existing Extra Seats */}
-                                    {(currentExtraSeats > 0 || seatAdjustment === 0 && currentExtraSeats === 0) && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-500 dark:text-slate-400">
-                                                Extra Seats ({currentExtraSeats} × {currencySymbol}{PER_SEAT_PRICE})
-                                            </span>
-                                            <span className="font-medium text-slate-900 dark:text-white">
-                                                +{currencySymbol}{(currentExtraSeats * PER_SEAT_PRICE).toFixed(2)}
-                                            </span>
-                                        </div>
-                                    )}
+            <div className="max-w-6xl mx-auto w-full p-6 space-y-8 pb-16">
 
-                                    {/* Row 3: Adjustment (If any) */}
-                                    {seatAdjustment !== 0 && (
-                                        <div className="flex justify-between items-center text-primary font-medium bg-primary/5 -mx-2 px-2 py-1 rounded">
-                                            <span className="flex items-center gap-1">
-                                                {seatAdjustment > 0 ? <Plus size={12} /> : <Minus size={12} />}
-                                                {Math.abs(seatAdjustment)} New Seat{Math.abs(seatAdjustment) !== 1 ? 's' : ''}
-                                            </span>
-                                            <span>
-                                                {seatAdjustment > 0 ? '+' : '-'}{currencySymbol}{Math.abs(seatAdjustment * PER_SEAT_PRICE).toFixed(2)}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Divider */}
-                                    <div className="border-t border-slate-200 dark:border-slate-600 my-2"></div>
-
-                                    {/* Total */}
-                                    <div className="flex justify-between items-center pt-1">
-                                        <span className="font-bold text-slate-700 dark:text-slate-200">Total Monthly</span>
-                                        <div className="text-xl font-bold text-slate-900 dark:text-white">
-                                            {currencySymbol}{totalMonthlyBill.toFixed(2)}
-                                            <span className="text-xs font-normal text-slate-500 ml-1">/mo</span>
-                                        </div>
-                                    </div>
-                                </div>
+                <section>
+                    <div className="text-center mb-12">
+                        {/* Billing Toggle (Copied from PricingModal) */}
+                        <div className="flex items-center justify-center gap-6 mt-10">
+                            <span className={`text-sm font-black transition-colors ${!annual ? 'text-slate-900' : 'text-slate-400'}`}>
+                                Monthly
+                            </span>
+                            <button
+                                onClick={() => setAnnual(!annual)}
+                                className="relative w-16 h-8 rounded-full bg-slate-100 border-2 border-slate-200 transition-all hover:border-slate-300 shadow-inner"
+                            >
+                                <motion.div
+                                    className="absolute top-1 w-5 h-5 rounded-full bg-primary shadow-lg shadow-primary/30"
+                                    animate={{ left: annual ? '34px' : '5px' }}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                />
+                            </button>
+                            <span className={`text-sm font-black transition-colors ${annual ? 'text-slate-900' : 'text-slate-400'}`}>
+                                Annual
+                            </span>
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-100 shadow-sm animate-pulse-soft">
+                                <span className="text-primary text-[10px] font-black uppercase tracking-wider">Save 25%</span>
                             </div>
 
+                            <button
+                                onClick={() => setAllCardsFlipped(!allCardsFlipped)}
+                                className={`ml-8 p-3 rounded-full transition-all flex items-center gap-2 font-black text-xs ${allCardsFlipped ? 'bg-primary text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:text-primary hover:border-primary shadow-sm'}`}
+                                title="Toggle detailed specifications"
+                            >
+                                <Info size={16} />
+                                {allCardsFlipped ? 'Hide Specs' : 'View Specs'}
+                            </button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                        {plans
+                            .filter((p: any) => p.currency === currencyCode)
+                            .sort((a: any, b: any) => {
+                                // Specific order: Free, Standard, Enterprise
+                                const order: Record<string, number> = { 'Free': 1, 'Standard': 2, 'Enterprise': 3 };
+                                return (order[a.name] || 0) - (order[b.name] || 0);
+                            })
+                            .map((p: any) => (
+                                <PlanCard
+                                    key={p.id}
+                                    plan={p}
+                                    currencySymbol={currencySymbol}
+                                    isCurrent={currentUser.planId === p.id}
+                                    currentUserBillingInterval={currentUser.billingInterval}
+                                    isFlipped={allCardsFlipped}
+                                    annual={annual}
+                                    onSwitch={() => {
+                                        if (p.name === 'Enterprise') {
+                                            setIsEnterpriseModalOpen(true);
+                                        } else {
+                                            navigate(`/checkout?plan=${p.id}${annual ? '&billing=annual' : '&billing=monthly'}`);
+                                        }
+                                    }}
+                                />
+                            ))
+                        }
+                    </div>
+                </section>
 
-                            <div className="flex flex-wrap gap-3 relative">
-                                {!currentUser.isPremium ? (
-                                    <button
-                                        onClick={() => navigate('/checkout?plan=premium')}
-                                        className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold shadow transition-all hover:shadow-lg active:scale-[0.98]"
-                                    >
-                                        Upgrade Now
-                                    </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            // onClick={() => window.open('mailto:support@doneone.app?subject=Cancel Subscription')} // Placeholder
-                                            className="px-4 py-2 text-slate-500 hover:text-red-500 transition-colors text-sm font-medium ml-auto"
-                                        >
-                                            Cancel Subscription
-                                        </button>
-                                    </>
-                                )}
+                {/* Seat Management / Utilization */}
+                <section className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+                        <div className="flex-1 w-full space-y-4">
+                            <div className="flex justify-between items-end">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-0.5">Workspace Capacity</h3>
+                                    <p className="text-xs text-slate-500">{uniqueEmployeeCount} of {totalSeats} seats currently occupied</p>
+                                </div>
+                                <span className="text-2xl font-black text-primary">{Math.round((uniqueEmployeeCount / totalSeats) * 100)}%</span>
+                            </div>
+
+                            <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                                <div
+                                    className="h-full bg-primary transition-all duration-1000 shadow-[0_0_12px_rgba(249,115,22,0.4)]"
+                                    style={{ width: `${Math.min(100, (uniqueEmployeeCount / totalSeats) * 100)}%` }}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Base Capacity</span>
+                                    <span className="text-base font-bold text-slate-800">{currentUser.maxResources || 8} Seats</span>
+                                </div>
+                                <div className="p-3 bg-orange-50 rounded-xl border border-orange-100">
+                                    <span className="text-[9px] font-bold text-orange-400 uppercase tracking-widest block mb-0.5">Extra Seats</span>
+                                    <span className="text-base font-bold text-orange-600">+{currentUser.extraSeats || 0} Seats</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Seat Management */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg">
-                                    <Users size={20} />
-                                </div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Seat Management</h3>
-                            </div>
-
-                            <div className="flex flex-col md:flex-row gap-6 items-center">
-                                {/* Current Stats */}
-                                <div className="flex-1 w-full space-y-4">
-                                    <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-100 dark:border-slate-700">
-                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Base Plan Seats</span>
-                                        <span className="font-bold text-slate-900 dark:text-white">{baseSeats}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-100 dark:border-slate-700">
-                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Extra Seats Purchased</span>
-                                        <span className="font-bold text-slate-900 dark:text-white">{extraSeats}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-2">
-                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Total Capacity</span>
-                                        <span className="text-lg font-bold text-primary">{totalSeats} Members</span>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-700 mt-2">
-                                        <span className="text-xs font-bold text-slate-500">Currently Active</span>
-                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{uniqueEmployeeCount} / {totalSeats} Used</span>
-                                    </div>
-                                </div>
-
-                                {/* Divider */}
-                                <div className="w-full md:w-px h-px md:h-24 bg-slate-200 dark:bg-slate-700"></div>
-
-                                {/* Seat Adjuster */}
-                                <div className="flex-1 w-full flex flex-col items-center justify-center gap-4">
-                                    <p className="text-sm text-slate-500 text-center">Need more team members?</p>
-                                    <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
-                                        <button
-                                            onClick={() => setSeatAdjustment(prev => prev - 1)}
-                                            disabled={seatAdjustment <= -extraSeats || (totalSeats + (seatAdjustment - 1)) < uniqueEmployeeCount}
-                                            className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        >
-                                            <Minus size={18} />
-                                        </button>
-                                        <span className="w-12 text-center font-bold text-lg text-slate-900 dark:text-white">
+                        <div className="w-full md:w-auto bg-slate-50 rounded-2xl p-6 border border-slate-200 flex flex-col gap-4">
+                            <div className="text-center md:text-left">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Adjust Seats</span>
+                                <div className="flex items-center justify-center md:justify-start gap-4 mt-3">
+                                    <button
+                                        onClick={() => setSeatAdjustment(prev => prev - 1)}
+                                        className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-primary hover:text-primary transition-all shadow-sm active:scale-90"
+                                    >
+                                        <Minus size={18} />
+                                    </button>
+                                    <div className="flex flex-col items-center">
+                                        <span className={`text-3xl font-black ${seatAdjustment === 0 ? 'text-slate-900' : seatAdjustment > 0 ? 'text-green-600' : 'text-red-500'}`}>
                                             {seatAdjustment > 0 ? `+${seatAdjustment}` : seatAdjustment}
                                         </span>
-                                        <button
-                                            onClick={() => setSeatAdjustment(prev => prev + 1)}
-                                            className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-                                        >
-                                            <Plus size={18} />
-                                        </button>
+                                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Seats</span>
                                     </div>
-
                                     <button
-                                        onClick={handleUpdateSeats}
-                                        disabled={seatAdjustment === 0}
-                                        className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-200 dark:text-slate-900 text-white rounded-lg font-medium shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                        onClick={() => setSeatAdjustment(prev => prev + 1)}
+                                        className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:border-primary hover:text-primary transition-all shadow-sm active:scale-90"
                                     >
-                                        {seatAdjustment > 0 ? 'Proceed to Checkout' : seatAdjustment < 0 ? 'Remove Seats' : 'Adjust Quantity'}
+                                        <Plus size={18} />
                                     </button>
                                 </div>
                             </div>
+                            <button
+                                onClick={handleUpdateSeats}
+                                disabled={seatAdjustment === 0 || isProcessing}
+                                className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-primary/20 ${seatAdjustment === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-primary hover:bg-primary-dark text-white active:scale-[0.98]'}`}
+                            >
+                                {isProcessing ? 'Wait...' : seatAdjustment >= 0 ? 'Add Seats' : 'Remove Seats'}
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                {/* Transaction History */}
+                <section>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900">Transaction history</h2>
+                            <p className="text-slate-500 text-xs">Download receipts and track your workspace spending.</p>
+                        </div>
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <div className="relative flex-1 md:w-56">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-primary transition-all shadow-sm"
+                                />
+                            </div>
+                            <button className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-primary transition-all shadow-sm active:scale-95">
+                                <Filter size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        <th className="px-5 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
+                                        <th className="px-5 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Description</th>
+                                        <th className="px-5 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                                        <th className="px-5 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Amount</th>
+                                        <th className="px-5 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Receipt</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {transactions.length > 0 ? transactions.map((tx: any) => (
+                                        <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
+                                            <td className="px-5 py-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-slate-700">{new Date(tx.created_at).toLocaleDateString()}</span>
+                                                    <span className="text-[9px] text-slate-400">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="p-1.5 bg-slate-100 rounded-lg group-hover:bg-white transition-colors">
+                                                        <CreditCard size={14} className="text-slate-500" />
+                                                    </div>
+                                                    <span className="text-xs font-medium text-slate-600">{tx.description}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${tx.status === 'completed' ? 'bg-green-100 text-green-700' : tx.status === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`}>
+                                                    {tx.status === 'completed' ? <CheckCircle size={8} /> : <Clock size={8} />}
+                                                    {tx.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                <span className="text-xs font-bold text-slate-900">{currencySymbol}{tx.amount.toFixed(2)}</span>
+                                            </td>
+                                            <td className="px-5 py-3 text-right">
+                                                <button className="p-1.5 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg">
+                                                    <Download size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-20 text-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300">
+                                                        <CreditCard size={32} />
+                                                    </div>
+                                                    <p className="text-slate-400 font-medium">No transactions found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            {/* Confirmation Modal for Reduction */}
+            {isConfirmationModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full border border-slate-100">
+                        <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-6 mx-auto">
+                            <XCircle size={32} />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 text-center mb-3">Confirm seat reduction?</h2>
+                        <p className="text-slate-500 text-center text-xs leading-relaxed px-4">
+                            You are about to remove <span className="font-bold text-slate-900">{Math.abs(seatAdjustment)}</span> seats from your subscription. This change will be reflected in your next billing cycle.
+                        </p>
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => setIsConfirmationModalOpen(false)}
+                                className="flex-1 py-3 text-slate-500 hover:text-slate-700 font-bold text-sm transition-colors"
+                            >
+                                Go back
+                            </button>
+                            <button
+                                onClick={handleConfirmReduction}
+                                disabled={isProcessing}
+                                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-100 transition-all disabled:opacity-50"
+                            >
+                                {isProcessing ? 'Wait...' : 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Enterprise Contact Modal */}
+            {isEnterpriseModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full border border-slate-100 mx-4">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-primary">
+                                <MessageSquare size={28} />
+                            </div>
+                            <button
+                                onClick={() => setIsEnterpriseModalOpen(false)}
+                                className="p-2 hover:bg-slate-50 rounded-lg text-slate-400"
+                            >
+                                <MoreHorizontal size={20} />
+                            </button>
                         </div>
 
-                        {/* Transaction History */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-800 dark:text-white">Billing History</h3>
-                                <button
-                                    onClick={() => fetchTransactions()}
-                                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-primary transition-colors font-medium bg-slate-50 dark:bg-slate-700/50 px-3 py-1.5 rounded-lg"
-                                >
-                                    <RefreshCw size={14} /> Refresh
-                                </button>
+                        <h2 className="text-2xl font-black text-slate-900 mb-2">Enterprise Inquiry</h2>
+                        <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+                            Need a custom plan? Tell us your organization's requirements (seats, features, SLAs) and we'll build a tailored solution for you.
+                        </p>
+
+                        <form onSubmit={handleSendEnterpriseRequest} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Your Requirements</label>
+                                <textarea
+                                    required
+                                    value={enterpriseRequirements}
+                                    onChange={(e) => setEnterpriseRequirements(e.target.value)}
+                                    placeholder="e.g. 500 seats, dedicated support, custom project limits..."
+                                    className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
+                                />
                             </div>
 
-                            {transactions.length === 0 ? (
-                                <div className="p-12 text-center text-slate-500">
-                                    <p>No transactions found.</p>
-                                </div>
+                            <button
+                                type="submit"
+                                disabled={isSendingMessage || !enterpriseRequirements.trim()}
+                                className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-base shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50 active:scale-95"
+                            >
+                                {isSendingMessage ? 'Sending...' : (
+                                    <>
+                                        Send Request <Send size={18} />
+                                    </>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Sub-components for cleaner code
+const PlanCard: React.FC<{ plan: any, currencySymbol: string, isCurrent: boolean, currentUserBillingInterval?: string, isFlipped: boolean, annual: boolean, onSwitch: () => void }> = ({ plan, currencySymbol, isCurrent, currentUserBillingInterval, isFlipped, annual, onSwitch }) => {
+    const isEnterprise = plan.name === 'Enterprise';
+    const isStandard = plan.name === 'Standard';
+    const isFree = plan.name === 'Free';
+
+    const projectLimit = plan.max_projects === 9999 || plan.max_projects === 999 ? 'Unlimited' : plan.max_projects;
+    const seatLimit = plan.max_members_per_project === 9999 || plan.max_members_per_project === 999 ? 'Unlimited' : plan.max_members_per_project;
+
+    // Feature list mapping to match the PricingModal preciesly
+    const getFeatures = () => {
+        if (isFree) {
+            return [
+                'Unlimited tasks',
+                'Kanban board view',
+                '1 project',
+                'Basic time tracking',
+                '7-day history',
+            ];
+        }
+        if (isStandard) {
+            return [
+                'Everything in Starter',
+                'Unlimited projects',
+                'List & Calendar views',
+                'Team collaboration (up to 10)',
+                'Advanced reporting',
+                'Priority support',
+                'Unlimited history',
+            ];
+        }
+        return [
+            'Everything in Pro',
+            'Unlimited team members',
+            'Admin controls',
+            'SSO integration',
+            'Custom branding',
+            'Dedicated support',
+            'SLA guarantee',
+        ];
+    };
+
+    const canUpgradeToYearly = isCurrent && annual && currentUserBillingInterval === 'monthly';
+    const buttonDisabled = isCurrent && !canUpgradeToYearly;
+
+    const getButtonText = (side: 'front' | 'back') => {
+        if (canUpgradeToYearly) return 'Upgrade to Yearly';
+        if (isCurrent) return 'Current Plan';
+        if (isEnterprise) return 'Contact Sales';
+        if (side === 'back' && isStandard) return 'Upgrade to Pro';
+        return side === 'front' ? 'Switch Plan' : 'Get Started';
+    };
+
+    const getDescription = () => {
+        if (isFree) return "Perfect for individuals getting started";
+        if (isStandard) return "For growing teams with premium needs";
+        return "For organizations that demand the best";
+    };
+
+    const getDisplayName = () => {
+        if (isFree) return "Starter";
+        if (isStandard) return "Pro";
+        return "Enterprise";
+    };
+
+    // Pricing logic matches PricingModal - annual is pro-rated / 12
+    const getPrice = () => {
+        if (isFree) return 0;
+        const monthly = plan.price_monthly;
+        if (annual) {
+            const annualPrice = plan.price_yearly ? Math.round(plan.price_yearly / 12) : Math.round(monthly * 0.75);
+            return annualPrice;
+        }
+        return monthly;
+    };
+
+    const currentPrice = getPrice();
+
+    return (
+        <div className={`relative w-full [perspective:1000px] group transition-all duration-700 ${isFlipped ? 'h-[580px]' : 'h-[240px]'}`}>
+            <div className={`relative h-full w-full transition-all duration-700 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
+
+                {/* Front Side (Compact) */}
+                <div className={`absolute inset-0 h-full w-full rounded-3xl border bg-white p-6 shadow-sm [backface-visibility:hidden] flex flex-col justify-between ${isCurrent ? 'border-primary shadow-xl shadow-primary/10 transition-transform' : 'border-slate-100 hover:border-slate-200 shadow-sm'}`}>
+                    {isStandard && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                            <span className="px-4 py-1.5 rounded-full bg-primary text-white text-[9px] font-black shadow-lg shadow-primary/30 uppercase tracking-widest whitespace-nowrap">
+                                Most Popular
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="relative">
+                        <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-xl font-black text-slate-900 tracking-tight">{getDisplayName()}</h3>
+                            {isCurrent && (
+                                <span className="text-[8px] text-primary font-black uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-full ml-auto">Active</span>
+                            )}
+                        </div>
+                        <p className="text-slate-400 text-xs font-bold leading-tight">
+                            {projectLimit} projects and {seatLimit} members per project.
+                        </p>
+                    </div>
+
+                    <div>
+                        <div className="mb-4">
+                            {isEnterprise ? (
+                                <div className="text-xl font-black text-slate-900 leading-none py-1">Custom Enterprise</div>
                             ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm">
-                                        <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                                            <tr>
-                                                <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-300">Date</th>
-                                                <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-300">Description</th>
-                                                <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-300">Status</th>
-                                                <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-300 text-right">Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                            {transactions.map((tx: any) => (
-                                                <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                                                    <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
-                                                        {new Date(tx.created_at).toLocaleString()}
-                                                    </td>
-                                                    <td className="px-6 py-4 font-medium text-slate-800 dark:text-white">
-                                                        {tx.description}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                                            ${tx.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                                (tx.status === 'cancelled' || tx.status === 'refunded') ? 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' :
-                                                                    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                                            {tx.status === 'completed' && <CheckCircle size={12} />}
-                                                            {(tx.status === 'cancelled' || tx.status === 'refunded') && <Users size={12} />}
-                                                            {tx.status === 'failed' && <XCircle size={12} />}
-                                                            <span className="capitalize">{(tx.status === 'refunded' ? 'Cancelled' : tx.status)}</span>
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right font-bold text-slate-700 dark:text-slate-200">
-                                                        {tx.amount < 0 ? '-' : ''}{tx.currency === 'INR' ? '₹' : '$'}{Math.abs(tx.amount).toFixed(2)}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-4xl font-black text-slate-900 tracking-tighter">{currencySymbol}{currentPrice}</span>
+                                    <span className="text-[10px] font-bold text-slate-400">/month</span>
                                 </div>
                             )}
                         </div>
+
+                        <button
+                            onClick={onSwitch}
+                            disabled={buttonDisabled}
+                            className={`w-full py-4 rounded-full text-[10px] font-black transition-all border-none ${buttonDisabled ? 'bg-slate-50 text-slate-400 cursor-default' : isStandard || canUpgradeToYearly ? 'bg-primary text-white shadow-lg shadow-primary/25 hover:brightness-110 active:scale-[0.98]' : isEnterprise ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10 hover:bg-black' : 'bg-slate-50 text-slate-900 hover:bg-slate-100 uppercase tracking-widest'}`}
+                        >
+                            {getButtonText('front')}
+                        </button>
                     </div>
-
-                    {/* Right Column: Payment & Info */}
-                    <div className="space-y-6">
-                        {/* Payment Method */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-                            <h3 className="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                                <CreditCard size={18} className="text-slate-400" />
-                                Payment Method
-                            </h3>
-                            <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center gap-4 mb-4 bg-slate-50 dark:bg-slate-700/50">
-                                <div className="text-sm text-slate-500">
-                                    Payments are securely managed by our payment processor.
-                                    <br />
-                                    Payment details are handled at checkout.
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Support Info */}
-                        <div className="bg-blue-50 dark:bg-blue-900/10 rounded-xl p-6 border border-blue-100 dark:border-blue-800">
-                            <h3 className="font-bold text-blue-900 dark:text-blue-300 mb-2">Need help with billing?</h3>
-                            <p className="text-sm text-blue-700 dark:text-blue-400 mb-4">
-                                Contact our support team for help with invoices, refunds, or custom enterprise plans.
-                            </p>
-                            <a
-                                href="mailto:billing@doneone.app"
-                                className="inline-flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors"
-                            >
-                                Contact Support <ArrowUpRight size={14} />
-                            </a>
-                        </div>
-                    </div>
-
                 </div>
 
-                {isConfirmationModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-700">
-                            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Confirm Seat Reduction</h2>
-                            <p className="text-slate-500 dark:text-slate-400 mb-6">
-                                You are removing <span className="font-bold text-slate-900 dark:text-white">{Math.abs(seatAdjustment)} seat{Math.abs(seatAdjustment) !== 1 ? 's' : ''}</span> from your subscription.
-                                <br /><br />
-                                Your future monthly bill will be reduced to <span className="font-bold text-slate-900 dark:text-white">{currencySymbol}{(totalMonthlyBill).toFixed(2)}</span>.
-                            </p>
-                            <div className="flex justify-end gap-3">
-                                <button
-                                    onClick={() => setIsConfirmationModalOpen(false)}
-                                    className="px-4 py-2 text-slate-500 hover:text-slate-700 font-medium"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSeatReduction}
-                                    disabled={isProcessing}
-                                    className="px-6 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold shadow-md transition-all active:scale-[0.98]"
-                                >
-                                    {isProcessing ? 'Processing...' : 'Confirm Reduction'}
-                                </button>
-                            </div>
+                {/* Back Side (PricingModal Style) */}
+                <div className={`absolute inset-0 h-full w-full rounded-3xl border bg-white px-8 py-10 [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col ${isCurrent ? 'border-primary shadow-2xl' : 'border-slate-100 shadow-xl shadow-slate-200/50'}`}>
+                    {isStandard && (
+                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+                            <span className="px-5 py-2.5 rounded-full bg-primary text-white text-[10px] font-black shadow-xl shadow-primary/30 uppercase tracking-[0.2em] whitespace-nowrap">
+                                Most Popular
+                            </span>
                         </div>
+                    )}
+
+                    <div className="mb-8 text-left">
+                        <h3 className="text-3xl font-bold text-slate-900 mb-2">{getDisplayName()}</h3>
+                        <p className="text-slate-600 text-sm">{getDescription()}</p>
                     </div>
-                )}
+
+                    <div className="mb-10 text-left">
+                        <div className="flex items-baseline gap-2">
+                            <AnimatePresence mode="wait">
+                                <motion.span
+                                    key={annual ? 'annual' : 'monthly'}
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    className="text-5xl font-bold text-slate-900"
+                                >
+                                    {currencySymbol}{currentPrice}
+                                </motion.span>
+                            </AnimatePresence>
+                            <span className="text-slate-500">/month</span>
+                        </div>
+                        {currentPrice > 0 && annual && (
+                            <p className="text-sm text-slate-500 mt-1">
+                                Billed annually ({currencySymbol}{currentPrice * 12}/year)
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="space-y-4 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                        {getFeatures().map((feature, idx) => (
+                            <div key={idx} className="flex items-start gap-3">
+                                <svg className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-slate-700 text-[14px] font-medium">{feature}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-10">
+                        <button
+                            onClick={onSwitch}
+                            disabled={buttonDisabled}
+                            className={`block w-full text-center py-4 rounded-full font-bold transition-all duration-300 ${isStandard || canUpgradeToYearly
+                                ? 'bg-primary text-white shadow-lg shadow-primary/30 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
+                                : isEnterprise
+                                    ? 'bg-slate-900 text-white hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98]'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:scale-[1.02] active:scale-[0.98]'
+                                }`}
+                        >
+                            {getButtonText('back')}
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
     );

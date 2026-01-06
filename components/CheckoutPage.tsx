@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { Shield, CreditCard, Check, ArrowLeft, Users, Lock, Crown, CheckCircle } from 'lucide-react';
+import { Shield, CreditCard, Check, ArrowLeft, Users, Lock, Crown, CheckCircle, Plus, Minus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export const CheckoutPage: React.FC = () => {
@@ -25,19 +25,29 @@ export const CheckoutPage: React.FC = () => {
         if (fetchPaymentConfigs) fetchPaymentConfigs();
     }, []);
 
-    // Per Seat Cost Priority: User Override > Plan Config > Default 5
-    const PER_SEAT_PRICE = currentUser?.perSeatCost || 5;
-
     const currency = currentUser?.currency || 'USD';
     const currencySymbol = currency === 'INR' ? '₹' : '$';
 
-    const premiumPlan = plans.find(p => p.id === 'premium' && p.currency === currency) || plans.find(p => p.id === 'premium');
-    const PLAN_BASE_PRICE = premiumPlan?.price_monthly || (currency === 'INR' ? 899 : 19);
-    const PLAN_MEMBERS_LIMIT = premiumPlan?.max_members_per_project || premiumPlan?.maxMembersPerProject || 8;
+    const billingParam = searchParams.get('billing');
+    const isAnnual = billingParam === 'annual';
+
+    const planParam = searchParams.get('plan');
+    const selectedPlan = plans.find((p: any) => p.id === planParam);
+
+    // Per Seat Cost Priority: User Override > Plan Config > Default 5
+    const PER_SEAT_PRICE = currentUser?.perSeatCost ||
+        (isAnnual ? (selectedPlan?.price_per_seat_yearly || selectedPlan?.price_per_seat_monthly) : selectedPlan?.price_per_seat_monthly) ||
+        5;
+
+    // Use price_yearly if annual, otherwise price_monthly
+    const PLAN_BASE_PRICE = isAnnual
+        ? (selectedPlan?.price_yearly || (selectedPlan?.price_monthly * 12))
+        : (selectedPlan?.price_monthly || 0);
+
+    const PLAN_MEMBERS_LIMIT = selectedPlan?.max_members_per_project || 8;
 
     // Base Capacity (Included Seats): User's DB Limit (if snapshot) > Plan Config > Default
     const INCLUDED_SEATS = currentUser?.maxResources || PLAN_MEMBERS_LIMIT;
-
 
     useEffect(() => {
         fetchUsers();
@@ -47,10 +57,10 @@ export const CheckoutPage: React.FC = () => {
     }, [currentUser?.id]);
 
     useEffect(() => {
-        const planParam = searchParams.get('plan');
+        const planId = searchParams.get('plan');
         const seatsParam = searchParams.get('seats');
 
-        if (planParam === 'premium') {
+        if (planId) {
             setItemType('plan');
             setQuantity(0);
         } else if (seatsParam) {
@@ -61,8 +71,10 @@ export const CheckoutPage: React.FC = () => {
 
     // Calculate Total
     const baseAmount = itemType === 'plan' ? PLAN_BASE_PRICE : 0;
-    const seatsAmount = quantity * PER_SEAT_PRICE;
-    const totalMonthly = baseAmount + seatsAmount;
+    const seatsAmount = isAnnual ? (quantity * PER_SEAT_PRICE * 12) : (quantity * PER_SEAT_PRICE);
+    const totalRecurring = baseAmount + seatsAmount;
+    const intervalLabel = isAnnual ? 'Year' : 'Month';
+    const intervalLabelLower = isAnnual ? 'year' : 'month';
 
     // Calculate Capacity
     const currentBase = INCLUDED_SEATS;
@@ -140,7 +152,6 @@ export const CheckoutPage: React.FC = () => {
                     await removeMember(p.id, userId);
                 }
             }
-
             setIsRemovalModalOpen(false);
             await handleCheckout();
         } catch (err) {
@@ -157,7 +168,7 @@ export const CheckoutPage: React.FC = () => {
         });
     };
 
-    // Razorpay IntegrationScript
+    // Razorpay Integration Script
     useEffect(() => {
         const script = document.createElement('script');
         script.src = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -194,16 +205,30 @@ export const CheckoutPage: React.FC = () => {
                 const currentExpiry = currentUser?.premiumUntil ? new Date(currentUser.premiumUntil) : null;
 
                 if (currentExpiry && !isNaN(currentExpiry.getTime())) {
-                    currentExpiry.setDate(currentExpiry.getDate() + 30);
+                    if (isAnnual) {
+                        currentExpiry.setFullYear(currentExpiry.getFullYear() + 1);
+                    } else {
+                        currentExpiry.setDate(currentExpiry.getDate() + 30);
+                    }
                     newExpiryDate = currentExpiry;
                 } else {
-                    newExpiryDate.setDate(newExpiryDate.getDate() + 30);
+                    if (isAnnual) {
+                        newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1);
+                    } else {
+                        newExpiryDate.setDate(newExpiryDate.getDate() + 30);
+                    }
                 }
 
                 // Update Premium Status & Expiry
                 await supabase.from('profiles').update({
+                    is_premium: true,
+                    plan_id: selectedPlan?.id || currentUser.plan_id,
                     premium_until: newExpiryDate.toISOString(),
-                    renewal_date: newExpiryDate.toISOString()
+                    renewal_date: newExpiryDate.toISOString(),
+                    max_resources: selectedPlan?.max_members_per_project || currentUser.maxResources,
+                    plan_base_cost: PLAN_BASE_PRICE,
+                    per_seat_cost: isAnnual ? (selectedPlan?.price_per_seat_yearly || 0) : (selectedPlan?.price_per_seat_monthly || 5),
+                    billing_interval: isAnnual ? 'annual' : 'monthly'
                 }).eq('id', currentUser.id);
 
                 // Log Plan Transaction
@@ -212,7 +237,7 @@ export const CheckoutPage: React.FC = () => {
                     user_id: currentUser.id,
                     amount: totalDueToday,
                     status: 'completed',
-                    description: `Premium Plan Renewal (until ${newExpiryDate.toLocaleDateString()})`,
+                    description: `${selectedPlan?.name || 'Premium'} Plan Upgrade/Renewal (until ${newExpiryDate.toLocaleDateString()})`,
                     currency: currency,
                     provider: provider,
                     created_at: new Date().toISOString()
@@ -222,12 +247,13 @@ export const CheckoutPage: React.FC = () => {
                     await addSeat(quantity - (currentUser?.extraSeats || 0));
                 }
             }
+
             await fetchUsers();
             setIsSuccess(true);
             setIsProcessing(false);
         } catch (error) {
             console.error("Provisioning failed:", error);
-            alert("Failed to update account. Please support.");
+            alert("Failed to update account. Please contact support.");
             setIsProcessing(false);
         }
     };
@@ -277,7 +303,7 @@ export const CheckoutPage: React.FC = () => {
             currency: "INR",
             name: "DoneOne",
             description: itemType === 'plan'
-                ? `Premium Plan (${currencySymbol}${PLAN_BASE_PRICE})`
+                ? `${selectedPlan?.name || 'Premium'} Plan (${isAnnual ? 'Annual' : 'Monthly'}) (${currencySymbol}${PLAN_BASE_PRICE})`
                 : `Extra Seats (${currencySymbol}${totalDueToday.toFixed(2)})`,
             image: "https://doneone.app/logo_icon.png",
             handler: async function (response: any) {
@@ -309,232 +335,208 @@ export const CheckoutPage: React.FC = () => {
     if (!currentUser) return <div className="p-10 text-center">Please log in to continue.</div>;
 
     return (
-        <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-900 flex flex-col">
-            <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-12 grid grid-cols-1 md:grid-cols-12 gap-8">
+        <div className="h-full overflow-y-auto bg-slate-50 text-slate-800">
+            <div className="flex-1 max-w-6xl mx-auto w-full p-6 md:pt-8 md:px-12 md:pb-12">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
 
-                {/* Left Column: Order Details */}
-                <div className="md:col-span-7 space-y-6">
-                    <div>
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors mb-4"
-                        >
-                            <ArrowLeft size={16} /> Back
-                        </button>
-                        <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">
-                            {itemType === 'plan' ? 'Upgrade Your Workspace' : 'Add Extra Seats'}
-                        </h1>
-                        <p className="text-slate-500 dark:text-slate-400">
-                            customize your plan capacity below.
-                        </p>
-                    </div>
-
-                    {/* Current Plan Info */}
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    {/* Left Column: Order Details */}
+                    <div className="md:col-span-7 space-y-6 animate-in slide-in-from-left duration-500">
                         <div>
-                            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Current Plan</p>
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-800 dark:text-white text-lg">
-                                    {currentUser.isPremium ? 'Premium Plan' : 'Free Plan'}
-                                </span>
-                                {currentUser.isPremium && <Crown size={16} className="text-yellow-500 fill-current" />}
-                            </div>
-                        </div>
-                        {currentUser.isPremium && currentUser.premiumUntil && (
-                            <div className="text-right">
-                                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Expires On</p>
-                                <p className="font-medium text-slate-700 dark:text-slate-300">
-                                    {new Date(currentUser.premiumUntil).toLocaleDateString()}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-                        {/* Base Plan Item */}
-                        {itemType === 'plan' && (
-                            <div className="p-6 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-800">
-                                <div className="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 text-white rounded-lg shrink-0 shadow-sm">
-                                    <Crown size={24} />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h3 className="font-bold text-lg text-slate-800 dark:text-white">Premium Plan Base</h3>
-                                            <p className="text-sm text-green-600 font-bold mt-1">Includes {INCLUDED_SEATS} Members</p>
-                                        </div>
-                                        <span className="font-bold text-lg text-slate-800 dark:text-white">{currencySymbol}{PLAN_BASE_PRICE}.00<span className="text-sm font-normal text-slate-400">/mo</span></span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Seats Item */}
-                        <div className="p-6">
-                            <div className="flex items-start gap-4">
-                                <div className="p-3 bg-blue-100 text-blue-600 rounded-lg shrink-0">
-                                    <Users size={24} />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">
-                                        Extra Members
-                                    </h3>
-                                    <p className="text-slate-500 text-sm mb-4">
-                                        Add more capacity beyond the included {INCLUDED_SEATS} seats.
-                                    </p>
-
-                                    <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                                        <div className="flex items-center border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden bg-white dark:bg-slate-800 shadow-sm">
-                                            <button
-                                                onClick={() => setQuantity(quantity - 1)}
-                                                disabled={itemType === 'seats' && quantity <= -(currentUser?.extraSeats || 0)}
-                                                className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 border-r border-slate-300 dark:border-slate-600 text-slate-600 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                -
-                                            </button>
-                                            <input
-                                                type="number"
-                                                value={quantity}
-                                                onChange={(e) => {
-                                                    const val = parseInt(e.target.value) || 0;
-                                                    const minAllowed = -(currentUser?.extraSeats || 0);
-                                                    const clamped = Math.max(val, minAllowed);
-                                                    setQuantity(clamped);
-                                                }}
-                                                className="w-16 py-2 text-center outline-none bg-transparent font-bold text-lg"
-                                                title="Positive to Add, Negative to Remove"
-                                            />
-                                            <button
-                                                onClick={() => setQuantity(quantity + 1)}
-                                                className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 border-l border-slate-300 dark:border-slate-600 text-slate-600 font-bold"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs text-slate-500 uppercase font-bold tracking-wider">Per Extra Seat</span>
-                                            <span className="font-bold text-slate-800 dark:text-white">{currencySymbol}{PER_SEAT_PRICE}/mo</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Capacity Summary Box */}
-                        <div className="p-6 bg-blue-50/50 dark:bg-blue-900/10 border-t border-blue-100 dark:border-blue-800">
-                            <div className="flex flex-col gap-2">
-                                <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide">New Total Capacity</h4>
-                                <div className="flex items-center gap-2 text-2xl font-bold text-slate-800 dark:text-white">
-                                    <span className="text-slate-400" title="Includes Base + Current Extra">{baseCapacity + (itemType === 'seats' ? (currentUser?.extraSeats || 0) : 0)} Current</span>
-                                    <span className="text-slate-300">+</span>
-                                    <span className="text-primary">{quantity} New</span>
-                                    <span className="text-slate-300">=</span>
-                                    <span>{totalCapacity + (itemType === 'seats' ? (currentUser?.extraSeats || 0) : 0)} Total</span>
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                    You have {baseCapacity + (itemType === 'seats' ? (currentUser?.extraSeats || 0) : 0)} seats now. Adding {quantity} more.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Column: Checkout Summary */}
-                <div className="md:col-span-5">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 sticky top-6">
-                        <h2 className="font-bold text-lg text-slate-800 dark:text-white mb-6">Order Summary</h2>
-
-                        <div className="space-y-4 mb-6">
-
-                            {/* Breakdown */}
-                            <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg border border-slate-100 dark:border-slate-600 mb-4">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Future Recurring Bill</p>
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-slate-600 dark:text-slate-400">Premium Plan Base</span>
-                                    <span className="font-medium text-slate-800 dark:text-white">${PLAN_BASE_PRICE}.00</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">
-                                        Total Extra Seats ({currentUser?.extraSeats || 0} + {quantity}) x ${PER_SEAT_PRICE}
-                                    </span>
-                                    <span className="font-medium text-slate-800 dark:text-white">
-                                        ${(((currentUser?.extraSeats || 0) + quantity) * PER_SEAT_PRICE).toFixed(2)}
-                                    </span>
-                                </div>
-                                <div className="border-t border-slate-200 dark:border-slate-600 my-2 pt-2 flex justify-between items-center">
-                                    <span className="font-bold text-xs text-slate-500">New Monthly Total</span>
-                                    <span className="font-bold text-slate-800 dark:text-white">
-                                        {currencySymbol}{(PLAN_BASE_PRICE + (((currentUser?.extraSeats || 0) + quantity) * PER_SEAT_PRICE)).toFixed(2)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <h3 className="font-bold text-sm text-slate-800 dark:text-white">Due Today {itemType === 'seats' && quantity > 0 && <span className="text-xs font-normal text-slate-500">(Prorated for {remainingDays} days)</span>}</h3>
-                            {itemType === 'plan' && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Premium Plan (Base)</span>
-                                    <span className="font-medium text-slate-800 dark:text-white">${PLAN_BASE_PRICE.toFixed(2)}</span>
-                                </div>
-                            )}
-                            {itemType === 'seats' && quantity > 0 && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">
-                                        {quantity} Extra Seat{quantity > 1 ? 's' : ''} (x{remainingDays} days)
-                                    </span>
-                                    <span className="font-medium text-slate-800 dark:text-white">${proratedCost.toFixed(2)}</span>
-                                </div>
-                            )}
-                            {itemType === 'seats' && quantity < 0 && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">
-                                        Seat Reduction (x{Math.abs(quantity)})
-                                    </span>
-                                    <span className="font-medium text-slate-800 dark:text-white">$0.00</span>
-                                </div>
-                            )}
-
-                            <div className="border-t border-slate-100 dark:border-slate-700 my-2 pt-2 flex justify-between items-center">
-                                <span className="font-bold text-slate-800 dark:text-white">Total due today</span>
-                                <span className="font-bold text-2xl text-primary">{currencySymbol}{totalDueToday.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-
-
                             <button
-                                onClick={handleCheckoutButton}
-                                disabled={isProcessing}
-                                className="w-full py-3 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold shadow-md hover:shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                onClick={() => navigate(-1)}
+                                className="group flex items-center gap-2 text-xs text-slate-500 hover:text-slate-900 transition-colors mb-4 font-bold"
                             >
-                                {isProcessing ? (
-                                    <>Processing...</>
-                                ) : (
-                                    <>Pay & Activate <Check size={18} /></>
-                                )}
+                                <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+                                Back to billing
                             </button>
+                            <h1 className="text-2xl font-black text-slate-900 mb-1 tracking-tight">
+                                {itemType === 'plan' ? 'Upgrade workspace' : 'Add capacity'}
+                            </h1>
+                            <p className="text-slate-500 text-sm">
+                                Confirm your order details below to finalize your subscription.
+                            </p>
+                        </div>
 
-                            <p className="text-[10px] text-center text-slate-400 mt-4">
-                                By confirming, you agree to DoneOne's <button onClick={() => window.open('/terms', '_blank')} className="underline hover:text-slate-600 transition-colors cursor-pointer text-slate-500">Terms and Conditions</button>.
-                                <br />Payments are processed securely by Razorpay.
+                        {/* Current Plan Snapshot */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-orange-50 text-primary rounded-xl border border-orange-100">
+                                    <Crown size={22} />
+                                </div>
+                                <div>
+                                    <p className="text-[9px] uppercase tracking-widest font-bold text-slate-400 mb-0.5">Active Plan</p>
+                                    <h3 className="text-base font-black text-slate-900">
+                                        {currentUser.isPremium ? 'Premium Core' : 'Free Tier'}
+                                    </h3>
+                                </div>
+                            </div>
+                            {currentUser.isPremium && currentUser.premiumUntil && (
+                                <div className="text-right">
+                                    <p className="text-[9px] uppercase tracking-widest font-bold text-slate-400 mb-0.5">Next Renewal</p>
+                                    <p className="text-sm font-bold text-slate-900">
+                                        {new Date(currentUser.premiumUntil).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                            {/* Base Plan Item */}
+                            {itemType === 'plan' && (
+                                <div className="p-6 flex items-center gap-6 bg-slate-50/50">
+                                    <div className="p-4 bg-gradient-to-br from-primary to-orange-600 text-white rounded-2xl shadow-lg shadow-primary/20">
+                                        <Crown size={26} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="font-black text-lg text-slate-900">Premium Plan Base</h3>
+                                                <p className="text-xs text-primary font-bold mt-0.5 uppercase tracking-widest">Foundational features</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-2xl font-black text-slate-900">{currencySymbol}{PLAN_BASE_PRICE}</span>
+                                                <span className="text-xs font-bold text-slate-400 block mt-0.5">/ {intervalLabelLower}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Seats Item */}
+                            <div className="p-6">
+                                <div className="flex items-start gap-6">
+                                    <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
+                                        <Users size={26} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h3 className="font-black text-lg text-slate-900">Additional Seats</h3>
+                                                <p className="text-slate-500 text-xs font-medium">Expand your team collaboration capacity</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xl font-black text-slate-800">{currencySymbol}{PER_SEAT_PRICE}</span>
+                                                <span className="text-[10px] font-bold text-slate-400 block mt-0.5">per seat / month</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col md:flex-row items-center gap-6 mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                                <button
+                                                    onClick={() => setQuantity(quantity - 1)}
+                                                    disabled={itemType === 'seats' && quantity <= -(currentUser?.extraSeats || 0)}
+                                                    className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 text-slate-400 disabled:opacity-20 transition-colors border-r border-slate-100"
+                                                >
+                                                    <Minus size={16} />
+                                                </button>
+                                                <input
+                                                    type="number"
+                                                    value={quantity}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        const minAllowed = -(currentUser?.extraSeats || 0);
+                                                        const clamped = Math.max(val, minAllowed);
+                                                        setQuantity(clamped);
+                                                    }}
+                                                    className="w-14 bg-transparent text-center font-black text-lg text-slate-900 outline-none"
+                                                />
+                                                <button
+                                                    onClick={() => setQuantity(quantity + 1)}
+                                                    className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 text-slate-400 transition-colors border-l border-slate-100"
+                                                >
+                                                    <Plus size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="flex-1 text-center md:text-left">
+                                                <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Total Capacity will be</span>
+                                                <span className="text-lg font-black text-slate-900">{(totalCapacity + (itemType === 'seats' ? (currentUser?.extraSeats || 0) : 0))} members</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Security Notice */}
+                        <div className="p-6 bg-slate-50/50 flex gap-4 items-center border-t border-slate-100">
+                            <Shield className="text-slate-400" size={20} />
+                            <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                                Payments are secured by industry-standard SSL encryption. By proceeding, you authorize DoneOne to charge your payment method for the amount displayed above.
                             </p>
                         </div>
                     </div>
-                </div>
 
+                    {/* Right Column: Checkout Summary */}
+                    <div className="md:col-span-5 animate-in slide-in-from-right duration-500">
+                        <div className="bg-white border border-slate-200 rounded-2xl p-6 sticky top-8 shadow-xl shadow-slate-200/50">
+                            <h2 className="text-xl font-black text-slate-900 mb-6 tracking-tight text-center md:text-left">Summary</h2>
+
+                            <div className="space-y-6 mb-8">
+                                <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-4">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Recurring Subscription</p>
+                                    <div className="flex justify-between items-center text-xs font-medium">
+                                        <span className="text-slate-500">{isAnnual ? 'Annual' : 'Monthly'} Plan Base</span>
+                                        <span className="font-bold text-slate-900">{currencySymbol}{PLAN_BASE_PRICE}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs font-medium pb-4 border-b border-slate-200">
+                                        <span className="text-slate-500">Extra Seat Allocation ({((currentUser?.extraSeats || 0) + quantity)})</span>
+                                        <span className="font-bold text-slate-900">{currencySymbol}{(((currentUser?.extraSeats || 0) + quantity) * (isAnnual ? PER_SEAT_PRICE * 12 : PER_SEAT_PRICE))}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-1">
+                                        <span className="text-xs font-black text-slate-900">Total Recurring {intervalLabel}ly</span>
+                                        <span className="text-xl font-black text-slate-900">{currencySymbol}{totalRecurring.toFixed(2)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <span className="text-base font-black text-slate-900">Amount due today</span>
+                                            {itemType === 'seats' && quantity > 0 && <span className="text-[10px] text-slate-500 font-bold mt-0.5 italic">Prorated for {remainingDays} days</span>}
+                                        </div>
+                                        <span className="text-3xl font-black text-primary">{currencySymbol}{totalDueToday.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <button
+                                    onClick={handleCheckoutButton}
+                                    disabled={isProcessing}
+                                    className="w-full py-3.5 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50"
+                                >
+                                    {isProcessing ? (
+                                        <>Wait...</>
+                                    ) : (
+                                        <>Pay & Activate <CheckCircle size={20} /></>
+                                    )}
+                                </button>
+
+                                <div className="flex items-center justify-center gap-2 pt-4 border-t border-slate-100">
+                                    <Lock size={12} className="text-slate-400" />
+                                    <span className="text-[9px] text-slate-400 uppercase tracking-widest font-black">Secure Checkout via SSL</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
+            {/* Removal Modal - Re-styled */}
             {isRemovalModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
-                        <div className="mb-4">
-                            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Capacity Limit Reached</h2>
-                            <p className="text-sm text-slate-500">
-                                Reducing seats will put some projects over the new limit. Please remove members to proceed.
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[3rem] shadow-[0_32px_128px_-12px_rgba(0,0,0,0.2)] p-12 max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-slate-100">
+                        <div className="mb-10">
+                            <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mb-8 border border-red-100">
+                                <Shield className="animate-pulse" size={40} />
+                            </div>
+                            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Capacity check</h2>
+                            <p className="text-slate-500 text-lg leading-relaxed">
+                                Reducing seats would leave some projects over their limit. Please select members to remove before proceeding.
                             </p>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto min-h-0 space-y-4 pr-2">
+                        <div className="flex-1 overflow-y-auto min-h-0 space-y-8 pr-4 custom-scrollbar">
                             {overLimitProjects.map((p: any) => {
                                 const countToRemove = missingCountMap[p.id];
                                 const selected = selectedRemovals[p.id] || [];
@@ -546,27 +548,33 @@ export const CheckoutPage: React.FC = () => {
                                 ].map(id => users.find((u: any) => u.id === id)).filter(Boolean);
 
                                 return (
-                                    <div key={p.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <h3 className="font-bold text-slate-700 dark:text-slate-200">{p.name}</h3>
-                                            <span className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">
-                                                Remove {remaining} more
+                                    <div key={p.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="font-black text-xl text-slate-900">{p.name}</h3>
+                                            <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest ${remaining === 0 ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                                                {remaining === 0 ? 'Limit met' : `Remove ${remaining} more`}
                                             </span>
                                         </div>
 
-                                        <div className="space-y-1">
+                                        <div className="grid grid-cols-1 gap-3">
                                             {members.map((m: any) => (
-                                                <label key={m.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded cursor-pointer">
+                                                <label key={m.id} className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border-2 ${selected.includes(m.id) ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100 hover:border-slate-300 shadow-sm'}`}>
+                                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${selected.includes(m.id) ? 'bg-red-600 border-red-600' : 'border-slate-300'}`}>
+                                                        {selected.includes(m.id) && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                    </div>
                                                     <input
                                                         type="checkbox"
+                                                        className="hidden"
                                                         checked={selected.includes(m.id)}
                                                         onChange={() => toggleMemberRemoval(p.id, m.id)}
                                                     />
-                                                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold">
+                                                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-black text-slate-800 border border-slate-200">
                                                         {m.name.charAt(0)}
                                                     </div>
-                                                    <span className="text-sm text-slate-700 dark:text-slate-300">{m.name}</span>
-                                                    <span className="text-xs text-slate-400 ml-auto">{m.role}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-black text-slate-900">{m.name}</span>
+                                                        <span className="text-[9px] text-slate-400 uppercase font-black tracking-widest mt-0.5">{m.role}</span>
+                                                    </div>
                                                 </label>
                                             ))}
                                         </div>
@@ -575,56 +583,57 @@ export const CheckoutPage: React.FC = () => {
                             })}
                         </div>
 
-                        <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+                        <div className="mt-8 flex gap-4 pt-6 border-t border-slate-100">
                             <button
                                 onClick={() => setIsRemovalModalOpen(false)}
-                                className="px-4 py-2 text-slate-500 hover:text-slate-700 font-medium"
+                                className="flex-1 py-3 text-slate-500 hover:text-slate-900 font-black transition-colors"
                             >
-                                Cancel
+                                Cancel Order
                             </button>
                             <button
                                 onClick={confirmRemovalAndCheckout}
                                 disabled={!isRemovalValid() || isProcessing}
-                                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-[2] py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-base shadow-xl shadow-red-200 transition-all disabled:opacity-20 active:scale-95"
                             >
-                                {isProcessing ? 'Processing...' : 'Remove & Checkout'}
+                                {isProcessing ? 'Wait...' : 'Confirm & Proceed'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* Success Modal - Re-styled */}
             {isSuccess && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full text-center relative overflow-hidden border border-slate-200 dark:border-slate-700">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary via-purple-500 to-pink-500"></div>
-
-                        <div className="mb-6 flex justify-center">
-                            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center animate-in zoom-in duration-300">
-                                <CheckCircle size={40} className="text-green-600 dark:text-green-400" />
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/95 backdrop-blur-2xl animate-in fade-in duration-500">
+                    <div className="max-w-md w-full p-8 text-center relative overflow-hidden flex flex-col items-center">
+                        <div className="mb-8 relative">
+                            <div className="w-32 h-32 bg-green-50 rounded-[3rem] flex items-center justify-center animate-in zoom-in duration-700 border border-green-100 shadow-inner">
+                                <div className="p-6 bg-green-500 text-white rounded-2xl shadow-2xl shadow-green-200 scale-110">
+                                    <CheckCircle size={48} strokeWidth={2.5} />
+                                </div>
                             </div>
                         </div>
 
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Payment Successful!</h2>
-                        <p className="text-slate-500 dark:text-slate-400 mb-8">
+                        <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Success!</h2>
+                        <p className="text-slate-500 text-lg leading-relaxed mb-10">
                             {itemType === 'seats'
-                                ? `You have successfully added ${quantity} extra seat(s) to your workspace.`
-                                : `Your Premium Plan has been renewed successfully.`
+                                ? `You've successfully added ${quantity} extra seats to your workspace.`
+                                : `Your premium subscription has been successfully activated.`
                             }
                         </p>
 
-                        <div className="flex flex-col gap-3">
+                        <div className="w-full flex flex-col gap-4 text-sm">
                             <button
                                 onClick={() => navigate('/')}
-                                className="w-full py-3 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold shadow-lg shadow-primary/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                Go to Dashboard
+                                Enter Workspace
                             </button>
                             <button
                                 onClick={() => navigate('/billing')}
-                                className="w-full py-3 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl font-semibold transition-all"
+                                className="w-full py-3 text-slate-400 hover:text-slate-900 font-bold transition-colors"
                             >
-                                View Receipt
+                                View Billing Hub
                             </button>
                         </div>
                     </div>

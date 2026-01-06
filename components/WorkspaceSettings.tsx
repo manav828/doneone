@@ -94,6 +94,12 @@ export const WorkspaceSettings: React.FC = () => {
     // Project Assignment States
     const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState<string>('all');
     const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all');
+
+    // Reset filters when changing sections to avoid unexpected filtering persistence
+    useEffect(() => {
+        setSelectedDepartmentFilter('all');
+        setSelectedProjectFilter('all');
+    }, [activeSection]);
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
     const [managingMemberDeptsId, setManagingMemberDeptsId] = useState<string | null>(null);
@@ -328,16 +334,19 @@ export const WorkspaceSettings: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <select
-                                        value={selectedDepartmentFilter}
-                                        onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
-                                        className="pl-3 pr-8 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                                    >
-                                        <option value="all">All Departments</option>
-                                        {ownedTeams.map(t => (
-                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                        ))}
-                                    </select>
+                                    <div className="relative">
+                                        <select
+                                            value={selectedDepartmentFilter}
+                                            onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                                            className="pl-3 pr-8 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-none"
+                                        >
+                                            <option value="all">All Departments</option>
+                                            {ownedTeams.map(t => (
+                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                    </div>
                                     <div className="relative">
                                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
@@ -760,36 +769,42 @@ export const WorkspaceSettings: React.FC = () => {
                                                 {/* Department Filter */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Department</label>
-                                                    <select
-                                                        value={selectedDepartmentFilter}
-                                                        onChange={(e) => {
-                                                            setSelectedDepartmentFilter(e.target.value);
-                                                            setSelectedProjectFilter('all');
-                                                            setShowAddMemberModal(false);
-                                                        }}
-                                                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium appearance-none"
-                                                    >
-                                                        <option value="all">All Departments</option>
-                                                        {ownedTeams.map(t => (
-                                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                                        ))}
-                                                    </select>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={selectedDepartmentFilter}
+                                                            onChange={(e) => {
+                                                                setSelectedDepartmentFilter(e.target.value);
+                                                                setSelectedProjectFilter('all');
+                                                                setShowAddMemberModal(false);
+                                                            }}
+                                                            className="w-full px-4 py-2.5 pr-10 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium appearance-none"
+                                                        >
+                                                            <option value="all">All Departments</option>
+                                                            {ownedTeams.map(t => (
+                                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                                    </div>
                                                 </div>
                                                 {/* Project Filter */}
                                                 <div>
                                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Project</label>
-                                                    <select
-                                                        value={selectedProjectFilter}
-                                                        onChange={(e) => { setSelectedProjectFilter(e.target.value); setShowAddMemberModal(false); }}
-                                                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium appearance-none"
-                                                    >
-                                                        <option value="all">-- Select a Project --</option>
-                                                        {allProjects
-                                                            .filter(p => selectedDepartmentFilter === 'all' || p.teamId === selectedDepartmentFilter)
-                                                            .map(p => (
-                                                                <option key={p.id} value={p.id}>{p.name}</option>
-                                                            ))}
-                                                    </select>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={selectedProjectFilter}
+                                                            onChange={(e) => { setSelectedProjectFilter(e.target.value); setShowAddMemberModal(false); }}
+                                                            className="w-full px-4 py-2.5 pr-10 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm font-medium appearance-none"
+                                                        >
+                                                            <option value="all">-- Select a Project --</option>
+                                                            {allProjects
+                                                                .filter(p => selectedDepartmentFilter === 'all' || p.teamId === selectedDepartmentFilter)
+                                                                .map(p => (
+                                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                                ))}
+                                                        </select>
+                                                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
