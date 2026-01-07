@@ -798,54 +798,52 @@ export const useStore = create<any>((set, get) => ({
 
       set({
         currentUser:
-          {
-            id: profile.id,
-            name: profile.name,
-            email: profile.email, // Now stored in profiles table
-            role: profile.role,
-            companyId: profile.company_id,
+          (() => {
+            const cpd = profile.custom_plan_data || {};
+            const isCustom = Object.keys(cpd).length > 0;
+            const plan = get().plans.find(p => p.id === profile.plan_id);
 
-            createdAt: new Date(profile.created_at).getTime(),
-            premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
-            isPremium: profile.is_custom_plan ||
-              (!!profile.plan_id && profile.plan_id !== (get().plans.find(p => p.price_monthly === 0 || p.price_monthly === '0')?.id)),
+            return {
+              id: profile.id,
+              name: profile.name,
+              email: profile.email,
+              role: profile.role,
+              companyId: profile.company_id,
+              createdAt: new Date(profile.created_at).getTime(),
+              premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
 
-            // NEW: Plan subscription fields
-            planId: profile.plan_id,
-            billingInterval: profile.billing_interval || profile.custom_plan_data?.billingInterval || 'monthly',
-            isCustomPlan: profile.is_custom_plan,
-            customPlanData: profile.custom_plan_data,
+              // Flags
+              isPremium: isCustom || (!!plan && plan.price_monthly > 0),
+              isCustomPlan: isCustom,
+              customPlanData: isCustom ? cpd : undefined,
 
-            // Billing/Enterprise fields
-            // If custom, use custom data. If standard, use the plan's price.
-            planBaseCost: profile.is_custom_plan
-              ? (profile.custom_plan_data?.baseCost || 0)
-              : (get().plans.find(p => p.id === profile.plan_id)?.price_monthly || 0),
-            perSeatCost: profile.is_custom_plan
-              ? (profile.custom_plan_data?.seatCost || 0)
-              : (get().plans.find(p => p.id === profile.plan_id)?.price_per_seat_monthly || 0),
+              // Columns
+              planId: profile.plan_id,
+              billingInterval: profile.billing_interval || 'monthly',
+              renewalDate: profile.renewal_date ? new Date(profile.renewal_date).getTime() : undefined,
+              currency: profile.currency || 'INR',
 
-            extraSeats: profile.custom_plan_data?.extraSeats || 0,
-            renewalDate: profile.renewal_date ? new Date(profile.renewal_date).getTime() : undefined,
+              // Specific Overrides
+              planBaseCost: isCustom ? (cpd.planBaseCost || 0) : (plan?.price_monthly || 0),
+              perSeatCost: isCustom ? (cpd.perSeatCost || 0) : (plan?.price_per_seat_monthly || 0),
+              extraSeats: isCustom ? (cpd.extraSeats || 0) : 0,
 
-            // Limits & Features
-            maxProjects: profile.is_custom_plan
-              ? (profile.custom_plan_data?.maxProjects || 3)
-              : (get().plans.find(p => p.id === profile.plan_id)?.max_projects || 3),
-            maxLeads: profile.is_custom_plan
-              ? (profile.custom_plan_data?.maxLeads || 2)
-              : (get().plans.find(p => p.id === profile.plan_id)?.max_leads_per_project || 2),
-            maxResources: profile.is_custom_plan
-              ? (profile.custom_plan_data?.maxResources || 5)
-              : (get().plans.find(p => p.id === profile.plan_id)?.max_members_per_project || 5),
+              // Limits & Features
+              maxProjects: isCustom ? (cpd.maxProjects || 3) : (plan?.max_projects || 3),
+              maxLeads: isCustom ? (cpd.maxLeads || 2) : (plan?.max_leads_per_project || 2),
+              maxResources: isCustom ? (cpd.maxResources || 5) : (plan?.max_members_per_project || 5),
 
-            notificationsEnabled: profile.is_custom_plan ? (profile.custom_plan_data?.notifications || false) : (!!get().plans.find(p => p.id === profile.plan_id)?.can_use_notifications),
-            remindersEnabled: profile.is_custom_plan ? (profile.custom_plan_data?.reminders || false) : (!!get().plans.find(p => p.id === profile.plan_id)?.can_set_reminders),
-            timeTrackingEnabled: profile.is_custom_plan ? (profile.custom_plan_data?.timeTracking || false) : (!!get().plans.find(p => p.id === profile.plan_id)?.is_premium), // fallback check
-            autoArchiveDays: archiveSettings?.auto_archive_days || 0,
-            historyRetentionDays: archiveSettings?.history_retention_days || null,
-            currency: profile.currency || 'INR'
-          } as User,
+              notificationsEnabled: isCustom ? (cpd.notifications || false) : (!!plan?.can_use_notifications),
+              remindersEnabled: isCustom ? (cpd.reminders || false) : (!!plan?.can_set_reminders),
+              timeTrackingEnabled: isCustom ? (cpd.timeTracking || false) : (!!plan && plan.price_monthly > 0),
+              imageUploadEnabled: isCustom ? (cpd.imageUpload || false) : (!!plan?.can_upload_images),
+              maxAttachmentsPerTask: isCustom ? (cpd.maxAttachments || 3) : (plan?.max_uploads_per_task_limit || 3),
+
+              autoArchiveDays: archiveSettings?.auto_archive_days || 0,
+              historyRetentionDays: archiveSettings?.history_retention_days || null,
+              allowMultipleInProgress: profile.allow_multiple_in_progress
+            } as User;
+          })(),
         archiveSettings: archiveSettings ? {
           userId: archiveSettings.user_id,
           autoArchiveDays: archiveSettings.auto_archive_days,
@@ -873,7 +871,9 @@ export const useStore = create<any>((set, get) => ({
             currentUser: {
               ...currentUser,
               maxProjects: activePlan.max_projects || activePlan.maxProjects,
-              maxLeads: activePlan.max_members_per_project || activePlan.maxMembersPerProject,
+              maxLeads: activePlan.max_leads_per_project || activePlan.maxLeadsPerProject || 2,
+              maxMembersPerProject: activePlan.max_members_per_project || activePlan.maxMembersPerProject || 5,
+              maxResources: activePlan.max_members_per_project || activePlan.maxMembersPerProject || 5,
               // Boolean Features: OR logic (Profile OR Plan)
               imageUploadEnabled: currentUser.imageUploadEnabled || activePlan.can_upload_images || activePlan.canUploadImages,
               remindersEnabled: currentUser.remindersEnabled || activePlan.can_set_reminders || activePlan.canSetReminders,
@@ -1021,8 +1021,10 @@ export const useStore = create<any>((set, get) => ({
     const mappedUsers: User[] = (allProfiles || []).map((p: any) => {
       const settings = Array.isArray(p.user_archive_settings) ? p.user_archive_settings[0] : p.user_archive_settings;
 
-      // Use custom_plan_data if it exists (for custom plans)
+      // JSONB-first logic: Use custom_plan_data if it has properties
       const cpd = p.custom_plan_data || {};
+      const isCustom = Object.keys(cpd).length > 0;
+      const plan = get().plans.find(pl => pl.id === p.plan_id);
 
       return {
         id: p.id,
@@ -1033,42 +1035,32 @@ export const useStore = create<any>((set, get) => ({
         companyId: p.company_id,
         createdAt: new Date(p.created_at).getTime(),
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
-        isPremium: p.is_custom_plan ||
-          (!!p.plan_id && p.plan_id !== (get().plans.find(pl => pl.price_monthly === 0 || pl.price_monthly === '0')?.id)),
 
-        // NEW: Plan subscription fields
+        // Calculated Flags
+        isPremium: isCustom || (!!plan && plan.price_monthly > 0),
+        isCustomPlan: isCustom,
+        customPlanData: isCustom ? cpd : undefined,
+
+        // Billing Columns (Kept as actual columns per user)
         planId: p.plan_id,
-        billingInterval: p.billing_interval || cpd.billingInterval || 'monthly',
-        isCustomPlan: p.is_custom_plan,
-        customPlanData: p.custom_plan_data,
-
-        // Billing/Enterprise fields
-        planBaseCost: p.is_custom_plan
-          ? (cpd.baseCost || 0)
-          : (get().plans.find(pl => pl.id === p.plan_id)?.price_monthly || 0),
-        perSeatCost: p.is_custom_plan
-          ? (cpd.seatCost || 0)
-          : (get().plans.find(pl => pl.id === p.plan_id)?.price_per_seat_monthly || 0),
-
-        extraSeats: cpd.extraSeats || 0,
+        billingInterval: p.billing_interval || 'monthly',
         renewalDate: p.renewal_date ? new Date(p.renewal_date).getTime() : undefined,
 
-        // Limits & Features
-        maxProjects: p.is_custom_plan
-          ? (cpd.maxProjects || 3)
-          : (get().plans.find(pl => pl.id === p.plan_id)?.max_projects || 3),
-        maxLeads: p.is_custom_plan
-          ? (cpd.maxLeads || 2)
-          : (get().plans.find(pl => pl.id === p.plan_id)?.max_leads_per_project || 2),
-        maxResources: p.is_custom_plan
-          ? (cpd.maxResources || 5)
-          : (get().plans.find(pl => pl.id === p.plan_id)?.max_members_per_project || 5),
+        // Specific Overrides - JSONB first, then Plan defaults
+        planBaseCost: isCustom ? (cpd.planBaseCost || 0) : (plan?.price_monthly || 0),
+        perSeatCost: isCustom ? (cpd.perSeatCost || 0) : (plan?.price_per_seat_monthly || 0),
+        extraSeats: isCustom ? (cpd.extraSeats || 0) : 0,
 
-        notificationsEnabled: p.is_custom_plan ? (cpd.notifications || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.can_use_notifications),
-        remindersEnabled: p.is_custom_plan ? (cpd.reminders || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.can_set_reminders),
-        timeTrackingEnabled: p.is_custom_plan ? (cpd.timeTracking || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.price_monthly),
-        imageUploadEnabled: p.is_custom_plan ? (cpd.imageUpload || false) : (!!get().plans.find(pl => pl.id === p.plan_id)?.can_upload_images),
-        maxAttachmentsPerTask: p.is_custom_plan ? (cpd.maxAttachments || 3) : (get().plans.find(pl => pl.id === p.plan_id)?.max_uploads_per_task_limit || 3),
+        // Limits & Feature Flags (Calculated on the fly)
+        maxProjects: isCustom ? (cpd.maxProjects || 3) : (plan?.max_projects || 3),
+        maxLeads: isCustom ? (cpd.maxLeads || 2) : (plan?.max_leads_per_project || 2),
+        maxResources: isCustom ? (cpd.maxResources || 5) : (plan?.max_members_per_project || 5),
+
+        notificationsEnabled: isCustom ? (cpd.notifications || false) : (!!plan?.can_use_notifications),
+        remindersEnabled: isCustom ? (cpd.reminders || false) : (!!plan?.can_set_reminders),
+        timeTrackingEnabled: isCustom ? (cpd.timeTracking || false) : (!!plan && plan.price_monthly > 0),
+        imageUploadEnabled: isCustom ? (cpd.imageUpload || false) : (!!plan?.can_upload_images),
+        maxAttachmentsPerTask: isCustom ? (cpd.maxAttachments || 3) : (plan?.max_uploads_per_task_limit || 3),
 
         autoArchiveDays: settings?.auto_archive_days || 0,
         historyRetentionDays: settings?.history_retention_days || null,
@@ -1237,17 +1229,13 @@ export const useStore = create<any>((set, get) => ({
 
   fetchColumns: async () => {
     const { data: columns } = await supabase.from('columns').select('*').order('order_index');
-    const localSettings = JSON.parse(localStorage.getItem('doneone_column_settings') || '{}');
 
     const processedColumns: Column[] = (columns || []).map((c: any) => ({
       id: c.id,
       projectId: c.project_id,
       title: c.title,
       orderIndex: c.order_index,
-      // Use local setting if exists, otherwise default 'Done' to true
-      isArchiveEnabled: localSettings[c.id]?.isArchiveEnabled !== undefined
-        ? localSettings[c.id].isArchiveEnabled
-        : (c.title === 'Done')
+      isArchiveEnabled: c.is_archive_enabled ?? (c.title === 'Done')
     }));
     set({ columns: processedColumns });
     return processedColumns;
@@ -1554,13 +1542,16 @@ export const useStore = create<any>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return;
 
-    // First fetch teams and departments (projects depend on departments for visibility)
+    // 1. Fetch Plans first (needed for team limit calculations)
+    await get().fetchPlans();
+
+    // 2. Fetch teams and departments
     await Promise.all([
       get().fetchTeams(),
       get().fetchAllDepartments()
     ]);
 
-    // Then fetch everything else including projects
+    // 3. Fetch everything else
     await Promise.all([
       get().fetchUsers(),
       get().fetchProjects(),
@@ -1568,8 +1559,7 @@ export const useStore = create<any>((set, get) => ({
       get().fetchTasks(),
       get().fetchActivities(),
       get().fetchNotifications(),
-      get().fetchTags(),
-      get().fetchPlans()
+      get().fetchTags()
     ]);
 
     set({ isLoading: false });
@@ -2061,17 +2051,13 @@ export const useStore = create<any>((set, get) => ({
       columns: state.columns.map(c => c.id === columnId ? { ...c, ...updates } : c)
     }));
 
-    // 2. Persist standard fields to DB
-    if (updates.title) {
-      await supabase.from('columns').update({ title: updates.title }).eq('id', columnId);
-    }
+    // 2. Persist fields to DB
+    const dbUpdates: any = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.isArchiveEnabled !== undefined) dbUpdates.is_archive_enabled = updates.isArchiveEnabled;
 
-    // 3. Persist extra fields (isArchiveEnabled) to LocalStorage (Schema Fallback)
-    // We do this because we aren't sure if the DB has 'is_archive_enabled' column
-    if (updates.isArchiveEnabled !== undefined) {
-      const settings = JSON.parse(localStorage.getItem('flowboard_column_settings') || '{}');
-      settings[columnId] = { ...(settings[columnId] || {}), isArchiveEnabled: updates.isArchiveEnabled };
-      localStorage.setItem('flowboard_column_settings', JSON.stringify(settings));
+    if (Object.keys(dbUpdates).length > 0) {
+      await supabase.from('columns').update(dbUpdates).eq('id', columnId);
     }
   },
 
@@ -3202,40 +3188,46 @@ export const useStore = create<any>((set, get) => ({
   },
 
   addSeat: async (seats: number) => {
-    const { currentUser } = get();
+    const { currentUser, plans } = get();
     if (!currentUser) return;
 
     try {
-      // Fetch current seats first to be safe
+      // JSONB-first logic: Get current snapshot
       const { data: profile, error: fetchError } = await supabase
         .from('profiles')
-        .select('extra_seats, plan_base_cost, max_resources, per_seat_cost') // Added per_seat_cost
+        .select('custom_plan_data, plan_id')
         .eq('id', currentUser.id)
         .single();
 
       if (fetchError) throw fetchError;
 
-      const currentExtra = profile.extra_seats || 0;
-      const newExtra = currentExtra + seats; // seats can be negative (decrement)
+      const cpd = profile.custom_plan_data || {};
+      const plan = plans.find((p: any) => p.id === profile.plan_id);
 
-      if (newExtra < 0) {
-        throw new Error("Cannot have negative extra seats.");
-      }
+      const currentExtra = cpd.extraSeats || 0;
+      const newExtra = Math.max(0, currentExtra + seats);
 
-      // Update Plan Base Cost
-      const PLAN_BASE = 19;
-      const PER_SEAT = profile.per_seat_cost || 5;
-      const newPlanBaseCost = PLAN_BASE + (newExtra * PER_SEAT);
+      // Prepare comprehensive snapshot to lock in "Custom Plan" status
+      const newSnapshot = {
+        ...cpd,
+        extraSeats: newExtra,
+        // Ensure standard fields are populated if they weren't already
+        planBaseCost: cpd.planBaseCost || plan?.price_monthly || 0,
+        perSeatCost: cpd.perSeatCost || plan?.price_per_seat_monthly || 0,
+        maxResources: cpd.maxResources || plan?.max_members_per_project || 5,
+        maxProjects: cpd.maxProjects || plan?.max_projects || 3,
+        maxLeads: cpd.maxLeads || plan?.max_leads_per_project || 2
+      };
 
       const { error } = await supabase
         .from('profiles')
         .update({
-          extra_seats: newExtra,
-          plan_base_cost: newPlanBaseCost
+          custom_plan_data: newSnapshot
         })
         .eq('id', currentUser.id);
 
       if (error) throw error;
+      await get().fetchUsers();
 
       // Log Transaction
       // Transaction Logging is handled by the caller (BillingPage/CheckoutPage)
@@ -4033,15 +4025,26 @@ export const useStore = create<any>((set, get) => ({
         .eq('team_id', t.id)
         .eq('status', 'active');
 
-      // Get owner's extra_seats for effective limit
+      // Get owner's plan limits for effective limit
       const { data: owner } = await supabase
         .from('profiles')
-        .select('max_resources, extra_seats')
+        .select('*')
         .eq('id', t.owner_id)
         .single();
 
-      const baseLimit = owner?.max_resources || 5;
-      const extraSeats = owner?.extra_seats || 0;
+      // Find plan for owner to get correct base limit
+      const ownerPlan = get().plans.find(p => p.id === owner?.plan_id);
+
+      // JSONB-first logic: Use custom_plan_data if it has properties
+      const cpd = owner?.custom_plan_data || {};
+      const isCustom = Object.keys(cpd).length > 0;
+
+      // Calculate limits - Prefer custom_plan_data
+      const baseLimit = isCustom
+        ? (cpd.maxResources || 5)
+        : (ownerPlan?.max_members_per_project || owner?.max_resources || 5);
+
+      const extraSeats = isCustom ? (cpd.extraSeats || 0) : 0;
 
       return {
         id: t.id,

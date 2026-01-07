@@ -9,20 +9,23 @@ interface ManageMemberDepartmentsModalProps {
 }
 
 export const ManageMemberDepartmentsModal: React.FC<ManageMemberDepartmentsModalProps> = ({ userId, onClose }) => {
-    const { users, teams, currentUser, activeMembers, addTeamMember, removeTeamMember } = useStore();
+    const { users, teams, currentUser, teamMembers, addTeamMember, removeTeamMember } = useStore();
     const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
     const [isSaving, setIsSaving] = useState(false);
 
     // Derived state
-    const ownedTeams = teams.filter(t => t.ownerId === currentUser?.id);
+    const ownedTeams = teams.filter(t =>
+        t.ownerId === currentUser?.id ||
+        t.managerIds?.includes(currentUser?.id || '')
+    );
 
     // Initialize state
     useEffect(() => {
-        const currentTeamIds = activeMembers
-            .filter(m => m.userId === userId)
+        const currentTeamIds = teamMembers
+            .filter(m => m.userId === userId && m.status === 'active')
             .map(m => m.teamId);
         setSelectedTeamIds(new Set(currentTeamIds));
-    }, [userId, activeMembers]);
+    }, [userId, teamMembers]);
 
     const memberUser = users.find(u => u.id === userId);
     if (!memberUser) return null;
@@ -34,7 +37,7 @@ export const ManageMemberDepartmentsModal: React.FC<ManageMemberDepartmentsModal
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const currentMemberships = activeMembers.filter(m => m.userId === userId);
+            const currentMemberships = teamMembers.filter(m => m.userId === userId && m.status === 'active');
             const currentTeamIds = new Set<string>(currentMemberships.map(m => m.teamId));
 
             // 1. Add new teams

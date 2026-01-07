@@ -33,6 +33,19 @@ CREATE TABLE public.profiles (
   max_resources int DEFAULT 5,
   auto_delete_days int DEFAULT 0,
   
+  -- Subscription & Enterprise (Added)
+  plan_id uuid, -- REFERENCES public.plans(id) -- Removed FK to avoid order dependency in setup
+  custom_plan_data jsonb DEFAULT '{}'::jsonb,
+  billing_interval text DEFAULT 'monthly',
+  extra_seats integer DEFAULT 0,
+  is_custom_plan boolean DEFAULT false,
+  renewal_date timestamp with time zone,
+  plan_base_cost numeric DEFAULT 0,
+  per_seat_cost numeric DEFAULT 5,
+  premium_until timestamp with time zone DEFAULT NULL,
+  currency text DEFAULT 'INR',
+  company_id uuid,
+  
   -- Feature Flags
   notifications_enabled boolean DEFAULT false,
   reminders_enabled boolean DEFAULT false,
