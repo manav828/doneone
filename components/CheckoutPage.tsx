@@ -34,17 +34,17 @@ export const CheckoutPage: React.FC = () => {
     const planParam = searchParams.get('plan');
     const selectedPlan = plans.find((p: any) => p.id === planParam);
 
-    // Per Seat Cost Priority: User Override > Plan Config > Default 5
+    // Per Seat Cost Priority: User Override > Plan Config > Default
     const PER_SEAT_PRICE = currentUser?.perSeatCost ||
-        (isAnnual ? (selectedPlan?.price_per_seat_yearly || selectedPlan?.price_per_seat_monthly) : selectedPlan?.price_per_seat_monthly) ||
-        5;
+        (selectedPlan ? (isAnnual ? (selectedPlan?.price_per_seat_yearly || selectedPlan?.price_per_seat_monthly) : selectedPlan?.price_per_seat_monthly) : 0) ||
+        (currentUser?.isPremium ? (currentUser?.perSeatCost || (currency === 'INR' ? 399 : 5)) : (currency === 'INR' ? 399 : 5));
 
     // Use price_yearly if annual, otherwise price_monthly
-    const PLAN_BASE_PRICE = isAnnual
-        ? (selectedPlan?.price_yearly || (selectedPlan?.price_monthly * 12))
-        : (selectedPlan?.price_monthly || 0);
+    const PLAN_BASE_PRICE = selectedPlan
+        ? (isAnnual ? (selectedPlan?.price_yearly || (selectedPlan?.price_monthly * 12)) : (selectedPlan?.price_monthly || 0))
+        : (isAnnual ? ((currentUser?.planBaseCost || (currency === 'INR' ? 899 : 12)) * 12) : (currentUser?.planBaseCost || (currency === 'INR' ? 899 : 12)));
 
-    const PLAN_MEMBERS_LIMIT = selectedPlan?.max_members_per_project || 8;
+    const PLAN_MEMBERS_LIMIT = selectedPlan?.max_members_per_project || (currentUser?.maxResources || 8);
 
     // Base Capacity (Included Seats): User's DB Limit (if snapshot) > Plan Config > Default
     const INCLUDED_SEATS = currentUser?.maxResources || PLAN_MEMBERS_LIMIT;
@@ -70,8 +70,10 @@ export const CheckoutPage: React.FC = () => {
     }, [searchParams]);
 
     // Calculate Total
-    const baseAmount = itemType === 'plan' ? PLAN_BASE_PRICE : 0;
-    const seatsAmount = isAnnual ? (quantity * PER_SEAT_PRICE * 12) : (quantity * PER_SEAT_PRICE);
+    const baseAmount = PLAN_BASE_PRICE;
+    const seatsAmount = (currentUser?.extraSeats || 0) + quantity > 0
+        ? ((currentUser?.extraSeats || 0) + quantity) * (isAnnual ? PER_SEAT_PRICE * 12 : PER_SEAT_PRICE)
+        : 0;
     const totalRecurring = baseAmount + seatsAmount;
     const intervalLabel = isAnnual ? 'Year' : 'Month';
     const intervalLabelLower = isAnnual ? 'year' : 'month';
@@ -91,12 +93,25 @@ export const CheckoutPage: React.FC = () => {
     const diffTime = Math.abs(renewalDate.getTime() - today.getTime());
     const remainingDays = isExpired ? 30 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    // Prorated Charge (Due Today)
-    const dailyRate = PER_SEAT_PRICE / 30;
-    const proratedCost = quantity > 0 ? (quantity * dailyRate * remainingDays) : 0;
+    // Prorated Charge (Due Today for new seats in current cycle)
+    const MONTHLY_SEAT_PRICE = (selectedPlan?.price_per_seat_monthly) || (currentUser?.perSeatCost) || (currency === 'INR' ? 299 : 5);
+    const dailyRate = MONTHLY_SEAT_PRICE / 30;
+    const proratedSeatCost = (itemType === 'seats' || isAnnual) && quantity > 0 ? (quantity * dailyRate * remainingDays) : 0;
+
+    // Determine if switching from Monthly to Annual
+    const isSwitchingToAnnual = isAnnual && (currentUser?.billingInterval || 'monthly') === 'monthly';
 
     // Total Due Today
-    const totalDueToday = itemType === 'plan' ? PLAN_BASE_PRICE : proratedCost;
+    let totalDueToday = 0;
+    if (itemType === 'plan' || isSwitchingToAnnual) {
+        // If switching to Annual, we charge:
+        // 1. The full Yearly Recurring Amount (which extends expiry by 1 year)
+        // 2. PLUS prorated amount for ONLY the new seats for the remainder of this month
+        totalDueToday = totalRecurring + proratedSeatCost;
+    } else {
+        // Just adding seats on the current monthly cycle
+        totalDueToday = proratedSeatCost;
+    }
 
     const handleCheckoutButton = async () => {
         // If reducing seats, check for limits
@@ -179,81 +194,93 @@ export const CheckoutPage: React.FC = () => {
         };
     }, []);
 
-    const processProvisioning = async (currency: string = 'USD', provider: string = 'system') => {
+    const processProvisioning = async (currencyCode: string = 'USD', provider: string = 'system') => {
         try {
-            if (itemType === 'seats') {
-                // Log Seat Transaction (Purchase or Reduction)
-                const isReduction = quantity < 0;
+            // Prepare the Data Snapshot (JSONB-first architecture)
+            // If user adds seats or switches plan, we lock in their current plan details into custom_plan_data
+            const plan = selectedPlan || plans.find((p: any) => p.id === currentUser.planId);
 
-                console.log("Provisioning Seat Transaction:", { quantity, amount: totalDueToday, isReduction });
-                await supabase.from('transactions').insert({
+            const snapshot: any = {
+                planBaseCost: PLAN_BASE_PRICE,
+                perSeatCost: PER_SEAT_PRICE,
+                extraSeats: itemType === 'seats' ? ((currentUser?.extraSeats || 0) + quantity) : (currentUser?.extraSeats || 0),
+                maxProjects: plan?.max_projects || currentUser.maxProjects || 3,
+                maxLeads: plan?.max_leads_per_project || currentUser.maxLeads || 2,
+                maxResources: plan?.max_members_per_project || currentUser.maxResources || 5,
+                notifications: !!(plan?.can_use_notifications || currentUser.notificationsEnabled),
+                reminders: !!(plan?.can_set_reminders || currentUser.remindersEnabled),
+                timeTracking: !!(plan?.price_monthly > 0 || currentUser.timeTrackingEnabled),
+                imageUpload: !!(plan?.can_upload_images || currentUser.imageUploadEnabled),
+                maxAttachments: plan?.max_uploads_per_task_limit || currentUser.maxAttachmentsPerTask || 3,
+                billingInterval: isAnnual ? 'annual' : 'monthly'
+            };
+
+            if (itemType === 'seats') {
+                // Log Seat Transaction
+                const isReduction = quantity < 0;
+                const { error: txError } = await supabase.from('transactions').insert({
                     user_id: currentUser.id,
                     amount: isReduction ? 0 : totalDueToday,
                     status: isReduction ? 'cancelled' : 'completed',
                     description: isReduction
                         ? `Seat Reduction (Removed ${Math.abs(quantity)} seat${Math.abs(quantity) > 1 ? 's' : ''})`
                         : `Added ${quantity} seat(s) (Prorated for ${remainingDays} days)`,
-                    currency: currency,
+                    currency: currencyCode,
                     provider: provider,
                     created_at: new Date().toISOString()
                 });
+                if (txError) throw txError;
 
-                await addSeat(quantity);
+                // Update Profile with new JSONB Snapshot
+                const { error: profileError } = await supabase.from('profiles').update({
+                    custom_plan_data: snapshot
+                }).eq('id', currentUser.id);
+                if (profileError) throw profileError;
+
             } else {
-                // Plan Renewal Logic
+                // Plan Renewal/Upgrade Logic
                 let newExpiryDate = new Date();
                 const currentExpiry = currentUser?.premiumUntil ? new Date(currentUser.premiumUntil) : null;
 
-                if (currentExpiry && !isNaN(currentExpiry.getTime())) {
-                    if (isAnnual) {
-                        currentExpiry.setFullYear(currentExpiry.getFullYear() + 1);
-                    } else {
-                        currentExpiry.setDate(currentExpiry.getDate() + 30);
-                    }
+                if (currentExpiry && !isNaN(currentExpiry.getTime()) && currentExpiry > new Date()) {
+                    if (isAnnual) currentExpiry.setFullYear(currentExpiry.getFullYear() + 1);
+                    else currentExpiry.setDate(currentExpiry.getDate() + 30);
                     newExpiryDate = currentExpiry;
                 } else {
-                    if (isAnnual) {
-                        newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1);
-                    } else {
-                        newExpiryDate.setDate(newExpiryDate.getDate() + 30);
-                    }
+                    if (isAnnual) newExpiryDate.setFullYear(newExpiryDate.getFullYear() + 1);
+                    else newExpiryDate.setDate(newExpiryDate.getDate() + 30);
                 }
 
-                // Update Premium Status & Expiry
-                await supabase.from('profiles').update({
-                    is_premium: true,
-                    plan_id: selectedPlan?.id || currentUser.plan_id,
+                // Update Profile: New Plan ID + Expiry + JSONB Snapshot
+                const { error: profileError } = await supabase.from('profiles').update({
+                    plan_id: selectedPlan?.id || currentUser.planId,
                     premium_until: newExpiryDate.toISOString(),
                     renewal_date: newExpiryDate.toISOString(),
-                    max_resources: selectedPlan?.max_members_per_project || currentUser.maxResources,
-                    plan_base_cost: PLAN_BASE_PRICE,
-                    per_seat_cost: isAnnual ? (selectedPlan?.price_per_seat_yearly || 0) : (selectedPlan?.price_per_seat_monthly || 5),
-                    billing_interval: isAnnual ? 'annual' : 'monthly'
+                    billing_interval: isAnnual ? 'annual' : 'monthly',
+                    custom_plan_data: snapshot
                 }).eq('id', currentUser.id);
 
+                if (profileError) throw profileError;
+
                 // Log Plan Transaction
-                console.log("Provisioning Plan Renewal:", { amount: totalDueToday });
-                await supabase.from('transactions').insert({
+                const { error: planTxError } = await supabase.from('transactions').insert({
                     user_id: currentUser.id,
                     amount: totalDueToday,
                     status: 'completed',
                     description: `${selectedPlan?.name || 'Premium'} Plan Upgrade/Renewal (until ${newExpiryDate.toLocaleDateString()})`,
-                    currency: currency,
+                    currency: currencyCode,
                     provider: provider,
                     created_at: new Date().toISOString()
                 });
-
-                if (quantity > (currentUser?.extraSeats || 0)) {
-                    await addSeat(quantity - (currentUser?.extraSeats || 0));
-                }
+                if (planTxError) throw planTxError;
             }
 
             await fetchUsers();
             setIsSuccess(true);
             setIsProcessing(false);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Provisioning failed:", error);
-            alert("Failed to update account. Please contact support.");
+            alert(`Provisioning failed: ${error.message || 'Unknown error'}. Please contact support.`);
             setIsProcessing(false);
         }
     };
@@ -382,7 +409,7 @@ export const CheckoutPage: React.FC = () => {
 
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden divide-y divide-slate-100">
                             {/* Base Plan Item */}
-                            {itemType === 'plan' && (
+                            {(itemType === 'plan' || isSwitchingToAnnual) && (
                                 <div className="p-6 flex items-center gap-6 bg-slate-50/50">
                                     <div className="p-4 bg-gradient-to-br from-primary to-orange-600 text-white rounded-2xl shadow-lg shadow-primary/20">
                                         <Crown size={26} />
@@ -473,15 +500,44 @@ export const CheckoutPage: React.FC = () => {
 
                             <div className="space-y-6 mb-8">
                                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-4">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Recurring Subscription</p>
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recurring Subscription</p>
+                                        {(itemType === 'plan' || isSwitchingToAnnual) && (
+                                            <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                                                New Expiry: {(() => {
+                                                    const start = (currentUser?.premiumUntil && new Date(currentUser.premiumUntil) > new Date())
+                                                        ? new Date(currentUser.premiumUntil)
+                                                        : new Date();
+                                                    const d = new Date(start);
+                                                    if (isAnnual) d.setFullYear(d.getFullYear() + 1);
+                                                    else d.setDate(d.getDate() + 30);
+                                                    return d.toLocaleDateString();
+                                                })()}
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex justify-between items-center text-xs font-medium">
                                         <span className="text-slate-500">{isAnnual ? 'Annual' : 'Monthly'} Plan Base</span>
                                         <span className="font-bold text-slate-900">{currencySymbol}{PLAN_BASE_PRICE}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs font-medium pb-4 border-b border-slate-200">
-                                        <span className="text-slate-500">Extra Seat Allocation ({((currentUser?.extraSeats || 0) + quantity)})</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-slate-500">Extra Seat Allocation ({((currentUser?.extraSeats || 0) + quantity)})</span>
+                                            <span className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                                {((currentUser?.extraSeats || 0) + quantity)} × {currencySymbol}{isAnnual ? PER_SEAT_PRICE * 12 : PER_SEAT_PRICE} / {intervalLabelLower}
+                                            </span>
+                                        </div>
                                         <span className="font-bold text-slate-900">{currencySymbol}{(((currentUser?.extraSeats || 0) + quantity) * (isAnnual ? PER_SEAT_PRICE * 12 : PER_SEAT_PRICE))}</span>
                                     </div>
+
+                                    {/* Proration Detail if applicable */}
+                                    {proratedSeatCost > 0 && isSwitchingToAnnual && (
+                                        <div className="flex justify-between items-center text-xs font-medium text-primary">
+                                            <span>New Seats Proration ({remainingDays} days)</span>
+                                            <span className="font-bold">+{currencySymbol}{proratedSeatCost.toFixed(2)}</span>
+                                        </div>
+                                    )}
+
                                     <div className="flex justify-between items-center pt-1">
                                         <span className="text-xs font-black text-slate-900">Total Recurring {intervalLabel}ly</span>
                                         <span className="text-xl font-black text-slate-900">{currencySymbol}{totalRecurring.toFixed(2)}</span>
@@ -492,7 +548,12 @@ export const CheckoutPage: React.FC = () => {
                                     <div className="flex justify-between items-center">
                                         <div className="flex flex-col">
                                             <span className="text-base font-black text-slate-900">Amount due today</span>
-                                            {itemType === 'seats' && quantity > 0 && <span className="text-[10px] text-slate-500 font-bold mt-0.5 italic">Prorated for {remainingDays} days</span>}
+                                            {proratedSeatCost > 0 && (
+                                                <span className="text-[10px] text-slate-500 font-bold mt-0.5 italic">Incl. {remainingDays} days for {quantity} new seat(s)</span>
+                                            )}
+                                            {isSwitchingToAnnual && (
+                                                <span className="text-[10px] text-primary font-bold mt-0.5 italic">Initial Annual Subscription</span>
+                                            )}
                                         </div>
                                         <span className="text-3xl font-black text-primary">{currencySymbol}{totalDueToday.toFixed(2)}</span>
                                     </div>
@@ -602,36 +663,36 @@ export const CheckoutPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Success Modal - Re-styled */}
+            {/* Success Modal - Smaller & Centered */}
             {isSuccess && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/95 backdrop-blur-2xl animate-in fade-in duration-500">
-                    <div className="max-w-md w-full p-8 text-center relative overflow-hidden flex flex-col items-center">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-500">
+                    <div className="max-w-md w-full p-10 bg-white rounded-[2.5rem] shadow-2xl text-center relative overflow-hidden flex flex-col items-center mx-4 border border-slate-100">
                         <div className="mb-8 relative">
-                            <div className="w-32 h-32 bg-green-50 rounded-[3rem] flex items-center justify-center animate-in zoom-in duration-700 border border-green-100 shadow-inner">
-                                <div className="p-6 bg-green-500 text-white rounded-2xl shadow-2xl shadow-green-200 scale-110">
-                                    <CheckCircle size={48} strokeWidth={2.5} />
+                            <div className="w-24 h-24 bg-green-50 rounded-3xl flex items-center justify-center animate-in zoom-in duration-700 border border-green-100">
+                                <div className="p-4 bg-green-500 text-white rounded-2xl shadow-xl shadow-green-200">
+                                    <CheckCircle size={40} strokeWidth={2.5} />
                                 </div>
                             </div>
                         </div>
 
-                        <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Success!</h2>
-                        <p className="text-slate-500 text-lg leading-relaxed mb-10">
+                        <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">Payment Successful!</h2>
+                        <p className="text-slate-500 text-base leading-relaxed mb-10 font-medium">
                             {itemType === 'seats'
-                                ? `You've successfully added ${quantity} extra seats to your workspace.`
-                                : `Your premium subscription has been successfully activated.`
+                                ? `Workspace capacity has been increased by ${Math.abs(quantity)} seat${Math.abs(quantity) > 1 ? 's' : ''}.`
+                                : `Your premium subscription for ${selectedPlan?.name || 'Premium'} is now active.`
                             }
                         </p>
 
-                        <div className="w-full flex flex-col gap-4 text-sm">
+                        <div className="w-full flex flex-col gap-3">
                             <button
                                 onClick={() => navigate('/')}
-                                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Enter Workspace
                             </button>
                             <button
                                 onClick={() => navigate('/billing')}
-                                className="w-full py-3 text-slate-400 hover:text-slate-900 font-bold transition-colors"
+                                className="w-full py-3 text-slate-400 hover:text-slate-900 font-bold transition-colors text-sm"
                             >
                                 View Billing Hub
                             </button>
