@@ -43,17 +43,17 @@ export const HistoryPage: React.FC = () => {
 
         // Filter to Project Members only
         const projectMembers = users.filter(u =>
-            u.id === activeProject.managerId ||
+            u.id === activeProject.ownerId ||
             activeProject.leadIds?.includes(u.id) ||
             activeProject.resourceIds?.includes(u.id) ||
             Object.keys(activeProject.reportsTo || {}).includes(u.id)
         );
 
-        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        const isOwner = activeProject.ownerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
         const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
-        if (isManager || viewAllEnabled) {
+        if (isOwner || viewAllEnabled) {
             return projectMembers;
         }
 
@@ -71,11 +71,11 @@ export const HistoryPage: React.FC = () => {
     // Apply role-based filter automatically
     useEffect(() => {
         if (!activeProject || !currentUser) return;
-        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        const isOwner = activeProject.ownerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
         const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
-        if (!isManager && !viewAllEnabled && !isLead) {
+        if (!isOwner && !viewAllEnabled && !isLead) {
             if (!historyFilters.assigneeIds?.includes(currentUser.id)) {
                 setHistoryFilters({ ...historyFilters, assigneeIds: [currentUser.id] });
             }
@@ -86,8 +86,8 @@ export const HistoryPage: React.FC = () => {
     const visibleHistory = useMemo(() => {
         if (!activeProject || !currentUser) return [];
 
-        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
-        if (isManager || activeProject.viewAllReportsEnabled) return taskHistory;
+        const isOwner = activeProject.ownerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        if (isOwner || activeProject.viewAllReportsEnabled) return taskHistory;
 
         const allowedUserIds = availableUsers.map(u => u.id);
         return taskHistory.filter(h => {

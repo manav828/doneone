@@ -1,0 +1,36 @@
+﻿AdminPanel.tsx:27: .filter(t => t.managerIds?.includes(currentUser?.id || '') || t.ownerId === currentUser?.id)
+AdminPanel.tsx:892: <p className="text-xs text-gray-500 mb-2">Manager: {users.find(u => u.id === p.managerId)?.name || p.manager?.name || 'Unknown'}</p>
+BillingPage.tsx:65: t.ownerId === loadedUser?.id || t.managerIds?.includes(loadedUser?.id)
+Board.tsx:95: {(currentUser?.email === 'manavss828@gmail.com' || project?.managerId === currentUser?.id || project?.leadIds.includes(currentUser?.id || '')) && (
+CheckoutPage.tsx:122: const myProjects = projects.filter((p: any) => p.managerId === currentUser?.id);
+DailyTimer.tsx:43: const isManager = activeProject?.managerId === currentUser?.id || currentUser?.email === 'manavss828@gmail.com';
+DailyTimer.tsx:133: if (activeProject.managerId) teamMemberIds.add(activeProject.managerId);
+HistoryPage.tsx:46: u.id === activeProject.managerId ||
+HistoryPage.tsx:52: const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+HistoryPage.tsx:74: const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+HistoryPage.tsx:89: const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+ManageMemberDepartmentsModal.tsx:19: t.managerIds?.includes(currentUser?.id || '')
+ProjectMembersModal.tsx:29: const delegatedManagers = (project.managerIds || []).map(getUser);
+ProjectMembersModal.tsx:31: const manager = getUser(project.managerId);
+ProjectMembersModal.tsx:33: const isOwner = currentUser.id === project.managerId;
+ReportsModal.tsx:31: u.id === activeProject.managerId ||
+ReportsPage.tsx:32: const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+ReportsPage.tsx:38: u.id === activeProject.managerId ||
+ReportsPage.tsx:77: const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+Sidebar.tsx:273: joinedTeams.filter(t => t.managerIds?.includes(currentUser?.id))
+Sidebar.tsx:673: joinedTeams.filter(t => t.managerIds?.includes(currentUser?.id))
+TaskCard.tsx:24: const isManager = activeProject?.managerId === currentUser?.id;
+TaskCard.tsx:32: const projectManager = activeProject?.manager || users.find(u => u.id === activeProject?.managerId);
+TaskEditModal.tsx:28: const isManager = activeProject?.managerId === currentUser?.id;
+TaskEditModal.tsx:403: u.id === activeProject.managerId ||
+TaskEditModal.tsx:476: .filter(u => activeProject?.managerId === u.id || activeProject?.leadIds.includes(u.id) || activeProject?.resourceIds.includes(u.id))
+TaskEditModal.tsx:759: u.id === taskProject.managerId ||
+TopBar.tsx:252: {activeProject.managerId === currentUser.id && (
+WorkspaceSettings.tsx:111: t.managerIds?.includes(currentUser?.id || '')
+WorkspaceSettings.tsx:170: t.managerIds?.includes(currentUser?.id || '')
+WorkspaceSettings.tsx:602: // Get Team Heads from team.managerIds
+WorkspaceSettings.tsx:603: const currentHeadIds = team.managerIds || [];
+WorkspaceSettings.tsx:625: {currentHeadIds.map(managerId => {
+WorkspaceSettings.tsx:626: const user = users.find(u => u.id === managerId);
+WorkspaceSettings.tsx:628: <span key={managerId} className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+WorkspaceSettings.tsx:630: <button onClick={() => removeTeamHead(team.id, managerId)} className="hover:text-red-500">

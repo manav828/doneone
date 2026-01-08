@@ -237,7 +237,7 @@ interface AppState {
   removeDepartmentHead: (departmentId: string, userId: string) => Promise<void>; // NEW
 
   // Project-Team Assignment
-  assignProjectToTeam: (projectId: string, teamId: string) => Promise<void>;
+  assignProjectToTeam: (projectId: string, teamId: string, departmentId?: string) => Promise<void>;
   assignMemberToProject: (projectId: string, userId: string, role: Role) => Promise<void>;
   assignProjectManager: (projectId: string, userId: string) => Promise<void>; // NEW
   removeProjectManager: (projectId: string, userId: string) => Promise<void>; // NEW
@@ -312,7 +312,7 @@ const setupRealtimeSubscription = (get: any, set: any) => {
           const newMember = payload.new;
           if (newMember.status === 'pending') {
             const project = projects.find(p => p.id === newMember.project_id);
-            if (project && project.managerId === currentUser.id) {
+            if (project && project.ownerId === currentUser.id) {
               chrome.notifications.create({
                 type: 'basic',
                 iconUrl: 'icon128.png',
@@ -1037,7 +1037,7 @@ export const useStore = create<any>((set, get) => ({
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
 
         // Calculated Flags
-        isPremium: isCustom || (!!plan && plan.price_monthly > 0),
+        isPremium: isCustom || (!!plan && (plan.price_monthly > 0 || Number(plan.price_monthly) > 0)) || (p.premium_until && new Date(p.premium_until).getTime() > Date.now()) || (new Date(p.created_at).getTime() + (30 * 24 * 60 * 60 * 1000) > Date.now()),
         isCustomPlan: isCustom,
         customPlanData: isCustom ? cpd : undefined,
 
@@ -1117,8 +1117,8 @@ export const useStore = create<any>((set, get) => ({
     const { data: members } = await supabase.from('project_members').select('*');
 
     // Fetch managers settings (for premium inheritance)
-    const managerIds = [...new Set((projects || []).map((p: any) => p.manager_id))];
-    const { data: managers } = await supabase.from('profiles').select('*').in('id', managerIds);
+    const ownerIds = [...new Set((projects || []).map((p: any) => p.owner_id))];
+    const { data: owners } = await supabase.from('profiles').select('*').in('id', ownerIds);
 
     const processedProjects: Project[] = (projects || []).map((p: any) => {
       const pMembers = (members || []).filter((m: any) => m.project_id === p.id);
@@ -1129,27 +1129,30 @@ export const useStore = create<any>((set, get) => ({
         }
       });
 
-      const managerUser = (managers || []).find((u: any) => u.id === p.manager_id);
+      const ownerUser = (owners || []).find((u: any) => u.id === p.owner_id);
 
-      let managerHasPremium = false;
-      if (managerUser) {
-        const mPremiumUntil = managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : 0;
+      let ownerHasPremium = false;
+      if (ownerUser) {
+        const oPremiumUntil = ownerUser.premium_until ? new Date(ownerUser.premium_until).getTime() : 0;
         const now = Date.now();
-        if (managerUser.is_custom_plan || mPremiumUntil > now) {
-          managerHasPremium = true;
+        const plan = get().plans.find(pl => pl.id === ownerUser.plan_id);
+        const hasPremiumPlan = !!plan && (plan.price_monthly > 0 || Number(plan.price_monthly) > 0);
+
+        if (ownerUser.is_custom_plan || oPremiumUntil > now || hasPremiumPlan) {
+          ownerHasPremium = true;
         } else {
-          const mCreatedAt = new Date(managerUser.created_at).getTime();
-          if (mCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) {
-            managerHasPremium = true;
+          const oCreatedAt = new Date(ownerUser.created_at).getTime();
+          if (oCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) {
+            ownerHasPremium = true;
           }
         }
       }
 
 
       // FIXED: Use helper functions instead of hardcoded plan IDs
-      const managerCurrency = managerUser?.currency || 'USD';
-      const activePlan = managerHasPremium
-        ? get().getPremiumPlan(managerCurrency)
+      const ownerCurrency = ownerUser?.currency || 'USD';
+      const activePlan = ownerHasPremium
+        ? get().getPremiumPlan(ownerCurrency)
         : get().getFreePlan();
 
       return {
@@ -1159,7 +1162,7 @@ export const useStore = create<any>((set, get) => ({
         code: p.code,
         teamId: p.team_id, // NEW: Link to team
         logo: p.logo,
-        managerId: p.manager_id,
+        ownerId: p.owner_id,
         managerIds: p.manager_ids || [],
         departmentId: p.department_id,
         autoMoveEnabled: p.auto_move_enabled !== undefined ? p.auto_move_enabled : true,
@@ -1168,21 +1171,21 @@ export const useStore = create<any>((set, get) => ({
         pendingJoinRequests: pMembers.filter((m: any) => m.status === 'pending').map((m: any) => m.user_id),
         reportsTo: reportsToMap,
         viewAllReportsEnabled: p.view_all_reports_enabled,
-        manager: managerUser ? {
-          id: managerUser.id,
-          name: managerUser.name,
+        owner: ownerUser ? {
+          id: ownerUser.id,
+          name: ownerUser.name,
           role: 'Manager' as const,
-          email: managerUser.email,
-          createdAt: new Date(managerUser.created_at).getTime(),
-          premiumUntil: managerUser.premium_until ? new Date(managerUser.premium_until).getTime() : undefined,
-          hasPremiumAccess: managerHasPremium,
-          currency: managerUser.currency || 'INR',
+          email: ownerUser.email,
+          createdAt: new Date(ownerUser.created_at).getTime(),
+          premiumUntil: ownerUser.premium_until ? new Date(ownerUser.premium_until).getTime() : undefined,
+          hasPremiumAccess: ownerHasPremium,
+          currency: ownerUser.currency || 'INR',
 
           // [CHANGED] Use OR logic with Plan limits
-          remindersEnabled: managerUser.reminders_enabled || activePlan?.can_set_reminders || activePlan?.canSetReminders || false,
-          imageUploadEnabled: managerUser.image_upload_enabled || activePlan?.can_upload_images || activePlan?.canUploadImages || false,
-          timeTrackingEnabled: managerUser.time_tracking_enabled || true, // Default true
-          maxAttachmentsPerTask: Math.max(managerUser.max_attachments_per_task || 0, activePlan?.max_images_per_task || activePlan?.maxUploadsPerTaskLimit || 0)
+          remindersEnabled: ownerUser.reminders_enabled || activePlan?.can_set_reminders || activePlan?.canSetReminders || false,
+          imageUploadEnabled: ownerUser.image_upload_enabled || activePlan?.can_upload_images || activePlan?.canUploadImages || false,
+          timeTrackingEnabled: ownerUser.time_tracking_enabled || true, // Default true
+          maxAttachmentsPerTask: Math.max(ownerUser.max_attachments_per_task || 0, activePlan?.max_images_per_task || activePlan?.maxUploadsPerTaskLimit || 0)
         } as User & { hasPremiumAccess?: boolean } : undefined
       };
     });
@@ -1208,7 +1211,7 @@ export const useStore = create<any>((set, get) => ({
 
     const validProjects = processedProjects.filter(p =>
       isSuperAdmin ||
-      p.managerId === currentUser.id ||
+      p.ownerId === currentUser.id ||
       p.managerIds?.includes(currentUser.id) ||
       p.leadIds.includes(currentUser.id) ||
       p.resourceIds.includes(currentUser.id) ||
@@ -1615,7 +1618,7 @@ export const useStore = create<any>((set, get) => ({
       get().ensureFixedColumns(id);
       // Trigger a refresh to ensure we have fresh tasks/permissions
       get().fetchTasks();
-      get().fetchProjects(); // To get fresh manager permission
+      get().fetchProjects(); // To get fresh owner permission
       get().loadTaskHistory(id); // Pre-load history
     }
   },
@@ -1625,7 +1628,7 @@ export const useStore = create<any>((set, get) => ({
     if (!get().checkRateLimit('addProject')) return;
     const user = get().currentUser;
     if (!user) return;
-    const myProjects = get().projects.filter(p => p.managerId === user.id);
+    const myProjects = get().projects.filter(p => p.ownerId === user.id);
 
     // Determine Effective Limit from PLANS table
     const isPremium = get().canAccessPremium();
@@ -1658,7 +1661,7 @@ export const useStore = create<any>((set, get) => ({
     const { data } = await supabase.from('projects').insert({
       name,
       description,
-      manager_id: user.id,
+      owner_id: user.id,
       code,
       team_id: teamId, // Use the provided or auto-assigned teamId
       auto_move_enabled: true,  // Enable auto-move by default
@@ -1672,7 +1675,7 @@ export const useStore = create<any>((set, get) => ({
         description: data.description,
         code: data.code,
         teamId: data.team_id, // NEW: Include teamId
-        managerId: data.manager_id,
+        ownerId: data.owner_id,
         // themeColor removed
         autoMoveEnabled: data.auto_move_enabled,
         leadIds: [],
@@ -1680,7 +1683,7 @@ export const useStore = create<any>((set, get) => ({
         pendingJoinRequests: [],
         reportsTo: {},
         viewAllReportsEnabled: data.view_all_reports_enabled,
-        manager: user,
+        owner: user,
         logo: data.logo
       };
 
@@ -1696,7 +1699,7 @@ export const useStore = create<any>((set, get) => ({
   addProjectFromTemplate: async (name, description, template, logo = '') => {
     const user = get().currentUser;
     if (!user) return;
-    const myProjects = get().projects.filter(p => p.managerId === user.id);
+    const myProjects = get().projects.filter(p => p.ownerId === user.id);
     // Determine Effective Limit from PLANS table
     const isPremium = get().canAccessPremium();
     const plans = get().plans;
@@ -1719,7 +1722,7 @@ export const useStore = create<any>((set, get) => ({
     const { data } = await supabase.from('projects').insert({
       name,
       description: description || template.description,
-      manager_id: user.id,
+      owner_id: user.id,
       code,
       logo: logo || ''
     }).select().single();
@@ -1731,7 +1734,7 @@ export const useStore = create<any>((set, get) => ({
         name: data.name,
         description: data.description,
         code: data.code,
-        managerId: data.manager_id,
+        ownerId: data.owner_id,
         // themeColor removed
         autoMoveEnabled: true,
         leadIds: [],
@@ -1739,7 +1742,7 @@ export const useStore = create<any>((set, get) => ({
         pendingJoinRequests: [],
         reportsTo: {},
         viewAllReportsEnabled: false,
-        manager: user,
+        owner: user,
         logo: data.logo
       };
       set(state => ({ projects: [...state.projects, newProject], activeProjectId: data.id }));
@@ -1785,8 +1788,8 @@ export const useStore = create<any>((set, get) => ({
     const project = projects.find(p => p.id === id);
     if (!project) return;
 
-    if (project.managerId !== currentUser?.id && currentUser?.email !== ADMIN_EMAIL) {
-      alert("Only the Project Manager can delete this project.");
+    if (project.ownerId !== currentUser?.id && currentUser?.email !== ADMIN_EMAIL) {
+      alert("Only the Project Owner can delete this project.");
       return;
     }
 
@@ -1806,14 +1809,14 @@ export const useStore = create<any>((set, get) => ({
   resolveJoinRequest: async (projectId, userId, approved) => {
     if (approved) {
       const project = get().projects.find(p => p.id === projectId);
-      const manager = get().users.find(u => u.id === project?.managerId);
-      if (manager) {
+      const owner = get().users.find(u => u.id === project?.ownerId);
+      if (owner) {
         const currentResources = project?.resourceIds.length || 0;
-        let limit = manager.maxResources || 5;
+        let limit = owner.maxResources || 5;
 
-        // Check Manager's Premium Status for Limit Override
-        // We can check if managerHasPremium (calculated in fetchProjects)
-        if (project.manager?.hasPremiumAccess) {
+        // Check Owner's Premium Status for Limit Override
+        // We can check if ownerHasPremium (calculated in fetchProjects)
+        if (project.owner?.hasPremiumAccess) {
           const premiumPlan = get().plans.find(p => p.id === 'premium');
           if (premiumPlan) {
             // Using maxMembersPerProject as the resource limit proxy if undefined?
@@ -1823,7 +1826,7 @@ export const useStore = create<any>((set, get) => ({
           }
         }
 
-        if (currentResources >= limit && manager.email !== ADMIN_EMAIL) {
+        if (currentResources >= limit && owner.email !== ADMIN_EMAIL) {
           alert(`Manager limit reached!`);
           return;
         }
@@ -1871,31 +1874,31 @@ export const useStore = create<any>((set, get) => ({
       // User said "can not invite any member".
       // If free plan: canInvite = false.
 
-      const manager = get().users.find(u => u.id === project.managerId);
-      if (manager) {
-        // Determine Plan based on MANAGER's status
-        const isManagerPremium = manager.isPremium;
+      const owner = get().users.find(u => u.id === project.ownerId);
+      if (owner) {
+        // Determine Plan based on OWNER's status
+        const isOwnerPremium = owner.isPremium;
         const plans = get().plans;
-        const managerPlan = isManagerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+        const ownerPlan = isOwnerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
 
         // Calculate Effective Limits (Profile > Plan > Default)
-        // Note: manager object here is raw profile, does not have merged plan props like currentUser
-        const planLimit = managerPlan?.maxMembersPerProject || 5;
-        const profileLimit = manager.maxResources || 0; // Using maxResources as generic member/resource limit if needed, or maxMembers if column existed
+        // Note: owner object here is raw profile, does not have merged plan props like currentUser
+        const planLimit = ownerPlan?.maxMembersPerProject || 5;
+        const profileLimit = owner.maxResources || 0; // Using maxResources as generic member/resource limit if needed, or maxMembers if column existed
         // Actually, we should check what 'activePlan.maxMembersPerProject' maps to.
         // For now, use the greater of the two.
         const effectiveLimit = Math.max(profileLimit, planLimit);
 
-        const canInvite = manager.canInvite || (managerPlan?.canInviteMembers ?? false);
+        const canInvite = owner.canInvite || (ownerPlan?.canInviteMembers ?? false);
 
         // 1. Check if inviting is allowed
-        if (!canInvite && manager.email !== ADMIN_EMAIL) {
+        if (!canInvite && owner.email !== ADMIN_EMAIL) {
           alert("The Project Owner's plan does not allow inviting members.");
           return;
         }
 
         // 2. Check Member Limits
-        if (totalMembers >= effectiveLimit && manager.email !== ADMIN_EMAIL) {
+        if (totalMembers >= effectiveLimit && owner.email !== ADMIN_EMAIL) {
           alert(`Project limit reached. The Owner's plan allows max ${effectiveLimit} members.`);
           return;
         }
@@ -1921,19 +1924,19 @@ export const useStore = create<any>((set, get) => ({
     }
 
     if (role === 'Lead') {
-      const manager = get().users.find(u => u.id === project.managerId);
-      if (manager) {
+      const owner = get().users.find(u => u.id === project.ownerId);
+      if (owner) {
         const currentLeads = project.leadIds.length || 0;
-        const isManagerPremium = manager.isPremium;
+        const isOwnerPremium = owner.isPremium;
         const plans = get().plans;
-        const managerPlan = isManagerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+        const ownerPlan = isOwnerPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
 
-        const planLeadLimit = managerPlan?.maxLeadsPerProject || (isManagerPremium ? 5 : 2);
-        const profileLeadLimit = manager.maxLeads || 0;
+        const planLeadLimit = ownerPlan?.maxLeadsPerProject || (isOwnerPremium ? 5 : 2);
+        const profileLeadLimit = owner.maxLeads || 0;
 
         const effectiveLeadLimit = Math.max(profileLeadLimit, planLeadLimit);
 
-        if (currentLeads >= effectiveLeadLimit && manager.email !== ADMIN_EMAIL) {
+        if (currentLeads >= effectiveLeadLimit && owner.email !== ADMIN_EMAIL) {
           alert(`Limit reached!`);
           return;
         }
@@ -1973,14 +1976,14 @@ export const useStore = create<any>((set, get) => ({
     const project = projects.find(p => p.id === projectId);
 
     if (project) {
-      const managerId = project.managerId;
+      const ownerId = project.ownerId;
 
-      // Get all projects managed by this user
-      const managerProjects = projects.filter(p => p.managerId === managerId);
+      // Get all projects owned by this user
+      const ownerProjects = projects.filter(p => p.ownerId === ownerId);
 
       // Calculate total members across all manager's projects (Leads + Resources, not counting manager themselves)
       let maxMembersInAnyProject = 0;
-      managerProjects.forEach(p => {
+      ownerProjects.forEach(p => {
         // Count after removal
         let memberCount = (p.leadIds?.length || 0) + (p.resourceIds?.length || 0);
         // If this is the project we removed from, decrement by 1
@@ -1993,16 +1996,16 @@ export const useStore = create<any>((set, get) => ({
       });
 
       // Fetch manager's profile to get their limits
-      const { data: manager } = await supabase
+      const { data: owner } = await supabase
         .from('profiles')
         .select('id, max_resources, extra_seats, per_seat_cost')
-        .eq('id', managerId)
+        .eq('id', ownerId)
         .single();
 
-      if (manager) {
-        const baseLimit = manager.max_resources || 5;
-        const currentExtraSeats = manager.extra_seats || 0;
-        const perSeatCost = manager.per_seat_cost || 5;
+      if (owner) {
+        const baseLimit = owner.max_resources || 5;
+        const currentExtraSeats = owner.extra_seats || 0;
+        const perSeatCost = owner.per_seat_cost || 5;
         const PLAN_BASE_PRICE = 19; // Hardcoded, could be from plans
 
         // Calculate how many extra seats are actually NEEDED
@@ -2021,11 +2024,11 @@ export const useStore = create<any>((set, get) => ({
           await supabase.from('profiles').update({
             extra_seats: newExtraSeats,
             plan_base_cost: newPlanBaseCost
-          }).eq('id', managerId);
+          }).eq('id', ownerId);
 
           // Log transaction
           await supabase.from('transactions').insert({
-            user_id: managerId,
+            user_id: ownerId,
             amount: 0, // No charge for auto-reduction
             status: 'completed',
             description: `Auto-reduced ${seatsToRemove} extra seat(s) after member removal. New monthly: $${newPlanBaseCost}.`,
@@ -2235,10 +2238,10 @@ export const useStore = create<any>((set, get) => ({
     const project = state.projects.find(p => p.id === task.projectId);
     if (!project) return;
 
-    const isManager = project.managerId === user.id;
+    const isOwner = project.ownerId === user.id;
     const isLead = project.leadIds.includes(user.id);
     const isAssignee = task.assigneeId === user.id;
-    if (!isManager && !isLead && !isAssignee) return;
+    if (!isOwner && !isLead && !isAssignee) return;
 
     const allTasks = [...state.tasks];
     const oldColumnId = task.columnId;
@@ -2269,7 +2272,7 @@ export const useStore = create<any>((set, get) => ({
       // RESTRICTION: Only if User has Premium AND Manager enabled Time Tracking
       // CHANGED: Use PROJECT OWNER'S Plan (canProjectUsePremium)
       const hasPremium = get().canProjectUsePremium(project.id);
-      const projectManager = state.users.find(u => u.id === project.managerId);
+      const projectOwner = state.users.find(u => u.id === project.ownerId);
       // SIMPLIFIED: If Owner is Premium, Time Tracking is Enabled. Ignore explicit flag.
       const timeTrackingEnabled = hasPremium;
 
@@ -2278,10 +2281,10 @@ export const useStore = create<any>((set, get) => ({
         taskId: updatedTask.id,
         projectId: project.id,
         canProjectUsePremium: hasPremium,
-        managerId: project.managerId,
-        managerFound: !!projectManager,
-        managerIsPremium: projectManager?.isPremium,
-        managerTimeTracking: projectManager?.timeTrackingEnabled,
+        ownerId: project.ownerId,
+        ownerFound: !!projectOwner,
+        ownerIsPremium: projectOwner?.isPremium,
+        ownerTimeTracking: projectOwner?.timeTrackingEnabled,
         FINAL_ENABLED: timeTrackingEnabled
       });
 
@@ -2389,7 +2392,7 @@ export const useStore = create<any>((set, get) => ({
     await supabase.from('tasks').upsert(batch);
 
     if (task.columnId !== newColumnId) {
-      const manager = state.users.find(u => u.id === project.managerId);
+      const owner = state.users.find(u => u.id === project.ownerId);
 
       // Determine recipients based on hierarchy
       const recipients = new Set<string>();
@@ -2398,12 +2401,12 @@ export const useStore = create<any>((set, get) => ({
       if (project.resourceIds.includes(user.id)) {
         const leadId = project.reportsTo[user.id];
         if (leadId) recipients.add(leadId);
-        recipients.add(project.managerId);
+        recipients.add(project.ownerId);
       }
 
       // 2. If user is Lead, notify Manager
       if (project.leadIds.includes(user.id)) {
-        recipients.add(project.managerId);
+        recipients.add(project.ownerId);
       }
 
       // Remove self from recipients
@@ -2775,11 +2778,11 @@ export const useStore = create<any>((set, get) => ({
     if (activeProjectId) {
       const project = projects.find(p => p.id === activeProjectId);
       if (project) {
-        const manager = users.find(u => u.id === project.managerId);
-        if (manager) {
-          limitOwner = manager;
+        const owner = users.find(u => u.id === project.ownerId);
+        if (owner) {
+          limitOwner = owner;
           // Note: 'users' array has raw profiles. 'isPremium' is on the profile.
-          limitOwnerPlan = manager.isPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
+          limitOwnerPlan = owner.isPremium ? plans.find(p => p.id === 'premium') : plans.find(p => p.id === 'free');
         }
       }
     }
@@ -3345,7 +3348,7 @@ export const useStore = create<any>((set, get) => ({
     let allowedTasks = [];
     const { teams } = get();
     const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
-    const isManager = project.managerId === currentUser.id;
+    const isOwner = project.ownerId === currentUser.id;
 
     // Check Team Head
     let isTeamHead = false;
@@ -3357,7 +3360,7 @@ export const useStore = create<any>((set, get) => ({
     // Check Project Lead (someone who has members reporting to them in this project)
     const isLead = project.reportsTo && Object.values(project.reportsTo).includes(currentUser.id);
 
-    if (isSuperAdmin || isManager || isTeamHead) {
+    if (isSuperAdmin || isOwner || isTeamHead) {
       allowedTasks = projectTasks;
     } else if (isLead) {
       // Lead sees: Assigned to self OR Assigned to their team members OR Discussion participant
@@ -3442,7 +3445,7 @@ export const useStore = create<any>((set, get) => ({
         // Return users who are team members OR project members (safety)
         return users.filter(u =>
           memberIds.includes(u.id) ||
-          u.id === project.managerId ||
+          u.id === project.ownerId ||
           project.leadIds.includes(u.id) ||
           project.resourceIds.includes(u.id)
         );
@@ -3451,16 +3454,16 @@ export const useStore = create<any>((set, get) => ({
 
     // Strictly strictly project members only (for regular users)
     const projectMembers = users.filter(u =>
-      u.id === project.managerId ||
+      u.id === project.ownerId ||
       project.leadIds.includes(u.id) ||
       project.resourceIds.includes(u.id)
     );
 
-    const isManager = project.managerId === currentUser.id;
+    const isOwner = project.ownerId === currentUser.id;
     const isLead = project.leadIds.includes(currentUser.id);
 
-    // Project Manager sees all project members
-    if (isManager) return projectMembers;
+    // Project Owner sees all project members
+    if (isOwner) return projectMembers;
 
     // Lead sees: Self + Resources reporting to them
     if (isLead) {
@@ -3517,7 +3520,7 @@ export const useStore = create<any>((set, get) => ({
 
     if (!authorityId) {
       // Personal Project OR no team found: Use Project Manager
-      authorityId = project.managerId;
+      authorityId = project.ownerId;
     }
 
     // Get Authority's profile
@@ -3525,37 +3528,40 @@ export const useStore = create<any>((set, get) => ({
     if (!authority) return get().getFreePlan();
 
     // Check if authority's subscription is valid
+    // A subscription is valid if premiumUntil is in the future OR if it's a custom plan OR if plan_id is set
+    // (We rely on the isPremium flag pre-computed in fetchUsers)
     const now = Date.now();
-    const premiumValid = authority.premiumUntil && authority.premiumUntil > now;
+    const premiumValid = authority.isPremium || (authority.premiumUntil && authority.premiumUntil > now);
 
     // Case 1: Custom Plan - use profile's custom data
-    if (authority.isCustomPlan && premiumValid) {
+    if ((authority.isCustomPlan || authority.id === 'custom') && premiumValid) {
       // Return a "virtual plan" from customPlanData
+      const cpd = authority.customPlanData || {};
       return {
         id: 'custom',
         name: 'Custom Plan',
         currency: authority.currency || 'USD',
-        price_monthly: authority.customPlanData?.baseCost || authority.planBaseCost || 0,
+        price_monthly: cpd.baseCost || authority.planBaseCost || 0,
         price_yearly: 0,
-        price_per_seat_monthly: authority.customPlanData?.seatCost || authority.perSeatCost || 0,
+        price_per_seat_monthly: cpd.seatCost || authority.perSeatCost || 0,
         price_per_seat_yearly: 0,
-        max_projects: authority.customPlanData?.maxProjects || authority.maxProjects || 999,
-        max_members_per_project: authority.customPlanData?.maxResources || authority.maxResources || 50,
-        max_leads_per_project: authority.customPlanData?.maxLeads || authority.maxLeads || 50,
+        max_projects: cpd.maxProjects || authority.maxProjects || 999,
+        max_members_per_project: cpd.maxResources || authority.maxResources || 50,
+        max_leads_per_project: cpd.maxLeads || authority.maxLeads || 50,
         max_upload_size_mb: 100,
-        max_images_per_task: authority.customPlanData?.maxAttachments || authority.maxAttachmentsPerTask || 10,
-        history_retention_days: authority.customPlanData?.historyRetentionDays || 365,
-        can_invite_members: authority.customPlanData?.canInvite ?? true,
-        can_upload_images: authority.customPlanData?.imageUpload ?? true,
-        can_set_reminders: authority.customPlanData?.reminders ?? true,
-        can_use_notifications: authority.customPlanData?.notifications ?? true,
-        can_export_data: authority.customPlanData?.canExport ?? true,
+        max_images_per_task: cpd.maxAttachments || authority.maxAttachmentsPerTask || 10,
+        history_retention_days: cpd.historyRetentionDays || 365,
+        can_invite_members: cpd.canInvite ?? true,
+        can_upload_images: cpd.imageUpload ?? true,
+        can_set_reminders: cpd.reminders ?? true,
+        can_use_notifications: cpd.notifications ?? true,
+        can_export_data: cpd.canExport ?? true,
         can_view_history: true,
       } as any;
     }
 
     // Case 2: Standard Plan - use linked plan from plans table
-    if (authority.planId && premiumValid) {
+    if (authority.planId && (premiumValid || !authority.premiumUntil)) {
       const linkedPlan = plans.find(p => p.id === authority.planId);
       if (linkedPlan) return linkedPlan;
     }
@@ -3581,7 +3587,8 @@ export const useStore = create<any>((set, get) => ({
     const { projects, currentUser } = get();
     if (currentUser?.email === ADMIN_EMAIL) return projects;
     return projects.filter(p =>
-      p.managerId === currentUser?.id ||
+      p.ownerId === currentUser?.id ||
+      p.managerIds?.includes(currentUser?.id || '') ||
       p.leadIds.includes(currentUser?.id || '') ||
       p.resourceIds.includes(currentUser?.id || '')
     );
@@ -3620,10 +3627,10 @@ export const useStore = create<any>((set, get) => ({
       isDeptHead = true;
     }
 
-    // Tier 3: Project Manager (Creator or Delegated)
-    const isProjectCreator = project.managerId === currentUser.id;
+    // Tier 3: Project Owner (Creator) or Delegated Manager
+    const isProjectOwner = project.ownerId === currentUser.id;
     const isDelegatedPM = project.managerIds?.includes(currentUser.id);
-    const isProjectManager = isProjectCreator || isDelegatedPM;
+    const isProjectManager = isProjectOwner || isDelegatedPM;
 
     let computedRole: Role = 'Resource';
 
@@ -3824,11 +3831,11 @@ export const useStore = create<any>((set, get) => ({
     // Filter by Visibility Rules (Hierarchy)
     let visibleHistory = taskHistory;
     if (activeProject && currentUser) {
-      const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+      const isOwner = activeProject.ownerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
       const viewAllEnabled = activeProject.viewAllReportsEnabled;
       const isLead = activeProject.leadIds?.includes(currentUser.id);
 
-      if (!isManager && !viewAllEnabled) {
+      if (!isOwner && !viewAllEnabled) {
         if (isLead) {
           const teamMemberIds = Object.entries(activeProject.reportsTo || {})
             .filter(([_, leadId]) => leadId === currentUser.id)
@@ -4695,10 +4702,13 @@ export const useStore = create<any>((set, get) => ({
   },
 
   // Project-Team Assignment
-  assignProjectToTeam: async (projectId, teamId) => {
+  assignProjectToTeam: async (projectId, teamId, departmentId) => {
     await supabase
       .from('projects')
-      .update({ team_id: teamId })
+      .update({
+        team_id: teamId,
+        department_id: departmentId
+      })
       .eq('id', projectId);
 
     await get().fetchProjects();
@@ -4788,7 +4798,7 @@ export const useStore = create<any>((set, get) => ({
 
     // 3. Project Manager: See everyone in their projects
     const managedProjectIds = projects
-      .filter(p => p.managerId === currentUser.id || p.managerIds?.includes(currentUser.id))
+      .filter(p => p.ownerId === currentUser.id || p.managerIds?.includes(currentUser.id))
       .map(p => p.id);
 
     if (managedProjectIds.length > 0) {
@@ -4843,7 +4853,8 @@ export const useStore = create<any>((set, get) => ({
     // Personal projects: no team AND user is manager, lead, or resource
     return projects.filter(p =>
       !p.teamId && (
-        p.managerId === currentUser.id ||
+        p.ownerId === currentUser.id ||
+        p.managerIds?.includes(currentUser.id) ||
         p.leadIds?.includes(currentUser.id) ||
         p.resourceIds?.includes(currentUser.id)
       )

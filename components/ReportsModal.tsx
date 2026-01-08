@@ -28,7 +28,7 @@ export const ReportsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const totalEstimatedTime = projectTasks.reduce((acc, t) => acc + (t.estimatedTime || 0), 0);
 
     const projectMembers = users.filter(u =>
-        u.id === activeProject.managerId ||
+        u.id === activeProject.ownerId ||
         activeProject.leadIds.includes(u.id) ||
         activeProject.resourceIds.includes(u.id)
     );

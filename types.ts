@@ -236,7 +236,7 @@ export interface Project {
   code?: string; // DEPRECATED: Join codes now at team level (kept for backward compat)
   teamId?: string; // NEW: Link to team (null for personal/free projects)
   departmentId?: string; // NEW: Link to department
-  managerId: string; // The Creator
+  ownerId: string; // The Creator
   managerIds?: string[]; // NEW: Delegated Project Managers
   leadIds: string[]; // Derived from project_members
   resourceIds: string[]; // Derived from project_members
@@ -245,7 +245,7 @@ export interface Project {
   // themeColor removed for Unified Design System
   autoMoveEnabled: boolean; // Enable auto-move from Pending to In Progress (default: true)
   viewAllReportsEnabled?: boolean; // If true, all members can see all reports (default: false)
-  manager?: User & { hasPremiumAccess?: boolean }; // Full manager details including premium status
+  owner?: User & { hasPremiumAccess?: boolean }; // Full owner details including premium status
   logo?: string; // URL to project logo image
   // Computed
   team?: Team;

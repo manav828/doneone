@@ -40,9 +40,9 @@ export const DailyTimer: React.FC = () => {
     )?.id || null;
 
     // Check if user is manager/lead to see team stats
-    const isManager = activeProject?.managerId === currentUser?.id || currentUser?.email === 'manavss828@gmail.com';
+    const isOwner = activeProject?.ownerId === currentUser?.id || currentUser?.email === 'manavss828@gmail.com';
     const isLead = activeProject?.leadIds?.includes(currentUser?.id || '');
-    const canViewTeam = isManager || isLead;
+    const canViewTeam = isOwner || isLead;
     const isViewingAllTeam = activeMemberFilter === null || activeMemberFilter === 'ALL';
 
     // Fetch daily logs from database
@@ -130,7 +130,7 @@ export const DailyTimer: React.FC = () => {
         const teamMemberIds = new Set<string>();
 
         // Add manager
-        if (activeProject.managerId) teamMemberIds.add(activeProject.managerId);
+        if (activeProject.ownerId) teamMemberIds.add(activeProject.ownerId);
 
         // Add leads
         activeProject.leadIds?.forEach(id => teamMemberIds.add(id));
@@ -139,7 +139,7 @@ export const DailyTimer: React.FC = () => {
         activeProject.resourceIds?.forEach(id => teamMemberIds.add(id));
 
         // For leads, only show their team
-        if (isLead && !isManager) {
+        if (isLead && !isOwner) {
             const myTeamIds = Object.entries(activeProject.reportsTo || {})
                 .filter(([_, leadId]) => leadId === currentUser?.id)
                 .map(([resourceId]) => resourceId);
@@ -160,7 +160,7 @@ export const DailyTimer: React.FC = () => {
                 isRunning,
             };
         }).sort((a, b) => b.totalSeconds - a.totalSeconds); // Sort by most time
-    }, [canViewTeam, isViewingAllTeam, activeProject, users, tasks, tick, isLead, isManager, currentUser, dailyLogs]);
+    }, [canViewTeam, isViewingAllTeam, activeProject, users, tasks, tick, isLead, isOwner, currentUser, dailyLogs]);
 
     // Format seconds to display string
     const formatTime = (seconds: number, showSeconds: boolean = false): string => {

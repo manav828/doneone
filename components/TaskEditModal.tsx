@@ -23,15 +23,15 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const activeProject = projects.find(p => p.id === activeProjectId);
 
     // FIXED PERMISSION LOGIC:
-    // If I am the manager of this project, use MY settings (always fresh from currentUser)
-    // If I am NOT the manager, use the project manager's settings
-    const isManager = activeProject?.managerId === currentUser?.id;
-    const effectiveManager = isManager ? currentUser : activeProject?.manager;
+    // If I am the owner of this project, use MY settings (always fresh from currentUser)
+    // If I am NOT the owner, use the project owner's settings
+    const isOwner = activeProject?.ownerId === currentUser?.id;
+    const effectiveOwner = isOwner ? currentUser : activeProject?.owner;
 
     const isLead = activeProject?.leadIds.includes(currentUser?.id || '');
-    const remindersEnabled = effectiveManager?.remindersEnabled || false;
-    const timeTrackingEnabled = effectiveManager?.timeTrackingEnabled || false;
-    const imageUploadEnabled = effectiveManager?.imageUploadEnabled || false;
+    const remindersEnabled = effectiveOwner?.remindersEnabled || false;
+    const timeTrackingEnabled = effectiveOwner?.timeTrackingEnabled || false;
+    const imageUploadEnabled = effectiveOwner?.imageUploadEnabled || false;
 
     const [localTitle, setLocalTitle] = useState(task.title);
     const [localDesc, setLocalDesc] = useState(task.description || '');
@@ -400,7 +400,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                             {users
                                                 .filter(u =>
                                                     !activeProject ? false :
-                                                        u.id === activeProject.managerId ||
+                                                        u.id === activeProject.ownerId ||
                                                         activeProject.leadIds.includes(u.id) ||
                                                         activeProject.resourceIds.includes(u.id)
                                                 )
@@ -473,7 +473,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                         </div>
                                         <div className="max-h-24 overflow-y-auto p-1.5 space-y-0.5">
                                             {users
-                                                .filter(u => activeProject?.managerId === u.id || activeProject?.leadIds.includes(u.id) || activeProject?.resourceIds.includes(u.id))
+                                                .filter(u => activeProject?.ownerId === u.id || activeProject?.leadIds.includes(u.id) || activeProject?.resourceIds.includes(u.id))
                                                 .map(user => (
                                                     <label key={user.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded cursor-pointer">
                                                         <input
@@ -756,7 +756,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                                             const taskProject = projects.find(p => p.id === projectId);
                                                             const projectMembers = users.filter(u =>
                                                                 taskProject ? (
-                                                                    u.id === taskProject.managerId ||
+                                                                    u.id === taskProject.ownerId ||
                                                                     taskProject.leadIds?.includes(u.id) ||
                                                                     taskProject.resourceIds?.includes(u.id)
                                                                 ) : false

@@ -889,7 +889,7 @@ export const AdminPanel: React.FC = () => {
                                                 <div className="w-3 h-3 rounded-full bg-primary"></div>
                                                 <h4 className="font-bold text-gray-800 dark:text-white truncate">{p.name}</h4>
                                             </div>
-                                            <p className="text-xs text-gray-500 mb-2">Manager: {users.find(u => u.id === p.managerId)?.name || p.manager?.name || 'Unknown'}</p>
+                                            <p className="text-xs text-gray-500 mb-2">Owner: {users.find(u => u.id === p.ownerId)?.name || p.owner?.name || 'Unknown'}</p>
                                             <p className="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded w-fit text-gray-600 dark:text-gray-300">
                                                 Code: {p.code}
                                             </p>

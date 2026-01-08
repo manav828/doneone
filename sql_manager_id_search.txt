@@ -1,0 +1,77 @@
+﻿add_manager_ids.sql:1: -- Add manager_ids column to departments table
+add_manager_ids.sql:4: IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'departments' AND column_name = 'manager_ids') THEN
+add_manager_ids.sql:5: ALTER TABLE departments ADD COLUMN manager_ids TEXT[] DEFAULT ARRAY[]::TEXT[];
+add_manager_ids.sql:9: -- Add manager_ids column to projects table
+add_manager_ids.sql:12: IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'projects' AND column_name = 'manager_ids') THEN
+add_manager_ids.sql:13: ALTER TABLE projects ADD COLUMN manager_ids TEXT[] DEFAULT ARRAY[]::TEXT[];
+add_manager_ids.sql:17: -- Migrate existing project manager_id to manager_ids array if needed (optional, for backward compatibility)
+add_manager_ids.sql:19: SET manager_ids = array_append(manager_ids, manager_id::TEXT)
+add_manager_ids.sql:20: WHERE manager_id IS NOT NULL AND manager_ids IS NOT NULL AND NOT (manager_id::TEXT = ANY(manager_ids));
+add_team_manager_ids.sql:1: -- Add manager_ids column to teams table for storing Team Heads
+add_team_manager_ids.sql:5: ADD COLUMN IF NOT EXISTS manager_ids UUID[] DEFAULT '{}';
+add_team_manager_ids.sql:8: CREATE INDEX IF NOT EXISTS idx_teams_manager_ids ON teams USING GIN (manager_ids);
+admin_actions.sql:22: SELECT ARRAY_AGG(id) INTO project_ids FROM projects WHERE manager_id = target_user_id;
+complete_schema.sql:65: manager_id uuid REFERENCES public.profiles(id),
+complete_schema.sql:260: v_manager_id uuid;
+complete_schema.sql:264: SELECT id, manager_id INTO v_project_id, v_manager_id
+complete_schema.sql:274: IF v_manager_id = auth.uid() THEN
+create_daily_work_logs.sql:48: AND projects.manager_id = auth.uid()
+create_daily_work_logs.sql:127: SELECT proj.manager_id FROM projects proj WHERE proj.id = p_project_id
+create_teams_tables.sql:291: p.manager_id,
+create_teams_tables.sql:295: JOIN profiles pr ON p.manager_id = pr.id
+create_teams_tables.sql:296: WHERE p.manager_id IS NOT NULL
+create_teams_tables.sql:298: AND NOT EXISTS (SELECT 1 FROM teams t WHERE t.owner_id = p.manager_id)
+create_teams_tables.sql:305: WHERE t.owner_id = p.manager_id
+database.sql:47: manager_id uuid REFERENCES public.profiles(id),
+database.sql:172: v_manager_id uuid;
+database.sql:176: SELECT id, manager_id INTO v_project_id, v_manager_id
+database.sql:186: IF v_manager_id = auth.uid() THEN
+fix_columns_rls.sql:21: p.manager_id = auth.uid() -- Project Manager
+fix_columns_rls.sql:22: OR auth.uid()::text = ANY(p.manager_ids::text[]) -- Project Co-Manager
+fix_columns_rls.sql:25: SELECT 1 FROM teams t WHERE t.id = p.team_id AND auth.uid()::text = ANY(t.manager_ids::text[])
+fix_columns_rls.sql:50: p.manager_id = auth.uid()
+fix_columns_rls.sql:51: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_columns_rls.sql:54: (t.owner_id = auth.uid() OR auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_columns_rls.sql:70: p.manager_id = auth.uid()
+fix_columns_rls.sql:71: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_columns_rls.sql:74: (t.owner_id = auth.uid() OR auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_columns_rls.sql:90: p.manager_id = auth.uid()
+fix_columns_rls.sql:91: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_columns_rls.sql:94: (t.owner_id = auth.uid() OR auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_company_read_policy.sql:27: WHERE manager_ids @> ARRAY[auth.uid()]
+fix_recursive_rls.sql:17: OR auth.uid()::text = ANY(manager_ids::text[])
+fix_tasks_rls.sql:24: p.manager_id = auth.uid()
+fix_tasks_rls.sql:26: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_tasks_rls.sql:30: OR EXISTS (SELECT 1 FROM teams t WHERE t.id = p.team_id AND auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_tasks_rls.sql:46: p.manager_id = auth.uid()
+fix_tasks_rls.sql:47: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_tasks_rls.sql:49: (t.owner_id = auth.uid() OR auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_tasks_rls.sql:66: p.manager_id = auth.uid()
+fix_tasks_rls.sql:67: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_tasks_rls.sql:69: (t.owner_id = auth.uid() OR auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_tasks_rls.sql:85: p.manager_id = auth.uid()
+fix_tasks_rls.sql:86: OR auth.uid()::text = ANY(p.manager_ids::text[])
+fix_tasks_rls.sql:88: (t.owner_id = auth.uid() OR auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_teams_rls.sql:16: -- User is a Team Head (in manager_ids)
+fix_teams_rls.sql:17: OR auth.uid()::text = ANY(manager_ids::text[])
+fix_teams_rls.sql:40: OR auth.uid()::text = ANY(manager_ids::text[])
+fix_team_head_rls.sql:42: manager_id = auth.uid()
+fix_team_head_rls.sql:43: OR auth.uid()::text = ANY(manager_ids::text[])
+fix_team_head_rls.sql:45: OR EXISTS (SELECT 1 FROM teams t WHERE t.id = team_id AND auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_team_head_rls.sql:48: CREATE POLICY "projects_insert" ON projects FOR INSERT WITH CHECK (manager_id = auth.uid());
+fix_team_head_rls.sql:49: CREATE POLICY "projects_update" ON projects FOR UPDATE USING (manager_id = auth.uid());
+fix_team_head_rls.sql:50: CREATE POLICY "projects_delete" ON projects FOR DELETE USING (manager_id = auth.uid());
+fix_team_members_rls.sql:22: OR EXISTS (SELECT 1 FROM teams t WHERE t.id = team_members.team_id AND auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_team_members_rls.sql:31: OR EXISTS (SELECT 1 FROM teams t WHERE t.id = team_id AND auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_team_members_rls.sql:41: OR EXISTS (SELECT 1 FROM teams t WHERE t.id = team_members.team_id AND auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_team_members_rls.sql:49: OR EXISTS (SELECT 1 FROM teams t WHERE t.id = team_members.team_id AND auth.uid()::text = ANY(t.manager_ids::text[]))
+fix_user_deletion_final.sql:43: DELETE FROM projects WHERE manager_id = target_user_id; -- Assuming manager_id is ownerish
+fix_user_deletion_final.sql:44: -- Or if projects have owner_id column? Projects table usually has manager_id as creator/lead
+secure_database.sql:66: AND projects.manager_id = auth.uid()
+secure_database.sql:108: manager_id = auth.uid() OR is_project_member(id) OR is_admin()
+secure_database.sql:112: CREATE POLICY "Projects: Insert" ON projects FOR INSERT WITH CHECK (auth.uid() = manager_id);
+secure_database.sql:115: CREATE POLICY "Projects: Update if manager" ON projects FOR UPDATE USING (manager_id = auth.uid() OR is_admin());
+secure_database.sql:118: CREATE POLICY "Projects: Delete if manager" ON projects FOR DELETE USING (manager_id = auth.uid() OR is_admin());
+secure_database.sql:125: EXISTS (SELECT 1 FROM projects WHERE id = project_id AND manager_id = auth.uid()) OR
+seed_data.sql:31: INSERT INTO projects (id, name, description, logo, theme_color, created_at, manager_id) VALUES
+seed_data.sql:37: manager_id = EXCLUDED.manager_id;

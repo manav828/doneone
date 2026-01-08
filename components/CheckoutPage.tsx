@@ -119,7 +119,7 @@ export const CheckoutPage: React.FC = () => {
             const currentTotal = (currentUser?.extraSeats || 0) + (currentUser?.maxResources || PLAN_MEMBERS_LIMIT);
             const newTotal = currentTotal + quantity;
 
-            const myProjects = projects.filter((p: any) => p.managerId === currentUser?.id);
+            const myProjects = projects.filter((p: any) => p.ownerId === currentUser?.id);
             const violations: any[] = [];
             const missing: Record<string, number> = {};
 
