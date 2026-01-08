@@ -249,11 +249,11 @@ export const TopBar: React.FC = () => {
 
           {activeProject && location.pathname === '/' && (
             <div className="flex items-center gap-1 mr-4 border-r border-slate-200 dark:border-slate-700 pr-4">
-              {activeProject.managerId === currentUser.id && (
+              {activeProject.ownerId === currentUser.id && (
                 <button
                   onClick={() => setIsReportsModalOpen(true)}
                   className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
-                  title="Reports (Manager Only)"
+                  title="Reports (Owner Only)"
                 >
                   <BarChart size={18} />
                 </button>

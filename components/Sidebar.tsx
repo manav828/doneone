@@ -14,6 +14,7 @@ import { TeamSettingsModal } from './TeamSettingsModal';
 import { JoinTeamModal } from './JoinTeamModal';
 import { CreateTeamModal } from './CreateTeamModal';
 import { Team } from '../types';
+import { MigrateProjectModal } from './MigrateProjectModal';
 
 // --- Extracted Components ---
 
@@ -24,6 +25,7 @@ const SidebarProjectCard = ({
   can,
   onEdit,
   onDelete,
+  onMigrate,
   onSelect
 }: any) => (
   <div
@@ -55,11 +57,23 @@ const SidebarProjectCard = ({
     </div>
 
     {!isCollapsed && (
-      <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+      <div className="flex transition-opacity gap-0.5">
+        {(!project.teamId || project.teamId === 'null') && (
+          <button
+            onClick={(e) => onMigrate(e, project.id)}
+            className={`p-1 rounded transition-all transform hover:scale-110 ${activeProjectId === project.id
+              ? 'text-[#FF6B35] bg-[#FF6B35]/10'
+              : 'text-amber-500 bg-amber-500/10 hover:bg-amber-500/20'
+              }`}
+            title="Move to Organization"
+          >
+            <Building2 size={13} />
+          </button>
+        )}
         {can('editSettings', project.id) && (
           <button
             onClick={(e) => onEdit(e, project)}
-            className={`p-1 rounded transition-colors ${activeProjectId === project.id ? 'text-[#FF6B35] hover:bg-[#FF6B35]/10' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-300 dark:hover:bg-slate-700'}`}
+            className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${activeProjectId === project.id ? 'text-[#FF6B35] hover:bg-[#FF6B35]/10' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-300 dark:hover:bg-slate-700'}`}
             title="Edit Project"
           >
             <Edit2 size={12} />
@@ -129,6 +143,7 @@ const SidebarTeamSection = ({
               can={can}
               onEdit={onEditProject}
               onDelete={onDeleteProject}
+              onMigrate={() => { }} // No migration for team projects
               onSelect={onSelectProject}
             />
           ))}
@@ -189,6 +204,10 @@ export const Sidebar: React.FC = () => {
   const [isTeamSettingsOpen, setIsTeamSettingsOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [creatingForTeamId, setCreatingForTeamId] = useState<string | null>(null);
+
+  // Migration state
+  const [isMigrateModalOpen, setIsMigrateModalOpen] = useState(false);
+  const [migrationProjectId, setMigrationProjectId] = useState<string | null>(null);
 
   // Form states
   const [newProjectName, setNewProjectName] = useState('');
@@ -301,6 +320,12 @@ export const Sidebar: React.FC = () => {
     setEditViewAllReports(project.viewAllReportsEnabled || false);
     setEditLogoUrl(project.logo || '');
     setIsEditModalOpen(true);
+  };
+
+  const openMigrateModal = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setMigrationProjectId(id);
+    setIsMigrateModalOpen(true);
   };
 
   const handleEditSave = (e: React.FormEvent) => {
@@ -507,6 +532,7 @@ export const Sidebar: React.FC = () => {
                     can={can}
                     onEdit={openEditModal}
                     onDelete={handleDelete}
+                    onMigrate={openMigrateModal}
                     onSelect={handleProjectSelect}
                   />
                 ))}
@@ -615,6 +641,17 @@ export const Sidebar: React.FC = () => {
             {!isCollapsed && <span>New Company</span>}
           </button>
         </div>
+
+        {/* Migration Help Link */}
+        {!isCollapsed && (
+          <button
+            onClick={() => navigate('/guide')}
+            className="w-full py-2 px-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-900/20 text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center justify-center gap-2 hover:bg-amber-100 transition-colors"
+          >
+            <HelpCircle size={14} />
+            How to Migrate Projects?
+          </button>
+        )}
 
         {/* New Project Button */}
         <button
@@ -910,6 +947,19 @@ export const Sidebar: React.FC = () => {
       <JoinTeamModal isOpen={isJoinTeamModalOpen} onClose={() => setIsJoinTeamModalOpen(false)} />
       <CreateTeamModal isOpen={isCreateTeamModalOpen} onClose={() => setIsCreateTeamModalOpen(false)} />
       <TeamSettingsModal isOpen={isTeamSettingsOpen} onClose={() => setIsTeamSettingsOpen(false)} team={selectedTeam} />
+
+      {
+        migrationProjectId && (
+          <MigrateProjectModal
+            isOpen={isMigrateModalOpen}
+            onClose={() => {
+              setIsMigrateModalOpen(false);
+              setMigrationProjectId(null);
+            }}
+            projectId={migrationProjectId}
+          />
+        )
+      }
     </aside >
   );
 };

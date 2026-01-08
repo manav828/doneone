@@ -29,18 +29,18 @@ export const ReportsPage: React.FC = () => {
     const projectMembers = useMemo(() => {
         if (!activeProject || !currentUser) return [];
 
-        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        const isOwner = activeProject.ownerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
         const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
         // Base members list (Manager + Leads + Resources)
         let members = users.filter(u =>
-            u.id === activeProject.managerId ||
+            u.id === activeProject.ownerId ||
             activeProject.leadIds?.includes(u.id) ||
             Object.keys(activeProject.reportsTo || {}).includes(u.id)
         );
 
-        if (viewAllEnabled || isManager) {
+        if (viewAllEnabled || isOwner) {
             return members;
         }
 
@@ -74,11 +74,11 @@ export const ReportsPage: React.FC = () => {
         let filtered = tasks.filter(t => t.projectId === activeProjectId);
 
         // 2. Visibility Logic (Role-Based)
-        const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+        const isOwner = activeProject.ownerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
         const isLead = activeProject.leadIds?.includes(currentUser.id);
         const viewAllEnabled = activeProject.viewAllReportsEnabled;
 
-        if (!isManager && !viewAllEnabled) {
+        if (!isOwner && !viewAllEnabled) {
             if (isLead) {
                 // Lead sees self + team members (resources reporting to them)
                 const teamMemberIds = Object.entries(activeProject.reportsTo || {})
@@ -240,7 +240,7 @@ export const ReportsPage: React.FC = () => {
     }, [dailyTimeByMember]);
 
     // Check Premium Status
-    const isPremium = activeProject?.manager?.isPremium || false;
+    const isPremium = activeProject?.owner?.isPremium || false;
 
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 

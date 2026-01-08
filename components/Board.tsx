@@ -92,7 +92,7 @@ export const Board: React.FC = () => {
                 className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-full pl-8 pr-8 py-1.5 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all min-w-[120px]"
               >
                 <option value="ME">My Workspace</option>
-                {(currentUser?.email === 'manavss828@gmail.com' || project?.managerId === currentUser?.id || project?.leadIds.includes(currentUser?.id || '')) && (
+                {(currentUser?.email === 'manavss828@gmail.com' || project?.ownerId === currentUser?.id || project?.leadIds.includes(currentUser?.id || '')) && (
                   <option value="ALL">All Team</option>
                 )}
                 <optgroup label="Team Members">

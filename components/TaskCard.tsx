@@ -21,19 +21,19 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
   } = useStore();
 
   const activeProject = projects.find(p => p.id === activeProjectId);
-  const isManager = activeProject?.managerId === currentUser?.id;
+  const isOwner = activeProject?.ownerId === currentUser?.id;
   const isLead = activeProject?.leadIds.includes(currentUser?.id || '');
   const isAssignee = task.assigneeId === currentUser?.id;
-  const canMove = isManager || isLead || isAssignee;
+  const canMove = isOwner || isLead || isAssignee;
 
   // Feature Flag Check
   // Feature Flag Check
-  // FIX: Use activeProject.manager directly as it contains the enriched plan overrides from fetchProjects
-  const projectManager = activeProject?.manager || users.find(u => u.id === activeProject?.managerId);
-  // CHANGED: Use Project Manager's Premium Status - Check BOTH property names
-  // activeProject.manager has 'hasPremiumAccess', users array has 'isPremium'
-  const hasPremium = (projectManager as any)?.hasPremiumAccess === true || projectManager?.isPremium === true;
-  const remindersEnabled = hasPremium && (projectManager?.remindersEnabled || false);
+  // FIX: Use activeProject.owner directly as it contains the enriched plan overrides from fetchProjects
+  const projectOwner = activeProject?.owner || users.find(u => u.id === activeProject?.ownerId);
+  // CHANGED: Use Project Owner's Premium Status - Check BOTH property names
+  // activeProject.owner has 'hasPremiumAccess', users array has 'isPremium'
+  const hasPremium = (projectOwner as any)?.hasPremiumAccess === true || projectOwner?.isPremium === true;
+  const remindersEnabled = hasPremium && (projectOwner?.remindersEnabled || false);
   // SIMPLIFIED: If Owner is Premium, Time Tracking is Enabled.
   const timeTrackingEnabled = hasPremium;
 

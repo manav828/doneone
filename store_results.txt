@@ -1,0 +1,81 @@
+﻿store.ts:315: if (project && project.managerId === currentUser.id) {
+store.ts:1120: const managerIds = [...new Set((projects || []).map((p: any) => p.manager_id))];
+store.ts:1121: const { data: managers } = await supabase.from('profiles').select('*').in('id', managerIds);
+store.ts:1132: const managerUser = (managers || []).find((u: any) => u.id === p.manager_id);
+store.ts:1162: managerId: p.manager_id,
+store.ts:1163: managerIds: p.manager_ids || [],
+store.ts:1193: // Get all team IDs where user is a Team Head (in team.managerIds)
+store.ts:1196: .filter(t => t.managerIds?.includes(currentUser.id))
+store.ts:1204: teams: teams.map(t => ({ name: t.name, id: t.id, managerIds: t.managerIds })),
+store.ts:1211: p.managerId === currentUser.id ||
+store.ts:1212: p.managerIds?.includes(currentUser.id) ||
+store.ts:1628: const myProjects = get().projects.filter(p => p.managerId === user.id);
+store.ts:1661: manager_id: user.id,
+store.ts:1675: managerId: data.manager_id,
+store.ts:1699: const myProjects = get().projects.filter(p => p.managerId === user.id);
+store.ts:1722: manager_id: user.id,
+store.ts:1734: managerId: data.manager_id,
+store.ts:1788: if (project.managerId !== currentUser?.id && currentUser?.email !== ADMIN_EMAIL) {
+store.ts:1809: const manager = get().users.find(u => u.id === project?.managerId);
+store.ts:1874: const manager = get().users.find(u => u.id === project.managerId);
+store.ts:1914: const delegatedManagers = project.managerIds || [];
+store.ts:1924: const manager = get().users.find(u => u.id === project.managerId);
+store.ts:1976: const managerId = project.managerId;
+store.ts:1979: const managerProjects = projects.filter(p => p.managerId === managerId);
+store.ts:1999: .eq('id', managerId)
+store.ts:2024: }).eq('id', managerId);
+store.ts:2028: user_id: managerId,
+store.ts:2238: const isManager = project.managerId === user.id;
+store.ts:2272: const projectManager = state.users.find(u => u.id === project.managerId);
+store.ts:2281: managerId: project.managerId,
+store.ts:2392: const manager = state.users.find(u => u.id === project.managerId);
+store.ts:2401: recipients.add(project.managerId);
+store.ts:2406: recipients.add(project.managerId);
+store.ts:2778: const manager = users.find(u => u.id === project.managerId);
+store.ts:3348: const isManager = project.managerId === currentUser.id;
+store.ts:3353: if (projectTeam?.managerIds?.includes(currentUser.id) || projectTeam?.ownerId === currentUser.id) {
+store.ts:3429: if (projectTeam?.managerIds?.includes(currentUser.id)) {
+store.ts:3445: u.id === project.managerId ||
+store.ts:3454: u.id === project.managerId ||
+store.ts:3459: const isManager = project.managerId === currentUser.id;
+store.ts:3520: authorityId = project.managerId;
+store.ts:3584: p.managerId === currentUser?.id ||
+store.ts:3619: if (projectTeam?.managerIds?.includes(currentUser.id)) {
+store.ts:3624: const isProjectCreator = project.managerId === currentUser.id;
+store.ts:3625: const isDelegatedPM = project.managerIds?.includes(currentUser.id);
+store.ts:3827: const isManager = activeProject.managerId === currentUser.id || currentUser.email === 'manavss828@gmail.com';
+store.ts:3996: // NEW: Fetch teams where user is a Team Head (in manager_ids)
+store.ts:4000: .contains('manager_ids', [currentUser.id])
+store.ts:4010: headTeams: headTeams?.map(t => ({ name: t.name, id: t.id, manager_ids: t.manager_ids }))
+store.ts:4055: managerIds: t.manager_ids || [], // NEW: Include manager_ids
+store.ts:4143: const currentManagers = team.managerIds || [];
+store.ts:4154: teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: newManagers } : t)
+store.ts:4158: const { data, error } = await supabase.from('teams').update({ manager_ids: newManagers }).eq('id', teamId).select();
+store.ts:4165: teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: currentManagers } : t)
+store.ts:4178: const currentManagers = team.managerIds || [];
+store.ts:4183: teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: newManagers } : t)
+store.ts:4187: const { error } = await supabase.from('teams').update({ manager_ids: newManagers }).eq('id', teamId);
+store.ts:4192: teams: state.teams.map(t => t.id === teamId ? { ...t, managerIds: currentManagers } : t)
+store.ts:4482: managerIds: d.manager_ids || []
+store.ts:4511: managerIds: d.manager_ids || []
+store.ts:4614: const currentManagers = dept.managerIds || [];
+store.ts:4620: departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: newManagers } : d)
+store.ts:4623: const { error } = await supabase.from('departments').update({ manager_ids: newManagers }).eq('id', departmentId);
+store.ts:4627: departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: currentManagers } : d)
+store.ts:4637: const currentManagers = dept.managerIds || [];
+store.ts:4641: departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: newManagers } : d)
+store.ts:4644: const { error } = await supabase.from('departments').update({ manager_ids: newManagers }).eq('id', departmentId);
+store.ts:4648: departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: currentManagers } : d)
+store.ts:4658: const currentManagers = project.managerIds || [];
+store.ts:4664: projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: newManagers } : p)
+store.ts:4667: const { error } = await supabase.from('projects').update({ manager_ids: newManagers }).eq('id', projectId);
+store.ts:4671: projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: currentManagers } : p)
+store.ts:4681: const currentManagers = project.managerIds || [];
+store.ts:4685: projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: newManagers } : p)
+store.ts:4688: const { error } = await supabase.from('projects').update({ manager_ids: newManagers }).eq('id', projectId);
+store.ts:4692: projects: state.projects.map(p => p.id === projectId ? { ...p, managerIds: currentManagers } : p)
+store.ts:4774: .filter(t => t.ownerId === currentUser.id || t.managerIds?.includes(currentUser.id))
+store.ts:4791: .filter(p => p.managerId === currentUser.id || p.managerIds?.includes(currentUser.id))
+store.ts:4824: // Include teams where user is a member (not owner) OR is a Team Head (in managerIds)
+store.ts:4830: t.managerIds?.includes(currentUser.id)
+store.ts:4846: p.managerId === currentUser.id ||

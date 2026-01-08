@@ -28,9 +28,9 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const resources = project.resourceIds.map(getUser);
   const delegatedManagers = (project.managerIds || []).map(getUser);
   const pendingUsers = (project.pendingJoinRequests || []).map(getUser);
-  const manager = getUser(project.managerId);
+  const owner = getUser(project.ownerId);
 
-  const isOwner = currentUser.id === project.managerId;
+  const isOwner = currentUser.id === project.ownerId;
   const canManage = can('manageTeam', project.id) || isOwner;
   const canAssignPM = can('assignProjectManager', project.id);
   const canAssignLead = can('assignLead', project.id);
@@ -42,11 +42,11 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const activePlan = plans.find(p => p.id === planId);
   const invitesAllowed = activePlan?.canInviteMembers ?? false;
 
-  const maxLeads = activePlan ? (activePlan.maxLeadsPerProject || 5) : (manager?.maxLeads || 2);
+  const maxLeads = activePlan ? (activePlan.maxLeadsPerProject || 5) : (owner?.maxLeads || 2);
   const planLimit = activePlan?.maxMembersPerProject || 2;
   const extra = currentUser.extraSeats || 0;
   const calculatedTotal = planLimit + extra;
-  const dbMaxRes = manager?.maxResources || 0;
+  const dbMaxRes = owner?.maxResources || 0;
   const maxRes = Math.max(calculatedTotal, dbMaxRes);
 
   return (
@@ -125,14 +125,14 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {/* Owner/Primary Manager */}
-            {manager && (
+            {owner && (
               <div className="flex items-center justify-between p-2 rounded bg-primary/5 border border-primary/20">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
-                    {manager.name.charAt(0)}
+                    {owner.name.charAt(0)}
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{manager.name}</p>
+                    <p className="text-sm font-medium">{owner.name}</p>
                     <p className="text-xs text-primary font-semibold flex items-center gap-1"><Shield size={10} /> Owner</p>
                   </div>
                 </div>

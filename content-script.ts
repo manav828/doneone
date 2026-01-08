@@ -188,7 +188,7 @@ function showQuickAddModal(data: { url: string; selectedText: string; linkUrl?: 
 
     // Collect all member IDs
     const memberIds = new Set([
-      project.managerId,
+      project.ownerId,
       ...(project.leadIds || []),
       ...(project.resourceIds || [])
     ]);

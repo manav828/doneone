@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, User, FolderKanban, Bell, Filter, LayoutList, Calendar,
   Archive, Settings, Crown, Clock, Download, Zap, MousePointerClick,
   Users, Lock, BarChart, X, Check, ToggleLeft, ToggleRight, Layout, Quote, Star,
-  ArrowRight, HelpCircle, ChevronDown, ChevronUp
+  ArrowRight, HelpCircle, ChevronDown, ChevronUp, Building2, Search
 } from 'lucide-react';
 import { useStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -86,6 +86,14 @@ const FEATURES_DATA = [
     benefits: ["Instant updates", "Browser-native alerts", "Interactive action buttons"],
     color: "bg-teal-500 text-teal-500",
     isPremium: false
+  },
+  {
+    icon: Building2,
+    title: "Project Migration",
+    description: "Scale your work by moving personal projects into a Company or Workspace structure.",
+    benefits: ["Centralize project management", "Enable Team Heads oversight", "Graduate from solo to team"],
+    color: "bg-amber-500 text-amber-500",
+    isPremium: false
   }
 ];
 
@@ -105,11 +113,87 @@ const FAQ_DATA = [
   {
     question: "How does the sleep timer work?",
     answer: "The extension detects system idle time. If you leave your computer without pausing a task, we'll ask if you want to discard that idle time when you return, keeping your logs accurate."
+  },
+  {
+    question: "How do I move a personal project to an Organization?",
+    answer: "Follow these exact steps:\n1. CREATE WORKSPACE: Click '+' next to Teams/Workspaces in the sidebar to create your Company.\n2. ADD DEPARTMENTS: Open 'Workspace Settings' and create departments like 'Marketing' or 'Dev'.\n3. LOCATE PROJECT: Find your project in the 'Personal Projects' list in the sidebar.\n4. START MOVE: Click the Building Icon (Move to Organization) that appears when you hover the project.\n5. CONFIGURE: Select your New Workspace and the Department you created.\n6. CONFIRM: Click 'Move to Organization' and your project will instantly migrate and appear under your Company header."
   }
 ];
 
+const MIGRATION_STEPS = [
+  {
+    title: "1. Create Your Company",
+    desc: "Look for the 'Teams/Workspaces' section in your sidebar. Click the '+' button to initialize your Company/Organization. This is the foundation for all professional features.",
+    icon: Building2,
+    color: "bg-blue-500"
+  },
+  {
+    title: "2. Set Up Departments",
+    desc: "Navigate to 'Workspace Settings' from your sidebar. Add your first department (e.g., 'Internal', 'Client Work', 'Engineering'). Projects must belong to a team context once migrated.",
+    icon: Layout,
+    color: "bg-purple-500"
+  },
+  {
+    title: "3. Locate & Trigger",
+    desc: "Find your solo project under 'Personal Projects'. Hover over it to reveal the 'Move to Organization' (Building icon). Click it to open the migration wizard.",
+    icon: MousePointerClick,
+    color: "bg-orange-500"
+  },
+  {
+    title: "4. Target & Finalize",
+    desc: "Select your new Company and the specific Department from the dropdowns. Click 'Move to Organization'. Your project will instantly relocate to the organizational workspace.",
+    icon: Zap,
+    color: "bg-green-500"
+  }
+];
+
+const MigrationTutorial: React.FC = () => (
+  <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="text-center space-y-4">
+      <h2 className="text-4xl font-bold text-slate-900 dark:text-white">Migration Masterclass</h2>
+      <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto text-lg">
+        Graduate your solo work to a professional enterprise structure in four simple steps.
+      </p>
+    </div>
+
+    <div className="grid md:grid-cols-2 gap-8">
+      {MIGRATION_STEPS.map((step, idx) => (
+        <div key={idx} className="bg-white dark:bg-slate-800 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
+          <div className="flex items-start gap-6 relative z-10">
+            <div className={`w-14 h-14 rounded-2xl ${step.color} text-white flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform`}>
+              <step.icon size={28} />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{step.title}</h3>
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-sm lg:text-base">
+                {step.desc}
+              </p>
+            </div>
+          </div>
+          {/* Decorative Number */}
+          <span className="absolute -bottom-10 -right-4 text-[10rem] font-black text-slate-50 dark:text-slate-900/50 pointer-events-none group-hover:text-primary/5 transition-colors">
+            {idx + 1}
+          </span>
+        </div>
+      ))}
+    </div>
+
+    <div className="bg-primary/5 border border-primary/10 rounded-3xl p-8 flex flex-col md:flex-row items-center gap-8">
+      <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-primary/20">
+        <Crown size={32} />
+      </div>
+      <div>
+        <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Why Migrate?</h4>
+        <p className="text-slate-600 dark:text-slate-400">
+          Personal projects are restricted to your eyes only. Once migrated to an Organization, you can assign **Team Heads**, use **Departments** for structure, and access **Enterprise Billing** for your entire team.
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
 // --- Classic Guide Component (Preserved) ---
-const GuideClassic: React.FC = () => {
+const GuideClassic: React.FC<{ searchQuery: string }> = ({ searchQuery }) => {
   const [filter, setFilter] = useState<'all' | 'free' | 'premium'>('all');
 
   const categories = [
@@ -118,9 +202,13 @@ const GuideClassic: React.FC = () => {
     { id: 'premium', label: 'Premium Powers' }
   ];
 
-  const filteredFeatures = filter === 'all'
-    ? FEATURES_DATA
-    : FEATURES_DATA.filter(f => filter === 'premium' ? f.isPremium : !f.isPremium);
+  const filteredFeatures = FEATURES_DATA.filter(f => {
+    const matchesSearch = f.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.description.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (filter === 'all') return true;
+    return filter === 'premium' ? f.isPremium : !f.isPremium;
+  });
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -174,9 +262,19 @@ const GuideClassic: React.FC = () => {
 };
 
 // --- Modern / Landing Page Style Guide Component ---
-const GuideModern: React.FC = () => {
-  const visualFeatures = FEATURES_DATA.filter(f => f.image);
-  const otherFeatures = FEATURES_DATA.filter(f => !f.image);
+const GuideModern: React.FC<{ searchQuery: string }> = ({ searchQuery }) => {
+  const filteredFeaturesData = FEATURES_DATA.filter(f =>
+    f.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const visualFeatures = filteredFeaturesData.filter(f => f.image);
+  const otherFeatures = filteredFeaturesData.filter(f => !f.image);
+  const filteredFaqs = FAQ_DATA.filter(f =>
+    f.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.answer.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // Fade Up Animation Variant
@@ -298,28 +396,33 @@ const GuideModern: React.FC = () => {
 
         <div className="relative z-10">
           <div className="mb-16 max-w-2xl">
-            <p className="text-teal-400 font-bold uppercase tracking-wider text-sm mb-4">Steps to Success</p>
+            <p className="text-teal-400 font-bold uppercase tracking-wider text-sm mb-4">Migration Masterclass</p>
             <h2 className="text-4xl md:text-5xl font-bold leading-tight mb-6">
-              Maximize your returns with a <br />
-              Workflow that generates.
+              Convert Your Solo Projects <br />
+              to an Organization Scale.
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
               <span className="text-6xl font-black text-white/20 mb-6 block">1</span>
-              <h3 className="text-xl font-bold mb-3">Create Project</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">Sign up and set up your first project from the dashboard.</p>
+              <h3 className="text-xl font-bold mb-3 text-teal-400">Build Foundation</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Click '+' in Sidebar to create your Workspace (Company Header).</p>
             </div>
             <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
               <span className="text-6xl font-black text-white/20 mb-6 block">2</span>
-              <h3 className="text-xl font-bold mb-3">Add Tasks</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">Use the Quick Add shortcut (Ctrl+Shift+F) to populate your board instantly.</p>
+              <h3 className="text-xl font-bold mb-3 text-teal-400">Set Structure</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Enter 'Workspace Settings' and add Departments (e.g. Sales, Tech).</p>
             </div>
             <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
               <span className="text-6xl font-black text-white/20 mb-6 block">3</span>
-              <h3 className="text-xl font-bold mb-3">Track Progress</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">Watch your productivity grow with detailed analytics and reports.</p>
+              <h3 className="text-xl font-bold mb-3 text-teal-400">Trigger Move</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Hover your Personal Project and click the Building Icon.</p>
+            </div>
+            <div className="bg-white/5 backdrop-blur-sm p-8 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+              <span className="text-6xl font-black text-white/20 mb-6 block">4</span>
+              <h3 className="text-xl font-bold mb-3 text-teal-400">Migrate!</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">Select Target Org & Dept. Confirm to move it instantly.</p>
             </div>
           </div>
         </div>
@@ -367,7 +470,7 @@ const GuideModern: React.FC = () => {
           <h2 className="text-3xl font-bold mb-4 text-slate-900 dark:text-white">Frequently Asked Questions</h2>
         </div>
         <div className="space-y-4">
-          {FAQ_DATA.map((faq, idx) => (
+          {filteredFaqs.map((faq, idx) => (
             <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <button
                 onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
@@ -421,33 +524,57 @@ const GuideModern: React.FC = () => {
 
 // --- Main Guide Component ---
 export const Guide: React.FC = () => {
-  const [viewMode, setViewMode] = useState<'classic' | 'modern'>('modern');
+  const [viewMode, setViewMode] = useState<'classic' | 'modern' | 'migration'>('migration');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const categories = [
+    { id: 'modern', label: 'Modern View', icon: Layout },
+    { id: 'classic', label: 'Classic View', icon: LayoutList },
+    { id: 'migration', label: 'Migration Tutorial', icon: Building2 }
+  ];
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 md:p-10 pb-24 scroll-smooth">
-      {/* View Toggles */}
-      <div className="flex justify-end mb-6 sticky top-0 z-20 pointer-events-none">
-        <div className="pointer-events-auto bg-white/80 dark:bg-slate-800/80 rounded-full shadow-lg p-1 flex border border-slate-200 dark:border-slate-700 backdrop-blur-md">
-          <button
-            onClick={() => setViewMode('modern')}
-            className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'modern' ? 'bg-slate-900 text-white shadow-md dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'}`}
-          >
-            <Layout size={16} /> Modern
-          </button>
-          <button
-            onClick={() => setViewMode('classic')}
-            className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'classic' ? 'bg-slate-900 text-white shadow-md dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'}`}
-          >
-            <LayoutList size={16} /> Classic
-          </button>
+      {/* Search & View Toggles */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-10 sticky top-0 z-20 pointer-events-none">
+
+        <div className="pointer-events-auto flex-1 max-w-lg w-full relative">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search help, features, migration keys..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md shadow-lg outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+          />
+        </div>
+
+        <div className="pointer-events-auto bg-white/80 dark:bg-slate-800/80 rounded-full shadow-lg p-1 flex border border-slate-200 dark:border-slate-700 backdrop-blur-md overflow-x-auto no-scrollbar">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setViewMode(cat.id as any)}
+              className={`px-4 py-2 rounded-full text-xs lg:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${viewMode === cat.id ? 'bg-slate-900 text-white shadow-md dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'}`}
+            >
+              <cat.icon size={16} /> {cat.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {viewMode === 'modern' ? <GuideModern /> : <GuideClassic />}
+      <AnimatePresence mode="wait">
+        {viewMode === 'migration' ? (
+          <MigrationTutorial key="migration" />
+        ) : viewMode === 'modern' ? (
+          <GuideModern key="modern" searchQuery={searchQuery} />
+        ) : (
+          <GuideClassic key="classic" searchQuery={searchQuery} />
+        )}
+      </AnimatePresence>
 
       {/* Footer / Copyright */}
       <div className="text-center text-slate-400 dark:text-slate-600 text-sm mt-20 pb-8">
-        &copy; 2025 FlowBoard. All rights reserved.
+        &copy; 2025 DoneOne. All rights reserved.
       </div>
     </div>
   );
