@@ -147,6 +147,7 @@ export interface Task {
   capturedScreenshot?: string;
   isHighlighted?: boolean;
   isReminderDismissed?: boolean;
+  priority?: 'high' | 'medium' | 'low'; // Task priority level
   // Discussion Task Fields
   isDiscussion?: boolean;
   discussionUserIds?: string[];

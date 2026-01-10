@@ -45,6 +45,215 @@ samp,
 }
 
 /* ============================================
+   PRIORITY VISUALIZATION STYLES
+   ============================================ */
+
+/* Priority Colors */
+:root {
+  --priority-high: #EF4444;
+  --priority-medium: #F97316;
+  --priority-low: #3B82F6;
+}
+
+/* === STYLE 1: BORDER (Static - Clean) === */
+html[data-priority-style="border"] .priority-high {
+  border: 2px solid var(--priority-high) !important;
+}
+
+html[data-priority-style="border"] .priority-medium {
+  border: 2px solid var(--priority-medium) !important;
+}
+
+html[data-priority-style="border"] .priority-low {
+  border: 2px solid var(--priority-low) !important;
+}
+
+/* === STYLE 1B: BORDER ANIMATED (Pulse Effect) === */
+html[data-priority-style="border-animated"] .priority-high {
+  border: 2px solid var(--priority-high) !important;
+  animation: border-pulse-high 2s ease-in-out infinite;
+}
+
+html[data-priority-style="border-animated"] .priority-medium {
+  border: 2px solid var(--priority-medium) !important;
+  animation: border-pulse-medium 2.5s ease-in-out infinite;
+}
+
+html[data-priority-style="border-animated"] .priority-low {
+  border: 2px solid var(--priority-low) !important;
+  animation: border-pulse-low 3s ease-in-out infinite;
+}
+
+@keyframes border-pulse-high {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15), 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+}
+
+@keyframes border-pulse-medium {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.12), 0 0 16px rgba(249, 115, 22, 0.25);
+  }
+}
+
+@keyframes border-pulse-low {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 0 12px rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* === STYLE 2: LEFT ACCENT BAR === */
+html[data-priority-style="accent-bar"] .priority-high,
+html[data-priority-style="accent-bar"] .priority-medium,
+html[data-priority-style="accent-bar"] .priority-low {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-priority-style="accent-bar"] .priority-high::before,
+html[data-priority-style="accent-bar"] .priority-medium::before,
+html[data-priority-style="accent-bar"] .priority-low::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+
+html[data-priority-style="accent-bar"] .priority-high::before {
+  background: var(--priority-high);
+}
+
+html[data-priority-style="accent-bar"] .priority-medium::before {
+  background: var(--priority-medium);
+}
+
+html[data-priority-style="accent-bar"] .priority-low::before {
+  background: var(--priority-low);
+}
+
+/* === STYLE 3: GRADIENT GLOW (Static) === */
+html[data-priority-style="gradient-glow"] .priority-high {
+  box-shadow: -4px 0 20px -2px rgba(239, 68, 68, 0.4), 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+html[data-priority-style="gradient-glow"] .priority-medium {
+  box-shadow: -4px 0 18px -2px rgba(249, 115, 22, 0.35), 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+html[data-priority-style="gradient-glow"] .priority-low {
+  box-shadow: -4px 0 16px -2px rgba(59, 130, 246, 0.35), 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* === STYLE 3B: GRADIENT ANIMATED (Breathing Glow) === */
+html[data-priority-style="gradient-animated"] .priority-high {
+  animation: glow-pulse-high 2s ease-in-out infinite;
+}
+
+html[data-priority-style="gradient-animated"] .priority-medium {
+  animation: glow-pulse-medium 2.5s ease-in-out infinite;
+}
+
+html[data-priority-style="gradient-animated"] .priority-low {
+  animation: glow-pulse-low 3s ease-in-out infinite;
+}
+
+@keyframes glow-pulse-high {
+
+  0%,
+  100% {
+    box-shadow: -4px 0 15px -2px rgba(239, 68, 68, 0.3), 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  50% {
+    box-shadow: -6px 0 30px -2px rgba(239, 68, 68, 0.5), 0 4px 8px rgba(239, 68, 68, 0.15);
+  }
+}
+
+@keyframes glow-pulse-medium {
+
+  0%,
+  100% {
+    box-shadow: -4px 0 12px -2px rgba(249, 115, 22, 0.25), 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  50% {
+    box-shadow: -5px 0 25px -2px rgba(249, 115, 22, 0.4), 0 4px 8px rgba(249, 115, 22, 0.12);
+  }
+}
+
+@keyframes glow-pulse-low {
+
+  0%,
+  100% {
+    box-shadow: -4px 0 10px -2px rgba(59, 130, 246, 0.2), 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  50% {
+    box-shadow: -5px 0 20px -2px rgba(59, 130, 246, 0.35), 0 4px 8px rgba(59, 130, 246, 0.1);
+  }
+}
+
+/* === STYLE 4: CORNER RIBBON === */
+html[data-priority-style="corner-ribbon"] .priority-critical,
+html[data-priority-style="corner-ribbon"] .priority-high,
+html[data-priority-style="corner-ribbon"] .priority-medium,
+html[data-priority-style="corner-ribbon"] .priority-low {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-priority-style="corner-ribbon"] .priority-critical::after,
+html[data-priority-style="corner-ribbon"] .priority-high::after,
+html[data-priority-style="corner-ribbon"] .priority-medium::after,
+html[data-priority-style="corner-ribbon"] .priority-low::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 28px 28px 0;
+}
+
+html[data-priority-style="corner-ribbon"] .priority-critical::after {
+  border-color: transparent var(--priority-critical) transparent transparent;
+}
+
+html[data-priority-style="corner-ribbon"] .priority-high::after {
+  border-color: transparent var(--priority-high) transparent transparent;
+}
+
+html[data-priority-style="corner-ribbon"] .priority-medium::after {
+  border-color: transparent var(--priority-medium) transparent transparent;
+}
+
+html[data-priority-style="corner-ribbon"] .priority-low::after {
+  border-color: transparent var(--priority-low) transparent transparent;
+}
+
+/* ============================================
    LANDING PAGE - DESIGN TOKENS
    ============================================ */
 /* ============================================

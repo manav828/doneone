@@ -130,6 +130,16 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
     await toggleTaskTimer(task.id);
   };
 
+  // Get priority class for CSS styling
+  const getPriorityClass = () => {
+    switch (task.priority) {
+      case 'high': return 'priority-high';
+      case 'medium': return 'priority-medium';
+      case 'low': return 'priority-low';
+      default: return '';
+    }
+  };
+
   const containerClasses = `
     card-lift group relative flex flex-col gap-2 p-3.5 rounded-xl border shadow-sm transition-all duration-200 select-none
     ${isDragging ? 'opacity-50 scale-105 z-50 cursor-grabbing' : 'opacity-100 cursor-grab'}
@@ -144,6 +154,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
           ? 'border-blue-300 dark:border-blue-700 bg-blue-50/10 dark:bg-blue-900/5'
           : 'border-slate-200 dark:border-slate-700'
     }
+    ${getPriorityClass()}
   `;
 
   return (

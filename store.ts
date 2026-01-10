@@ -1270,6 +1270,7 @@ export const useStore = create<any>((set, get) => ({
       capturedText: t.captured_text,
       capturedScreenshot: t.captured_screenshot,
       isReminderDismissed: t.is_reminder_dismissed || false,
+      priority: t.priority || undefined,
       // Discussion fields
       isDiscussion: t.is_discussion || false,
       discussionUserIds: t.discussion_user_ids || [],
@@ -2188,6 +2189,7 @@ export const useStore = create<any>((set, get) => ({
     if (updates.orderIndex !== undefined) dbUpdates.order_index = updates.orderIndex;
     if (updates.assigneeId !== undefined) dbUpdates.assignee_id = updates.assigneeId;
     if (updates.tagIds !== undefined) dbUpdates.tag_ids = updates.tagIds;
+    if (updates.priority !== undefined) dbUpdates.priority = updates.priority || null;
 
     // FIXED: Strictly handle reminder_at. If it's number (timestamp) or null, convert to ISO.
     if (updates.reminderAt !== undefined) {
