@@ -9,6 +9,7 @@ import { DataManagementModal } from './DataManagementModal';
 import { PremiumModal } from './PremiumModal';
 import { PricingModal } from './PricingModal';
 import { UserTicketsModal } from './UserTicketsModal';
+import { FontToggle } from './FontToggle';
 
 export const TopBar: React.FC = () => {
   const {
@@ -194,6 +195,9 @@ export const TopBar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Font Toggle */}
+          <FontToggle />
+
           {/* Help & Support */}
           <button
             onClick={() => setIsHelpModalOpen(true)}

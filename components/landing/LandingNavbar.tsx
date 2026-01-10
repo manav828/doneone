@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FontToggle } from '../FontToggle';
 
 interface LandingNavbarProps {
     onLogin: () => void;
@@ -66,6 +67,7 @@ const LandingNavbar = ({ onLogin, onRegister }: LandingNavbarProps) => {
 
                     {/* Auth Buttons */}
                     <div className="hidden md:flex items-center gap-3">
+                        <FontToggle />
                         <motion.button
                             onClick={onLogin}
                             className="px-4 py-2 text-slate-700 font-medium hover:text-slate-900 transition-colors"

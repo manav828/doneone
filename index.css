@@ -1,8 +1,48 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ============================================
+   FONT FAMILY SYSTEM
+   ============================================ */
+:root {
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-roboto: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sfpro: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
+  --font-family: var(--font-inter);
+}
+
+/* Font family switching via data attribute */
+html[data-font="inter"] {
+  --font-family: var(--font-inter);
+}
+
+html[data-font="roboto"] {
+  --font-family: var(--font-roboto);
+}
+
+html[data-font="sfpro"] {
+  --font-family: var(--font-sfpro);
+}
+
+/* Apply font family globally to ALL elements */
+*,
+*::before,
+*::after {
+  font-family: var(--font-family) !important;
+}
+
+/* Preserve monospace for code elements */
+code,
+pre,
+kbd,
+samp,
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace !important;
+}
 
 /* ============================================
    LANDING PAGE - DESIGN TOKENS
