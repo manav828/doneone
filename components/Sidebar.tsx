@@ -15,6 +15,39 @@ import { JoinTeamModal } from './JoinTeamModal';
 import { CreateTeamModal } from './CreateTeamModal';
 import { Team } from '../types';
 import { MigrateProjectModal } from './MigrateProjectModal';
+import { getLogoPath } from './LogoToggle';
+
+// --- Dynamic Logo Component ---
+const DynamicLogo: React.FC<{ isCollapsed: boolean }> = ({ isCollapsed }) => {
+  const [logoPath, setLogoPath] = useState(getLogoPath());
+
+  useEffect(() => {
+    // Update logo when storage or custom event changes
+    const handleLogoChange = () => setLogoPath(getLogoPath());
+
+    window.addEventListener('logoChange', handleLogoChange);
+    window.addEventListener('storage', handleLogoChange);
+
+    return () => {
+      window.removeEventListener('logoChange', handleLogoChange);
+      window.removeEventListener('storage', handleLogoChange);
+    };
+  }, []);
+
+  // Check if it's a custom logo (logo1 or logo2) - make them larger
+  const isCustomLogo = logoPath.includes('logo1') || logoPath.includes('logo2');
+  const sizeClass = isCollapsed
+    ? (isCustomLogo ? 'h-12 w-12 object-cover rounded-lg' : 'h-8 w-8 object-contain')
+    : (isCustomLogo ? 'h-16 w-auto object-contain' : 'h-8 w-auto object-contain');
+
+  return (
+    <img
+      src={logoPath}
+      alt="DoneOne"
+      className={sizeClass}
+    />
+  );
+};
 
 // --- Extracted Components ---
 
@@ -391,11 +424,11 @@ export const Sidebar: React.FC = () => {
           {!isCollapsed ? (
             <div className="flex flex-col pl-3">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="DoneOne" className="h-8 w-auto object-contain" />
+                <DynamicLogo isCollapsed={false} />
               </div>
             </div>
           ) : (
-            <img src="/logo.png" alt="DoneOne" className="h-8 w-8 object-contain" />
+            <DynamicLogo isCollapsed={true} />
           )}
         </div>
 

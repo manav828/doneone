@@ -10,6 +10,9 @@ import { PremiumModal } from './PremiumModal';
 import { PricingModal } from './PricingModal';
 import { UserTicketsModal } from './UserTicketsModal';
 import { FontToggle } from './FontToggle';
+import { PriorityStyleToggle } from './PriorityStyleToggle';
+import { LogoToggle } from './LogoToggle';
+import { DevModeWrapper } from './DevModeWrapper';
 
 export const TopBar: React.FC = () => {
   const {
@@ -195,8 +198,14 @@ export const TopBar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Font Toggle */}
-          <FontToggle />
+          {/* Developer Mode Toggles (only visible when localStorage.doneone = 'yes') */}
+          <DevModeWrapper>
+            <div className="flex items-center gap-2">
+              <FontToggle />
+              <PriorityStyleToggle />
+              <LogoToggle />
+            </div>
+          </DevModeWrapper>
 
           {/* Help & Support */}
           <button

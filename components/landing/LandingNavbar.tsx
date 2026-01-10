@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FontToggle } from '../FontToggle';
+import { PriorityStyleToggle } from '../PriorityStyleToggle';
+import { DevModeWrapper } from '../DevModeWrapper';
+import { LogoToggle, getLogoPath } from '../LogoToggle';
 
 interface LandingNavbarProps {
     onLogin: () => void;
@@ -10,6 +13,7 @@ interface LandingNavbarProps {
 const LandingNavbar = ({ onLogin, onRegister }: LandingNavbarProps) => {
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [logoPath, setLogoPath] = useState(getLogoPath());
 
     useEffect(() => {
         const handleScroll = () => {
@@ -17,6 +21,12 @@ const LandingNavbar = ({ onLogin, onRegister }: LandingNavbarProps) => {
         };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    useEffect(() => {
+        const handleLogoChange = () => setLogoPath(getLogoPath());
+        window.addEventListener('logoChange', handleLogoChange);
+        return () => window.removeEventListener('logoChange', handleLogoChange);
     }, []);
 
     const navLinks = [
@@ -44,7 +54,7 @@ const LandingNavbar = ({ onLogin, onRegister }: LandingNavbarProps) => {
                         whileHover={{ scale: 1.02 }}
                     >
                         <img
-                            src="/logo.png"
+                            src={logoPath}
                             alt="D.one Logo"
                             className="h-7 md:h-8 w-auto"
                         />
@@ -67,7 +77,14 @@ const LandingNavbar = ({ onLogin, onRegister }: LandingNavbarProps) => {
 
                     {/* Auth Buttons */}
                     <div className="hidden md:flex items-center gap-3">
-                        <FontToggle />
+                        {/* Developer Mode Toggles */}
+                        <DevModeWrapper>
+                            <div className="flex items-center gap-2">
+                                <FontToggle />
+                                <PriorityStyleToggle />
+                                <LogoToggle />
+                            </div>
+                        </DevModeWrapper>
                         <motion.button
                             onClick={onLogin}
                             className="px-4 py-2 text-slate-700 font-medium hover:text-slate-900 transition-colors"

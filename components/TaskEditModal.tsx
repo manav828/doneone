@@ -46,7 +46,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const [localReminderUsers, setLocalReminderUsers] = useState<string[]>(task.reminderUserIds || []);
     const [showReminder, setShowReminder] = useState(!!task.reminderAt);
     const [premiumModalFeature, setPremiumModalFeature] = useState<string | null>(null);
-    const [localPriority, setLocalPriority] = useState('');
+    const [localPriority, setLocalPriority] = useState<'high' | 'medium' | 'low' | ''>(task.priority || '');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
     const assigneeDropdownRef = useRef<HTMLDivElement>(null);
@@ -132,12 +132,12 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
         }
     }, [isOpen, task]);
 
-    // Priority sync
+    // Priority sync - load from task.priority field directly
     useEffect(() => {
-        const pTags = tags.filter(t => t.type === 'Priority' && localTags.includes(t.id));
-        if (pTags.length > 0) setLocalPriority(pTags[0].id);
-        else setLocalPriority('');
-    }, [isOpen, tags, localTags]);
+        if (isOpen) {
+            setLocalPriority(task.priority || '');
+        }
+    }, [isOpen, task.priority]);
 
     // Timer effect
     useEffect(() => {
@@ -201,6 +201,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             description: localDesc,
             assigneeId: localAssignee || undefined,
             tagIds: finalTags,
+            priority: localPriority || undefined,
             reminderAt: reminderDate ? new Date(reminderDate).getTime() : null,
             reminderUserIds: reminderDate ? localReminderUsers : undefined,
             attachments: [] as string[], // Placeholder, will be filled below
@@ -428,9 +429,15 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                         </div>
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Priority</label>
-                            <select value={localPriority} onChange={e => setLocalPriority(e.target.value)} className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none">
+                            <select
+                                value={localPriority}
+                                onChange={e => setLocalPriority(e.target.value as 'high' | 'medium' | 'low' | '')}
+                                className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 appearance-none"
+                            >
                                 <option value="">None</option>
-                                {priorityTags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
                             </select>
                         </div>
                     </div>
