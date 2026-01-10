@@ -1,5 +1,5 @@
 
-export type Role = 'DeptHead' | 'Manager' | 'Lead' | 'Resource';
+export type Role = 'Admin' | 'DeptHead' | 'Manager' | 'Lead' | 'Resource';
 
 export interface Company {
   id: string;
@@ -271,6 +271,21 @@ export interface Notification {
 
 // Permission map
 export const PERMISSIONS = {
+  Admin: {
+    createProject: true,
+    deleteProject: true,
+    manageTeam: true,
+    editSettings: true,
+    manageColumns: true,
+    manageTasks: true,
+    manageTags: true,
+    assignProjectManager: true,
+    assignLead: true,
+    viewAllDepartments: true,
+    viewAllProjects: true,
+    manageBilling: true,
+    viewAuditLogs: true,
+  },
   DeptHead: {
     createProject: true,
     deleteProject: true,
@@ -418,3 +433,62 @@ export interface Transaction {
   created_at: string;
 }
 
+// ============================================================
+// ANALYTICS & REPORTING TYPES
+// ============================================================
+
+export type ReportScope = 'personal' | 'team' | 'project' | 'department' | 'workspace';
+
+export interface UserMetrics {
+  userId: string;
+  userName: string;
+  tasksCompleted: number;
+  tasksInProgress: number;
+  tasksPending: number;
+  tasksOverdue: number;
+  totalTimeTracked: number; // seconds
+  avgCompletionTime: number; // seconds
+  productivityTrend: number[]; // last 7 days task counts
+  velocityScore: number; // 0-100
+}
+
+export interface ProjectMetrics {
+  projectId: string;
+  projectName: string;
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  pendingTasks: number;
+  overdueTasks: number;
+  totalTimeTracked: number;
+  healthScore: number; // 0-100
+  onTimeRate: number; // percentage
+  avgCycleTime: number; // seconds
+  bottleneckColumn?: string;
+  memberMetrics: UserMetrics[];
+}
+
+export interface DepartmentMetrics {
+  departmentId: string;
+  departmentName: string;
+  totalProjects: number;
+  activeMembers: number;
+  totalTasks: number;
+  completedTasks: number;
+  totalTimeTracked: number;
+  avgHealthScore: number;
+  projectMetrics: ProjectMetrics[];
+}
+
+export interface WorkspaceMetrics {
+  workspaceId: string;
+  workspaceName: string;
+  totalDepartments: number;
+  totalProjects: number;
+  totalMembers: number;
+  totalTasks: number;
+  completedTasks: number;
+  totalTimeTracked: number;
+  avgHealthScore: number;
+  departmentMetrics: DepartmentMetrics[];
+}

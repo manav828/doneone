@@ -1,4 +1,4 @@
-
+ 
 import React, { useState } from 'react';
 import { useStore } from '../store';
 import { Modal } from './Modal';

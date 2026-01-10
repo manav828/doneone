@@ -4930,5 +4930,249 @@ export const useStore = create<any>((set, get) => ({
     }
   },
 
+  // ============================================================
+  // ANALYTICS & REPORTING FUNCTIONS
+  // ============================================================
+
+  // Calculate metrics for a single user within a project
+  calculateUserMetrics: (userId: string, projectId?: string): any => {
+    const { tasks, columns, users } = get();
+    const user = users.find(u => u.id === userId);
+    if (!user) return null;
+
+    const userTasks = tasks.filter(t =>
+      t.assigneeId === userId &&
+      (!projectId || t.projectId === projectId)
+    );
+
+    const projectCols = projectId ? columns.filter(c => c.projectId === projectId) : columns;
+    const doneColumn = projectCols.find(c => c.title === 'Done');
+    const inProgressColumn = projectCols.find(c => c.title === 'In Progress');
+    const pendingColumn = projectCols.find(c => c.title === 'Pending');
+
+    const now = Date.now();
+    const completedTasks = userTasks.filter(t => doneColumn && t.columnId === doneColumn.id);
+    const inProgressTasks = userTasks.filter(t => inProgressColumn && t.columnId === inProgressColumn.id);
+    const pendingTasks = userTasks.filter(t => pendingColumn && t.columnId === pendingColumn.id);
+    const overdueTasks = userTasks.filter(t => t.reminderAt && t.reminderAt < now && (!doneColumn || t.columnId !== doneColumn.id));
+
+    const totalTimeTracked = userTasks.reduce((sum, t) => sum + (t.timeTracked || 0), 0);
+
+    // Average completion time (from startedAt to completedAt)
+    const completedWithTime = completedTasks.filter(t => t.startedAt && t.completedAt);
+    const avgCompletionTime = completedWithTime.length > 0
+      ? completedWithTime.reduce((sum, t) => sum + ((t.completedAt! - t.startedAt!) / 1000), 0) / completedWithTime.length
+      : 0;
+
+    // Productivity trend: last 7 days completed task count
+    const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+    const productivityTrend: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = now - ((i + 1) * 24 * 60 * 60 * 1000);
+      const dayEnd = now - (i * 24 * 60 * 60 * 1000);
+      const count = completedTasks.filter(t => t.completedAt && t.completedAt >= dayStart && t.completedAt < dayEnd).length;
+      productivityTrend.push(count);
+    }
+
+    // Velocity score: based on completion rate and consistency
+    const totalAssigned = userTasks.length;
+    const completionRate = totalAssigned > 0 ? (completedTasks.length / totalAssigned) * 100 : 0;
+    const velocityScore = Math.min(100, Math.round(completionRate * 0.7 + (productivityTrend.reduce((a, b) => a + b, 0) * 3)));
+
+    return {
+      userId,
+      userName: user.name,
+      tasksCompleted: completedTasks.length,
+      tasksInProgress: inProgressTasks.length,
+      tasksPending: pendingTasks.length,
+      tasksOverdue: overdueTasks.length,
+      totalTimeTracked,
+      avgCompletionTime,
+      productivityTrend,
+      velocityScore,
+    };
+  },
+
+  // Calculate metrics for a project
+  calculateProjectMetrics: (projectId: string): any => {
+    const { tasks, columns, projects, users } = get();
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return null;
+
+    const projectTasks = tasks.filter(t => t.projectId === projectId);
+    const projectCols = columns.filter(c => c.projectId === projectId);
+
+    const doneColumn = projectCols.find(c => c.title === 'Done');
+    const inProgressColumn = projectCols.find(c => c.title === 'In Progress');
+    const pendingColumn = projectCols.find(c => c.title === 'Pending');
+
+    const now = Date.now();
+    const completedTasks = projectTasks.filter(t => doneColumn && t.columnId === doneColumn.id);
+    const inProgressTasks = projectTasks.filter(t => inProgressColumn && t.columnId === inProgressColumn.id);
+    const pendingTasks = projectTasks.filter(t => pendingColumn && t.columnId === pendingColumn.id);
+    const overdueTasks = projectTasks.filter(t => t.reminderAt && t.reminderAt < now && (!doneColumn || t.columnId !== doneColumn.id));
+
+    const totalTimeTracked = projectTasks.reduce((sum, t) => sum + (t.timeTracked || 0), 0);
+
+    // On-time rate: completed tasks that were done before reminder
+    const completedWithDeadline = completedTasks.filter(t => t.reminderAt);
+    const onTimeCount = completedWithDeadline.filter(t => t.completedAt! <= t.reminderAt!).length;
+    const onTimeRate = completedWithDeadline.length > 0 ? (onTimeCount / completedWithDeadline.length) * 100 : 100;
+
+    // Average cycle time (time in each column)
+    const completedWithCycle = completedTasks.filter(t => t.createdAt && t.completedAt);
+    const avgCycleTime = completedWithCycle.length > 0
+      ? completedWithCycle.reduce((sum, t) => sum + ((t.completedAt! - t.createdAt) / 1000), 0) / completedWithCycle.length
+      : 0;
+
+    // Bottleneck detection: column with most tasks stuck
+    const columnTaskCounts = projectCols.map(col => ({
+      column: col.title,
+      count: projectTasks.filter(t => t.columnId === col.id).length,
+    })).filter(c => c.column !== 'Done').sort((a, b) => b.count - a.count);
+    const bottleneckColumn = columnTaskCounts.length > 0 && columnTaskCounts[0].count > 5 ? columnTaskCounts[0].column : undefined;
+
+    // Health score: combination of on-time, completion rate, overdue ratio
+    const completionRate = projectTasks.length > 0 ? (completedTasks.length / projectTasks.length) * 100 : 0;
+    const overdueRatio = projectTasks.length > 0 ? (overdueTasks.length / projectTasks.length) * 100 : 0;
+    const healthScore = Math.round(Math.max(0, Math.min(100, (onTimeRate * 0.4) + (completionRate * 0.4) - (overdueRatio * 0.5) + 30)));
+
+    // Member metrics
+    const memberIds = [...new Set([project.ownerId, ...(project.leadIds || []), ...(project.resourceIds || [])])];
+    const memberMetrics = memberIds.map(id => get().calculateUserMetrics(id, projectId)).filter(Boolean);
+
+    return {
+      projectId,
+      projectName: project.name,
+      totalTasks: projectTasks.length,
+      completedTasks: completedTasks.length,
+      inProgressTasks: inProgressTasks.length,
+      pendingTasks: pendingTasks.length,
+      overdueTasks: overdueTasks.length,
+      totalTimeTracked,
+      healthScore,
+      onTimeRate: Math.round(onTimeRate),
+      avgCycleTime,
+      bottleneckColumn,
+      memberMetrics,
+    };
+  },
+
+  // Calculate metrics for a department (aggregates projects)
+  calculateDepartmentMetrics: (departmentId: string): any => {
+    const { departments, projects } = get();
+    const department = departments.find(d => d.id === departmentId);
+    if (!department) return null;
+
+    const deptProjects = projects.filter(p => p.departmentId === departmentId);
+    const projectMetrics = deptProjects.map(p => get().calculateProjectMetrics(p.id)).filter(Boolean);
+
+    const totalTasks = projectMetrics.reduce((sum, p) => sum + p.totalTasks, 0);
+    const completedTasks = projectMetrics.reduce((sum, p) => sum + p.completedTasks, 0);
+    const totalTimeTracked = projectMetrics.reduce((sum, p) => sum + p.totalTimeTracked, 0);
+    const avgHealthScore = projectMetrics.length > 0
+      ? Math.round(projectMetrics.reduce((sum, p) => sum + p.healthScore, 0) / projectMetrics.length)
+      : 0;
+
+    const uniqueMembers = new Set<string>();
+    projectMetrics.forEach(p => p.memberMetrics.forEach((m: any) => uniqueMembers.add(m.userId)));
+
+    return {
+      departmentId,
+      departmentName: department.name,
+      totalProjects: deptProjects.length,
+      activeMembers: uniqueMembers.size,
+      totalTasks,
+      completedTasks,
+      totalTimeTracked,
+      avgHealthScore,
+      projectMetrics,
+    };
+  },
+
+  // Calculate metrics for entire workspace
+  calculateWorkspaceMetrics: (teamId: string): any => {
+    const { teams, departments, projects } = get();
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return null;
+
+    const teamDepartments = departments.filter(d => d.teamId === teamId);
+    const teamProjects = projects.filter(p => p.teamId === teamId);
+
+    const departmentMetrics = teamDepartments.map(d => get().calculateDepartmentMetrics(d.id)).filter(Boolean);
+
+    // Also include projects not in any department
+    const unassignedProjects = teamProjects.filter(p => !p.departmentId);
+    const unassignedProjectMetrics = unassignedProjects.map(p => get().calculateProjectMetrics(p.id)).filter(Boolean);
+
+    const allProjectMetrics = [...departmentMetrics.flatMap(d => d.projectMetrics), ...unassignedProjectMetrics];
+
+    const totalTasks = allProjectMetrics.reduce((sum, p) => sum + p.totalTasks, 0);
+    const completedTasks = allProjectMetrics.reduce((sum, p) => sum + p.completedTasks, 0);
+    const totalTimeTracked = allProjectMetrics.reduce((sum, p) => sum + p.totalTimeTracked, 0);
+    const avgHealthScore = allProjectMetrics.length > 0
+      ? Math.round(allProjectMetrics.reduce((sum, p) => sum + p.healthScore, 0) / allProjectMetrics.length)
+      : 0;
+
+    const uniqueMembers = new Set<string>();
+    allProjectMetrics.forEach(p => p.memberMetrics.forEach((m: any) => uniqueMembers.add(m.userId)));
+
+    return {
+      workspaceId: teamId,
+      workspaceName: team.name,
+      totalDepartments: teamDepartments.length,
+      totalProjects: teamProjects.length,
+      totalMembers: uniqueMembers.size,
+      totalTasks,
+      completedTasks,
+      totalTimeTracked,
+      avgHealthScore,
+      departmentMetrics,
+    };
+  },
+
+  // Get user's effective role level for visibility rules
+  getUserRoleLevel: (projectId?: string): 'admin' | 'depthead' | 'manager' | 'lead' | 'resource' | 'none' => {
+    const { currentUser, projects, teams, departments } = get();
+    if (!currentUser) return 'none';
+
+    // Check if Admin (hardcoded admin email or role)
+    if (currentUser.email === 'manavss828@gmail.com' || currentUser.role === 'Admin') {
+      return 'admin';
+    }
+
+    // Check if Workspace Owner
+    const ownedTeam = teams.find(t => t.ownerId === currentUser.id);
+    if (ownedTeam) return 'admin';
+
+    // Check if DeptHead (manages a department)
+    const managedDept = departments.find(d => d.managerIds?.includes(currentUser.id));
+    if (managedDept) return 'depthead';
+
+    if (projectId) {
+      const project = projects.find(p => p.id === projectId);
+      if (project) {
+        if (project.ownerId === currentUser.id || project.managerIds?.includes(currentUser.id)) {
+          return 'manager';
+        }
+        if (project.leadIds?.includes(currentUser.id)) {
+          return 'lead';
+        }
+        if (project.resourceIds?.includes(currentUser.id) || Object.keys(project.reportsTo || {}).includes(currentUser.id)) {
+          return 'resource';
+        }
+      }
+    }
+
+    // General check across all projects
+    const isManagerAnywhere = projects.some(p => p.ownerId === currentUser.id || p.managerIds?.includes(currentUser.id));
+    if (isManagerAnywhere) return 'manager';
+
+    const isLeadAnywhere = projects.some(p => p.leadIds?.includes(currentUser.id));
+    if (isLeadAnywhere) return 'lead';
+
+    return 'resource';
+  },
+
 }));
 
