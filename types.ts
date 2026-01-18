@@ -110,6 +110,7 @@ export interface User {
   allowMultipleInProgress?: boolean;
   onboardingCompleted?: boolean;
   currency: 'USD' | 'INR';
+  soundEnabled?: boolean; // Default: true - controls audio feedback for actions
 }
 
 export type CurrencyType = 'USD' | 'INR';
@@ -154,6 +155,14 @@ export interface Task {
   discussionEnded?: boolean;
   // Recurring Task Fields
   recurrence?: RecurrenceConfig | null;
+  subtasks?: Subtask[];
+}
+
+export interface Subtask {
+  id: string;
+  text: string;
+  completed: boolean;
+  orderIndex: number;
 }
 
 export interface RecurrenceConfig {
@@ -290,7 +299,7 @@ export const PERMISSIONS = {
   DeptHead: {
     createProject: true,
     deleteProject: true,
-    manageTeam: true,
+    manageTeam: true, // Can only assign/remove within their Dept
     editSettings: true,
     manageColumns: true,
     manageTasks: true,
@@ -299,20 +308,20 @@ export const PERMISSIONS = {
     assignLead: true,
   },
   Manager: {
-    createProject: true,
-    deleteProject: true,
-    manageTeam: true,
+    createProject: false, // RESTRICTED
+    deleteProject: false,
+    manageTeam: false,    // RESTRICTED (Cannot invite/remove)
     editSettings: true,
     manageColumns: true,
     manageTasks: true,
     manageTags: true,
     assignProjectManager: false,
-    assignLead: true,
+    assignLead: true,     // Can assign Leads within their Project
   },
   Lead: {
-    createProject: true,
+    createProject: false, // RESTRICTED
     deleteProject: false,
-    manageTeam: true,
+    manageTeam: false,    // RESTRICTED
     editSettings: false,
     manageColumns: true,
     manageTasks: true,
@@ -321,7 +330,7 @@ export const PERMISSIONS = {
     assignLead: false,
   },
   Resource: {
-    createProject: true,
+    createProject: false, // RESTRICTED
     deleteProject: false,
     manageTeam: false,
     editSettings: false,

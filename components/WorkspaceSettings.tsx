@@ -524,19 +524,23 @@ export const WorkspaceSettings: React.FC = () => {
                                     <h2 className="text-xl font-bold">Departments</h2>
                                     <p className="text-sm text-slate-500 mt-1">Organize your company into departments (Workspaces)</p>
                                 </div>
-                                <button
-                                    onClick={async () => {
-                                        const name = prompt('Enter department name:');
-                                        if (name && name.trim()) {
-                                            await createTeam(name.trim());
-                                            fetchTeams();
-                                        }
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-                                >
-                                    <Plus size={16} />
-                                    Add Department
-                                </button>
+                                {/* Check for Admin Role OR Admin Email (Owner) */}
+                                {/* Check for Admin Role OR Company Owner */}
+                                {(currentUser?.role === 'Admin' || currentUser?.id === currentCompany?.ownerId) && (
+                                    <button
+                                        onClick={async () => {
+                                            const name = prompt('Enter department name:');
+                                            if (name && name.trim()) {
+                                                await createTeam(name.trim());
+                                                fetchTeams();
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                                    >
+                                        <Plus size={16} />
+                                        Add Department
+                                    </button>
+                                )}
                             </div>
 
                             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -556,13 +560,17 @@ export const WorkspaceSettings: React.FC = () => {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setManagingDeptId(team.id)}
-                                                        className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg"
-                                                        title="Manage Department Heads"
-                                                    >
-                                                        <Users size={16} />
-                                                    </button>
+                                                    {/* Strict Access: Only Admins/Owner can manage Department Heads */}
+                                                    {/* Strict Access: Only Admins/Owner can manage Department Heads */}
+                                                    {(currentUser?.role === 'Admin' || currentUser?.id === currentCompany?.ownerId) && (
+                                                        <button
+                                                            onClick={() => setManagingDeptId(team.id)}
+                                                            className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg"
+                                                            title="Manage Department Heads"
+                                                        >
+                                                            <Users size={16} />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => {
                                                             setItemToRename({ id: team.id, name: team.name, type: 'department' });

@@ -55,7 +55,13 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* Project Code */}
         <div className={`p-4 rounded-lg flex items-center justify-between border border-dashed ${!invitesAllowed && canManage ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-300 dark:bg-gray-700/50 dark:border-gray-600'}`}>
-          {!invitesAllowed && canManage ? (
+          {/* STRICT UI: Only Admin can see/use invites */}
+          {currentUser.role !== 'Admin' ? (
+            <div className="flex items-center gap-3 text-gray-500 w-full">
+              <Lock size={20} />
+              <p className="text-sm">Only Admins can invite new members.</p>
+            </div>
+          ) : !invitesAllowed && canManage ? (
             <div className="flex items-center gap-3 text-gray-500 w-full">
               <Lock size={20} />
               <p className="text-sm">Invites are disabled. Contact Admin to upgrade to Premium.</p>
@@ -191,7 +197,7 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         onClick={() => changeMemberRole(project.id, member.id, 'Manager')}
                         className="text-gray-400 hover:text-blue-500 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
                       >
-                        Promote to Manager
+                        Promote to Project Manager
                       </button>
                     )}
                     <button

@@ -45,6 +45,7 @@ const LandingPricing = ({ onRegister }: LandingPricingProps) => {
             description: 'For organizations that demand the best',
             price: { monthly: 39, annual: 29 },
             features: [
+                'Customized functionality for you',
                 'Everything in Pro',
                 'Unlimited team members',
                 'Admin controls',

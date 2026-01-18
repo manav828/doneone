@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Palette, ChevronDown, Check } from 'lucide-react';
 
-export type PriorityStyle = 'border' | 'border-animated' | 'accent-bar' | 'gradient-glow' | 'gradient-animated' | 'corner-ribbon';
+export type PriorityStyle = 'border' | 'border-animated' | 'accent-bar' | 'gradient-glow' | 'gradient-animated' | 'corner-ribbon' | 'soft-background';
 
 interface StyleConfig {
     id: PriorityStyle;
@@ -16,6 +16,7 @@ const styles: StyleConfig[] = [
     { id: 'gradient-glow', name: 'Gradient Glow', description: 'Static edge glow' },
     { id: 'gradient-animated', name: 'Gradient Pulse', description: 'Animated glow effect' },
     { id: 'corner-ribbon', name: 'Corner Ribbon', description: 'Diagonal ribbon' },
+    { id: 'soft-background', name: 'Soft Background', description: 'Light tint with accent bar' },
 ];
 
 export const PriorityStyleToggle: React.FC = () => {
@@ -25,7 +26,7 @@ export const PriorityStyleToggle: React.FC = () => {
 
     useEffect(() => {
         const savedStyle = localStorage.getItem('doneone_priority_style') as PriorityStyle;
-        if (savedStyle && ['border', 'border-animated', 'accent-bar', 'gradient-glow', 'gradient-animated', 'corner-ribbon'].includes(savedStyle)) {
+        if (savedStyle && ['border', 'border-animated', 'accent-bar', 'gradient-glow', 'gradient-animated', 'corner-ribbon', 'soft-background'].includes(savedStyle)) {
             setCurrentStyle(savedStyle);
             document.documentElement.setAttribute('data-priority-style', savedStyle);
         }

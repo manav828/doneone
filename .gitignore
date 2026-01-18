@@ -22,3 +22,25 @@ node_modules
 *.njsproj
 *.sln
 *.sw?
+
+# Testing
+tests/
+test-results/
+playwright-report/
+blob-report/
+playwright.config.ts
+.playwright/
+*.spec.ts
+*.test.ts
+PHASE1_TESTING.md
+tsc_error.log
+tsc_errors
+tsc_check_clean
+results.txt
+search_results.txt
+store_results.txt
+readable_results.txt
+dupes.txt
+grep_py.txt
+sql_manager_id_search.txt
+store_snake_case_manager.txt
