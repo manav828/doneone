@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Image, ChevronDown, Check } from 'lucide-react';
 
-export type LogoOption = 'default' | 'logo1' | 'logo2';
+export type LogoOption = 'default' | 'logo1' | 'logo2' | 'logo3';
 
 interface LogoConfig {
     id: LogoOption;
@@ -13,6 +13,7 @@ const logos: LogoConfig[] = [
     { id: 'default', name: 'Default', path: '/logo.png' },
     { id: 'logo1', name: 'Logo 1', path: '/logo1.jpg' },
     { id: 'logo2', name: 'Logo 2', path: '/logo2.jpg' },
+    { id: 'logo3', name: 'Logo 3', path: '/logo3.png' },
 ];
 
 export const LogoToggle: React.FC = () => {
@@ -22,7 +23,7 @@ export const LogoToggle: React.FC = () => {
 
     useEffect(() => {
         const savedLogo = localStorage.getItem('doneone_logo') as LogoOption;
-        if (savedLogo && ['default', 'logo1', 'logo2'].includes(savedLogo)) {
+        if (savedLogo && ['default', 'logo1', 'logo2', 'logo3'].includes(savedLogo)) {
             setCurrentLogo(savedLogo);
             document.documentElement.setAttribute('data-logo', savedLogo);
         }
@@ -74,8 +75,8 @@ export const LogoToggle: React.FC = () => {
                                 key={logo.id}
                                 onClick={() => handleLogoChange(logo.id)}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${currentLogo === logo.id
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                                     }`}
                             >
                                 <img

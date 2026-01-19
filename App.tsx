@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Board } from './components/Board';
 import { AdminPanel } from './components/AdminPanel';
@@ -14,13 +14,16 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { PricingModal } from './components/PricingModal';
 import { CheckoutPage } from './components/CheckoutPage';
 import BillingPage from './components/BillingPage';
+import ComparePlansPage from './components/ComparePlansPage';
 import LandingPage from './components/landing/LandingPage';
 import { WorkspaceSettings } from './components/WorkspaceSettings';
 import { TermsPage } from './components/TermsPage';
 
-const App: React.FC = () => {
-  const { init, currentUser, isLoading, tasks, projects } = useStore();
-  const [showLoginForm, setShowLoginForm] = React.useState(false);
+// Wrapper component that handles routing logic
+const AppRoutes: React.FC = () => {
+  const { init, currentUser, isLoading, tasks } = useStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Super Admin Check (Hardcoded for security, matching AdminPanel)
   const isSuperAdmin = currentUser?.email === 'manavss828@gmail.com';
@@ -32,22 +35,22 @@ const App: React.FC = () => {
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
+  }, []);
 
-    // Check for Welcome Modal (First Time Trial)
+  const [showWelcome, setShowWelcome] = React.useState(false);
+  const { isPricingModalOpen, setPricingModalOpen } = useStore();
+
+  // Check for Welcome Modal (First Time Trial)
+  useEffect(() => {
     const hasSeenWelcome = localStorage.getItem('doneone_welcome_seen');
     if (!hasSeenWelcome && currentUser && currentUser.createdAt) {
-      // Only show if account is created recently (e.g. within last 24 hours) OR just trust the flag?
-      // Let's check if they are in trial.
       const isTrial = (Date.now() - currentUser.createdAt < 30 * 24 * 60 * 60 * 1000) && !currentUser.premiumUntil;
       if (isTrial) {
         setShowWelcome(true);
         localStorage.setItem('doneone_welcome_seen', 'true');
       }
     }
-  }, []); // Run only on mount
-
-  const [showWelcome, setShowWelcome] = React.useState(false);
-  const { isPricingModalOpen, setPricingModalOpen } = useStore();
+  }, [currentUser]);
 
   // Poll for Reminders
   useEffect(() => {
@@ -57,7 +60,6 @@ const App: React.FC = () => {
       tasks.forEach(task => {
         if (task.reminderAt && !task.description?.includes("[Notified]")) {
           if (task.reminderAt <= now && task.reminderAt > now - 60000) {
-            // Send Notification ONLY if tasked to me or in reminder list
             const isRecipient = task.assigneeId === currentUser.id || (task.reminderUserIds && task.reminderUserIds.includes(currentUser.id));
 
             if (isRecipient && Notification.permission === 'granted') {
@@ -73,6 +75,13 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [tasks, currentUser]);
 
+  // Redirect to dashboard if already logged in and on /auth
+  useEffect(() => {
+    if (currentUser && location.pathname === '/auth') {
+      navigate('/');
+    }
+  }, [currentUser, location.pathname, navigate]);
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-white dark:bg-gray-900 text-primary">
@@ -81,23 +90,30 @@ const App: React.FC = () => {
     );
   }
 
-  // Show Login form if user clicked login/register from landing page
-  if (!currentUser && showLoginForm) {
-    return <Login />;
-  }
-
-  // Show Landing Page when not logged in
+  // Landing page and auth routes (no Layout wrapper)
   if (!currentUser) {
     return (
-      <LandingPage
-        onLogin={() => setShowLoginForm(true)}
-        onRegister={() => setShowLoginForm(true)}
-      />
+      <Routes>
+        <Route
+          path="/auth"
+          element={<Login />}
+        />
+        <Route
+          path="*"
+          element={
+            <LandingPage
+              onLogin={() => navigate('/auth')}
+              onRegister={() => navigate('/auth')}
+            />
+          }
+        />
+      </Routes>
     );
   }
 
+  // Authenticated routes
   return (
-    <Router>
+    <>
       <CustomAlert />
       <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <Layout>
@@ -126,12 +142,23 @@ const App: React.FC = () => {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/billing" element={<BillingPage />} />
+            <Route path="/compare" element={<ComparePlansPage />} />
             <Route path="/workspace" element={<WorkspaceSettings />} />
             <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />
             <Route path="/terms" element={<TermsPage />} />
+            {/* Redirect /auth to / when logged in */}
+            <Route path="/auth" element={<Navigate to="/" replace />} />
           </Routes>
         )}
       </Layout>
+    </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <Router>
+      <AppRoutes />
     </Router>
   );
 };

@@ -163,28 +163,40 @@ const BillingPage: React.FC = () => {
     };
 
     return (
-        <div className="h-full overflow-y-auto bg-white text-slate-800">
+        <div className="h-full overflow-y-auto bg-slate-50/30 dark:bg-slate-950 text-slate-800 dark:text-slate-100">
             <div className="max-w-6xl mx-auto w-full p-8 space-y-12 pb-24">
 
                 <section>
-                    {/* Billing Toggle */}
-                    <div className="flex items-center justify-center gap-5 mb-12">
-                        <span className={`text-sm font-medium transition-colors ${!annual ? 'text-slate-900' : 'text-slate-400'}`}>
-                            Monthly
-                        </span>
-                        <button
-                            onClick={() => setAnnual(!annual)}
-                            className={`relative w-12 h-6 rounded-full transition-all duration-300 ${annual ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-slate-200'}`}
-                        >
-                            <motion.div
-                                className={`absolute top-[3px] w-[18px] h-[18px] rounded-full shadow-md transition-colors duration-300 ${annual ? 'bg-white' : 'bg-slate-900'}`}
-                                animate={{ left: annual ? '27px' : '3px' }}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                            />
-                        </button>
-                        <span className={`text-sm font-medium transition-colors ${annual ? 'text-slate-900' : 'text-slate-400'}`}>
-                            Yearly <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded ml-1">-25%</span>
-                        </span>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Subscription Plans</h1>
+                            <p className="text-slate-500 dark:text-slate-400 font-medium text-sm mt-1">Scale your workspace as your team grows.</p>
+                        </div>
+                        <div className="flex items-center gap-6">
+                            {/* Billing Toggle */}
+                            <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-1.5 px-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                                <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!annual ? 'text-[#FF6B35]' : 'text-slate-400'}`}>Monthly</span>
+                                <button
+                                    onClick={() => setAnnual(!annual)}
+                                    className={`relative w-10 h-5 rounded-full transition-all duration-300 ${annual ? 'bg-[#FF6B35]' : 'bg-slate-200 dark:bg-slate-800'}`}
+                                >
+                                    <motion.div
+                                        className="absolute top-[2px] w-4 h-4 rounded-full bg-white shadow-sm"
+                                        animate={{ left: annual ? '22px' : '2px' }}
+                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                    />
+                                </button>
+                                <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${annual ? 'text-[#FF6B35]' : 'text-slate-400'}`}>Yearly</span>
+                            </div>
+
+                            <button
+                                onClick={() => navigate('/compare')}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+                            >
+                                <RefreshCw size={14} className="rotate-90" />
+                                Compare Plans
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
@@ -215,48 +227,53 @@ const BillingPage: React.FC = () => {
                 </section>
 
                 {/* Workspace Capacity */}
-                <section className="bg-white rounded-2xl p-0 border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-100">
-                        <div className="flex-1 p-8">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                    <Users size={20} />
+                <section className="bg-white dark:bg-slate-900 rounded-3xl p-0 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xl shadow-slate-200/50 dark:shadow-none">
+                    <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-800">
+                        <div className="flex-1 p-8 lg:p-10">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-2xl text-[#FF6B35]">
+                                    <Users size={22} />
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-900">Workspace Capacity</h3>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Workspace Capacity</h3>
                             </div>
 
-                            <div className="flex items-end justify-between mb-2">
-                                <span className="text-sm text-slate-500">Occupied Seats</span>
-                                <span className="text-sm font-bold text-slate-900">{uniqueEmployeeCount} / {totalSeats}</span>
+                            <div className="flex items-end justify-between mb-3">
+                                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Occupied Seats</span>
+                                <span className="text-sm font-bold text-slate-900 dark:text-white">{uniqueEmployeeCount} / {totalSeats}</span>
                             </div>
 
-                            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-primary transition-all duration-1000 ease-out rounded-full shadow-[0_0_10px_rgba(255,107,0,0.3)]"
+                                    className="h-full bg-[#FF6B35] transition-all duration-1000 ease-out rounded-full shadow-[0_0_15px_rgba(255,107,53,0.4)]"
                                     style={{ width: `${Math.min(100, (uniqueEmployeeCount / totalSeats) * 100)}%` }}
                                 />
                             </div>
-                            <p className="text-xs text-slate-400 mt-3 font-medium">Your plan includes {currentUser.maxResources || 0} base seats + {currentUser.extraSeats || 0} extra seats.</p>
+                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-4 font-medium flex items-center gap-2">
+                                <Info size={14} />
+                                Your plan includes {currentUser.maxResources || 0} base seats + {currentUser.extraSeats || 0} extra seats.
+                            </p>
                         </div>
 
-                        <div className="bg-slate-50/50 p-8 min-w-[340px] flex flex-col justify-center">
+                        <div className="bg-slate-50/50 dark:bg-slate-800/30 p-8 lg:p-10 min-w-[360px] flex flex-col justify-center">
                             <div className="flex items-center justify-between mb-6">
-                                <span className="text-sm font-bold text-slate-700">Adjust Seats</span>
-                                <div className="flex items-center gap-3 bg-white p-1 border border-slate-200 rounded-lg shadow-sm">
+                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Adjust Seats</span>
+                                <div className="flex items-center gap-4 bg-white dark:bg-slate-800 p-2 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
                                     <button
                                         onClick={() => setSeatAdjustment(prev => prev - 1)}
-                                        className="p-1 px-2 hover:bg-slate-50 rounded text-slate-400 hover:text-slate-900 transition-colors"
+                                        disabled={totalSeats + seatAdjustment <= (currentUser.maxResources || 0)}
+                                        className="p-1 px-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                        title={totalSeats + seatAdjustment <= (currentUser.maxResources || 0) ? "Cannot reduce below base seats" : ""}
                                     >
-                                        <Minus size={14} />
+                                        <Minus size={16} />
                                     </button>
-                                    <span className={`text-base font-bold min-w-[2.5ch] text-center ${seatAdjustment === 0 ? 'text-slate-900' : seatAdjustment > 0 ? 'text-primary' : 'text-red-500'}`}>
+                                    <span className={`text-lg font-black min-w-[2.5ch] text-center ${seatAdjustment === 0 ? 'text-slate-900 dark:text-white' : seatAdjustment > 0 ? 'text-[#FF6B35]' : 'text-red-500'}`}>
                                         {seatAdjustment > 0 ? `+${seatAdjustment}` : seatAdjustment}
                                     </span>
                                     <button
                                         onClick={() => setSeatAdjustment(prev => prev + 1)}
-                                        className="p-1 px-2 hover:bg-slate-50 rounded text-slate-400 hover:text-slate-900 transition-colors"
+                                        className="p-1 px-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                                     >
-                                        <Plus size={14} />
+                                        <Plus size={16} />
                                     </button>
                                 </div>
                             </div>
@@ -284,32 +301,33 @@ const BillingPage: React.FC = () => {
 
                 {/* Transaction History */}
                 <section>
-                    <h2 className="text-xl font-bold text-slate-900 mb-6">Transaction history</h2>
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-8 tracking-tight">Transaction history</h2>
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] overflow-hidden shadow-xl shadow-slate-200/50 dark:shadow-none">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Receipt</th>
+                                <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                                    <th className="px-8 py-5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Date</th>
+                                    <th className="px-8 py-5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Description</th>
+                                    <th className="px-8 py-5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Status</th>
+                                    <th className="px-8 py-5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Amount</th>
+                                    <th className="px-8 py-5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">Receipt</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50">
+                            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                                 {transactions.length > 0 ? transactions.map((tx: any) => (
-                                    <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-4 text-sm text-slate-600">{new Date(tx.created_at).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 text-sm font-medium text-slate-900">{tx.description}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${tx.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                                    <tr key={tx.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                        <td className="px-8 py-5 text-sm font-medium text-slate-500 dark:text-slate-400">{new Date(tx.created_at).toLocaleDateString()}</td>
+                                        <td className="px-8 py-5 text-sm font-bold text-slate-900 dark:text-white">{tx.description}</td>
+                                        <td className="px-8 py-5">
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${tx.status === 'completed' ? 'bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${tx.status === 'completed' ? 'bg-[#FF6B35]' : 'bg-slate-400'}`} />
                                                 {tx.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-sm font-bold text-slate-900">{currencySymbol}{tx.amount.toFixed(2)}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="p-2 text-slate-400 hover:text-slate-900 transition-colors">
-                                                <Download size={18} />
+                                        <td className="px-8 py-5 text-sm font-black text-slate-900 dark:text-white">{currencySymbol}{tx.amount.toFixed(2)}</td>
+                                        <td className="px-8 py-5 text-right">
+                                            <button className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                                <Download size={20} />
                                             </button>
                                         </td>
                                     </tr>
@@ -388,49 +406,61 @@ const PlanCard: React.FC<{ plan: any, currencySymbol: string, isCurrent: boolean
     const currentPrice = getPrice();
 
     return (
-        <div className={`relative bg-neutral-50/50 border rounded-2xl p-8 flex flex-col justify-between transition-all duration-300 min-h-[220px] ${isCurrent ? 'border-neutral-200 shadow-sm' : 'border-neutral-100 hover:border-neutral-200 shadow-sm'}`}>
-            <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-slate-900 tracking-tight">{plan.name}</h3>
-                    <div className="w-4 h-4 rounded-full border border-slate-200 flex items-center justify-center cursor-help">
-                        <span className="text-[10px] font-bold text-slate-400">?</span>
-                    </div>
+        <div className={`relative border rounded-[1.4rem] p-7 flex flex-col justify-between transition-all duration-300 min-h-[220px] group
+            ${isCurrent
+                ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.12)] scale-[1.01] z-10'
+                : 'bg-[#FDFDFD] dark:bg-slate-900/30 border-slate-100 dark:border-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm hover:shadow-2xl'}`}>
+
+            {isEnterprise && (
+                <div className="absolute top-0 right-0 opacity-[0.04] dark:opacity-[0.08] pointer-events-none group-hover:scale-110 transition-transform duration-700 origin-top-right">
+                    <RefreshCw size={140} className="rotate-90" strokeWidth={0.5} />
+                </div>
+            )}
+
+            <div className="space-y-4">
+                <div className="flex items-center gap-1.5">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                        {plan.name === 'Enterprise' ? 'Unlimited' : plan.name === 'Standard' ? 'Growth' : 'Core'}
+                    </h3>
+                    <Info size={12} className="text-slate-300 dark:text-slate-600" />
                 </div>
 
-                <p className="text-sm text-slate-500 leading-normal max-w-[240px]">
-                    {plan.max_projects === 999 ? 'Unlimited' : plan.max_projects} projects and {plan.max_members_per_project === 999 ? 'unlimited' : plan.max_members_per_project} members.
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal font-medium max-w-[90%]">
+                    {plan.max_members_per_project === 999 ? 'Unlimited seats' : `${plan.max_members_per_project} seats`} and 200 GB bandwidth.
                 </p>
 
-                <div className="pt-4">
+                <div className="pt-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold text-slate-900 tracking-tight">
+                        <span className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
                             {currencySymbol}{currentPrice}
                         </span>
-                        <span className="text-sm text-slate-400 font-medium font-sans">per month</span>
+                        <span className="text-[12px] text-slate-400 font-medium">per month</span>
                     </div>
                 </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-8">
                 <button
                     onClick={onSwitch}
                     disabled={isCurrent && !isEnterprise}
-                    className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${isCurrent
-                        ? 'bg-white border border-slate-200 text-slate-900 cursor-default'
-                        : 'bg-primary text-white hover:bg-primary-dark shadow-lg shadow-primary/20 active:scale-[0.98]'
+                    className={`w-full py-3.5 rounded-xl text-[12px] font-bold transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] ${isCurrent
+                        ? 'bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-900 dark:text-white cursor-default'
+                        : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100'
                         }`}
                 >
                     {isCurrent ? (
                         'Current plan'
                     ) : (
                         <>
-                            {isEnterprise ? <MessageSquare size={16} /> : <RefreshCw size={16} />}
-                            {isEnterprise ? 'Contact sales' : 'Switch plan'}
+                            <RefreshCw size={14} className="rotate-90" />
+                            Switch plan
                         </>
                     )}
                 </button>
             </div>
         </div>
+
+
     );
 };
 

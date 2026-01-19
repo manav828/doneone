@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock, ChevronLeft } from 'lucide-react';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
@@ -13,8 +13,10 @@ import { FontToggle } from './FontToggle';
 import { PriorityStyleToggle } from './PriorityStyleToggle';
 import { LogoToggle } from './LogoToggle';
 import { DevModeWrapper } from './DevModeWrapper';
+import { useNavigate } from 'react-router-dom';
 
 export const TopBar: React.FC = () => {
+  const navigate = useNavigate();
   const {
     themeMode,
     setThemeMode,
@@ -151,6 +153,17 @@ export const TopBar: React.FC = () => {
             <h2 className="text-xl font-bold text-primary">DoneOne Checkout</h2>
           ) : location.pathname === '/billing' ? (
             <h2 className="text-xl font-bold text-primary">DoneOne Billing</h2>
+          ) : location.pathname === '/compare' ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/billing')}
+                className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-primary transition-all flex items-center gap-1 group"
+              >
+                <ChevronLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+                <span className="text-xs font-bold uppercase tracking-wider">Back</span>
+              </button>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white">Plan Comparison</h2>
+            </div>
           ) : location.pathname === '/workspace' ? (
             <h2 className="text-lg font-bold text-slate-800 dark:text-white">Workspace Settings</h2>
           ) : activeProject ? (

@@ -3,10 +3,11 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
 import { useStore } from '../store';
-import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare, MessageCircle, Repeat } from 'lucide-react';
+import { Tag as TagIcon, User, Trash, Clock, Plus, BellRing, Play, Pause, Timer, AlertCircle, Image, X, Upload, Archive, CheckSquare, MessageCircle, Repeat, Check } from 'lucide-react';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { TaskEditModal } from './TaskEditModal';
+import { playSubtaskComplete } from '../utils/sounds';
 
 interface Props {
   task: Task;
@@ -170,8 +171,10 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
         {/* Toggle Collapse Button */}
         <button
           onClick={(e) => { e.stopPropagation(); toggleTaskCollapse(task.id); }}
-          className="absolute top-2 right-2 p-1 text-slate-400 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity z-20"
+          className="absolute top-2 right-2 p-1 text-slate-400 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity z-20 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary rounded"
           title={isCollapsed ? "Expand" : "Collapse"}
+          aria-label={isCollapsed ? "Expand task" : "Collapse task"}
+          aria-expanded={!isCollapsed}
         >
           {isCollapsed ? (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -214,6 +217,16 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
           )}
         </div>
 
+        {/* Subtask count - visible when collapsed */}
+        {isCollapsed && task.subtasks && task.subtasks.length > 0 && (
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+            <CheckSquare size={12} />
+            <span className="font-medium">
+              {task.subtasks.filter(s => s.completed).length}/{task.subtasks.length} Completed
+            </span>
+          </div>
+        )}
+
         {/* Details (Hidden if collapsed) */}
         {!isCollapsed && (
           <>
@@ -224,13 +237,74 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
               </p>
             )}
 
+            {/* Subtasks Section - Card Style */}
+            {task.subtasks && task.subtasks.length > 0 && (
+              <div className="mb-3">
+                {/* Progress indicator */}
+                <div className="flex items-center gap-1.5 mb-3 text-[11px] text-slate-500 dark:text-slate-400">
+                  <CheckSquare size={12} />
+                  <span className="font-medium">
+                    {task.subtasks.filter(s => s.completed).length}/{task.subtasks.length} Completed
+                  </span>
+                </div>
+
+                {/* Scrollable subtask list - shows all with scroll */}
+                <div className="max-h-[180px] overflow-y-auto scrollbar-thin space-y-2 pr-1">
+                  {[...task.subtasks]
+                    .sort((a, b) => a.orderIndex - b.orderIndex)
+                    .map((subtask) => (
+                      <div
+                        key={subtask.id}
+                        className="flex items-center gap-3 p-2.5 rounded-xl bg-gradient-to-br from-white to-slate-50/80 dark:from-slate-700/80 dark:to-slate-700/60 border border-slate-200/80 dark:border-slate-600/50 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.12),0_4px_16px_-4px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.15),0_6px_20px_-4px_rgba(0,0,0,0.1)] transition-shadow duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Circular checkbox */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const newSubtasks = task.subtasks?.map(s =>
+                              s.id === subtask.id ? { ...s, completed: !s.completed } : s
+                            ) || [];
+                            await updateTask(task.id, { subtasks: newSubtasks });
+                            if (currentUser?.soundEnabled !== false && !subtask.completed) {
+                              playSubtaskComplete();
+                            }
+                          }}
+                          className={`relative w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary
+                            ${subtask.completed
+                              ? 'bg-primary border-primary text-white'
+                              : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-500 hover:border-primary'
+                            }`}
+                          role="checkbox"
+                          aria-checked={subtask.completed}
+                          aria-label={`Mark subtask "${subtask.text}" as ${subtask.completed ? 'incomplete' : 'complete'}`}
+                        >
+                          {subtask.completed && <Check size={12} strokeWidth={3} />}
+                        </button>
+
+                        {/* Text */}
+                        <span className={`flex-1 text-[13px] font-medium leading-snug ${subtask.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                          {subtask.text}
+                        </span>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
+
             {/* Attachments Preview */}
             {task.attachments && task.attachments.length > 0 && (
               <div className="flex gap-1 mb-3 overflow-hidden">
                 {task.attachments.slice(0, 3).map((url, i) => (
-                  <div key={i} className="w-8 h-8 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer hover:opacity-80" onClick={(e) => { e.stopPropagation(); setPreviewImage(url); }}>
-                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
-                  </div>
+                  <button
+                    key={i}
+                    className="w-8 h-8 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary p-0"
+                    onClick={(e) => { e.stopPropagation(); setPreviewImage(url); }}
+                    title="View attachment"
+                  >
+                    <img src={url} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
                 ))}
                 {task.attachments.length > 3 && (
                   <div className="w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500">
@@ -239,115 +313,115 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
                 )}
               </div>
             )}
-
-            {/* Footer */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-50 dark:border-slate-700/50 mt-1">
-              <div className="flex items-center gap-2">
-                {assignedUser ? (
-                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700/50 pr-2 pl-0.5 py-0.5 rounded-full border border-slate-100 dark:border-slate-700">
-                    {assignedUser.avatar ? (
-                      <img src={assignedUser.avatar} alt={assignedUser.name} className="w-4 h-4 rounded-full object-cover shadow-sm border border-white dark:border-slate-700" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
-                        {assignedUser.name.charAt(0)}
-                      </div>
-                    )}
-                    <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{assignedUser.name.split(' ')[0]}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 opacity-40">
-                    <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                      <User size={10} className="text-slate-500" />
-                    </div>
-                  </div>
-                )}
-
-
-                {timeTrackingEnabled && canMove && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleTaskTimer(task.id);
-                    }}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border transition-all z-10 
-                      ${task.timerStartedAt
-                        ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-700 animate-pulse'
-                        : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600'
-                      }`}
-                    title={task.timerStartedAt ? "Pause Timer" : "Start Timer"}
-                  >
-                    {task.timerStartedAt ? (
-                      <Pause size={10} fill="currentColor" />
-                    ) : (
-                      <Play size={10} fill="currentColor" />
-                    )}
-                    <span className="font-mono whitespace-nowrap">
-                      {formatTime(elapsedTime)}
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Archive Button (Only in Done column) */}
-                {isDoneColumn && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmModal({
-                        isOpen: true,
-                        title: 'Archive Task',
-                        message: 'Are you sure you want to archive this task? It will be moved to History.',
-                        confirmText: 'Archive',
-                        onConfirm: () => archiveTaskManually(task.id)
-                      });
-                    }}
-                    className="p-1 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
-                    title="Archive Task"
-                  >
-                    <Archive size={14} />
-                  </button>
-                )}
-
-                {(task.reminderAt || task.updatedAt || task.recurrence) && (
-                  <div className="flex items-center gap-1.5">
-                    {task.recurrence && (
-                      <div title="Recurring Task" className="text-blue-500 bg-blue-50 dark:bg-blue-900/20 p-0.5 rounded">
-                        <Repeat size={10} />
-                      </div>
-                    )}
-                    {/* Stop Animation Button */}
-                    {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && !task.isReminderDismissed && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateTask(task.id, { isReminderDismissed: true });
-                        }}
-                        className={`text-[10px] px-2 py-1 rounded-md border transition-all flex items-center gap-1 font-semibold shadow-sm hover:scale-105 active:scale-95 ${isOverdue
-                          ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/50'
-                          : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50'
-                          }`}
-                        title="Stop Alert Animation"
-                      >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="6" y="6" width="12" height="12" rx="2" />
-                        </svg>
-                        Stop
-                      </button>
-                    )}
-
-                    <span className={`text-[10px] font-medium flex items-center gap-1 ${((isOverdue || isDueSoon) && !isDoneColumn && !task.isReminderDismissed) ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
-                      {task.reminderAt && remindersEnabled && !((isOverdue || isDueSoon) && !isDoneColumn && !task.isReminderDismissed) && <Clock size={10} />}
-                      {task.reminderAt && remindersEnabled
-                        ? new Date(task.reminderAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : new Date(task.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
           </>
         )}
+
+        {/* Footer - Always visible */}
+        <div className={`flex items-center justify-between pt-3 border-t border-slate-50 dark:border-slate-700/50 ${isCollapsed ? 'mt-0' : 'mt-1'}`}>
+          <div className="flex items-center gap-2">
+            {assignedUser ? (
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700/50 pr-2 pl-0.5 py-0.5 rounded-full border border-slate-100 dark:border-slate-700">
+                {assignedUser.avatar ? (
+                  <img src={assignedUser.avatar} alt={assignedUser.name} className="w-4 h-4 rounded-full object-cover shadow-sm border border-white dark:border-slate-700" />
+                ) : (
+                  <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
+                    {assignedUser.name.charAt(0)}
+                  </div>
+                )}
+                <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{assignedUser.name.split(' ')[0]}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 opacity-40">
+                <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                  <User size={10} className="text-slate-500" />
+                </div>
+              </div>
+            )}
+
+
+            {timeTrackingEnabled && canMove && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleTaskTimer(task.id);
+                }}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border transition-all z-10 
+                  ${task.timerStartedAt
+                    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-700 animate-pulse'
+                    : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600'
+                  }`}
+                title={task.timerStartedAt ? "Pause Timer" : "Start Timer"}
+              >
+                {task.timerStartedAt ? (
+                  <Pause size={10} fill="currentColor" />
+                ) : (
+                  <Play size={10} fill="currentColor" />
+                )}
+                <span className="font-mono whitespace-nowrap">
+                  {formatTime(elapsedTime)}
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Archive Button (Only in Done column) */}
+            {isDoneColumn && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmModal({
+                    isOpen: true,
+                    title: 'Archive Task',
+                    message: 'Are you sure you want to archive this task? It will be moved to History.',
+                    confirmText: 'Archive',
+                    onConfirm: () => archiveTaskManually(task.id)
+                  });
+                }}
+                className="p-1 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                title="Archive Task"
+              >
+                <Archive size={14} />
+              </button>
+            )}
+
+            {(task.reminderAt || task.updatedAt || task.recurrence) && (
+              <div className="flex items-center gap-1.5">
+                {task.recurrence && (
+                  <div title="Recurring Task" className="text-blue-500 bg-blue-50 dark:bg-blue-900/20 p-0.5 rounded">
+                    <Repeat size={10} />
+                  </div>
+                )}
+                {/* Stop Animation Button */}
+                {task.reminderAt && !isDoneColumn && (isOverdue || isDueSoon) && !task.isReminderDismissed && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateTask(task.id, { isReminderDismissed: true });
+                    }}
+                    className={`text-[10px] px-2 py-1 rounded-md border transition-all flex items-center gap-1 font-semibold shadow-sm hover:scale-105 active:scale-95 ${isOverdue
+                      ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/50'
+                      : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                      }`}
+                    title="Stop Alert Animation"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                    Stop
+                  </button>
+                )}
+
+                <span className={`text-[10px] font-medium flex items-center gap-1 ${((isOverdue || isDueSoon) && !isDoneColumn && !task.isReminderDismissed) ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                  {task.reminderAt && remindersEnabled && !((isOverdue || isDueSoon) && !isDoneColumn && !task.isReminderDismissed) && <Clock size={10} />}
+                  {task.reminderAt && remindersEnabled
+                    ? new Date(task.reminderAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : new Date(task.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <TaskEditModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} task={task} />

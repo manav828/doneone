@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store';
-import { Task, User, RecurrenceConfig } from '../types';
+import { Task, User, RecurrenceConfig, Subtask } from '../types';
 import { Modal } from './Modal';
 import { ConfirmModal } from './ConfirmModal';
 import { PremiumModal } from './PremiumModal';
-import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users, MessageCircle, CheckCircle, Edit2, Repeat } from 'lucide-react';
+import { Plus, Trash, Timer, Play, Pause, X, Clock, Image, Archive, Lock, Users, MessageCircle, CheckCircle, Edit2, Repeat, ListTodo, GripVertical } from 'lucide-react';
+import { playSubtaskComplete, playAllComplete } from '../utils/sounds';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { v4 as uuidv4 } from 'uuid';
 
 interface TaskEditModalProps {
     isOpen: boolean;
@@ -13,6 +18,93 @@ interface TaskEditModalProps {
     isCreating?: boolean;
     onSaveNew?: (task: Partial<Task>) => Promise<void>;
 }
+
+// Sortable Subtask Item Component with Timeline Design
+interface SortableSubtaskItemProps {
+    subtask: Subtask;
+    onToggle: () => void;
+    onDelete: () => void;
+    isLast: boolean;
+}
+
+const SortableSubtaskItem: React.FC<SortableSubtaskItemProps> = ({ subtask, onToggle, onDelete, isLast }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: subtask.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`flex items-start gap-3 group relative ${isDragging ? 'z-10' : ''}`}
+        >
+            {/* Timeline vertical line - hidden for last item */}
+            {!isLast && (
+                <div className="absolute left-[15px] top-[28px] w-[2px] h-[calc(100%+4px)] bg-slate-200 dark:bg-slate-600" />
+            )}
+
+            {/* Circular Checkbox with checkmark */}
+            <button
+                onClick={onToggle}
+                className={`relative w-[30px] h-[30px] rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 z-10
+                    ${subtask.completed
+                        ? 'bg-primary border-primary text-white'
+                        : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-500 hover:border-primary'
+                    }`}
+                role="checkbox"
+                aria-checked={subtask.completed}
+                aria-label={`Mark subtask "${subtask.text}" as ${subtask.completed ? 'incomplete' : 'complete'}`}
+            >
+                {subtask.completed && (
+                    <CheckCircle size={16} className="text-white" fill="currentColor" />
+                )}
+            </button>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0 py-1">
+                <div className="flex items-center justify-between gap-2">
+                    <span className={`text-sm font-medium ${subtask.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                        {subtask.text}
+                    </span>
+
+                    {/* Actions (visible on hover) */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                        {/* Drag handle */}
+                        <div
+                            {...attributes}
+                            {...listeners}
+                            className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                            tabIndex={0}
+                            role="button"
+                            aria-label="Drag to reorder subtask"
+                        >
+                            <GripVertical size={14} />
+                        </div>
+                        {/* Delete button */}
+                        <button
+                            onClick={onDelete}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded focus-visible:ring-2 focus-visible:ring-red-500"
+                            aria-label="Delete subtask"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, task, isCreating, onSaveNew }) => {
     const {
@@ -76,6 +168,17 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     // Recurrence State
     const [localRecurrence, setLocalRecurrence] = useState<RecurrenceConfig | null>(task.recurrence || null);
 
+    // Subtask State
+    const [localSubtasks, setLocalSubtasks] = useState<Subtask[]>(task.subtasks || []);
+    const [newSubtaskText, setNewSubtaskText] = useState('');
+    const MAX_SUBTASKS = 8;
+
+    // Dnd-kit sensors for subtask reordering
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (discussionDropdownRef.current && !discussionDropdownRef.current.contains(event.target as Node)) {
@@ -129,6 +232,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             // Discussion
             setIsDiscussion(task.isDiscussion || false);
             setDiscussionUsers(task.discussionUserIds || []);
+            // Subtasks
+            setLocalSubtasks(task.subtasks || []);
+            setNewSubtaskText('');
         }
     }, [isOpen, task]);
 
@@ -211,7 +317,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
             isDiscussion: isDiscussion,
             discussionUserIds: isDiscussion ? discussionUsers : [],
             // Recurrence
-            recurrence: finalRecurrence
+            recurrence: finalRecurrence,
+            // Subtasks
+            subtasks: localSubtasks
         };
 
         // 1. Process Uploads (Convert File objects to URLs)
@@ -326,6 +434,56 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
         });
     };
 
+    // Subtask Handlers
+    const handleAddSubtask = () => {
+        if (!newSubtaskText.trim() || localSubtasks.length >= MAX_SUBTASKS) return;
+        const newSubtask: Subtask = {
+            id: uuidv4(),
+            text: newSubtaskText.trim(),
+            completed: false,
+            orderIndex: localSubtasks.length
+        };
+        setLocalSubtasks([...localSubtasks, newSubtask]);
+        setNewSubtaskText('');
+    };
+
+    const handleDeleteSubtask = (subtaskId: string) => {
+        setLocalSubtasks(prev =>
+            prev.filter(s => s.id !== subtaskId)
+                .map((s, i) => ({ ...s, orderIndex: i }))
+        );
+    };
+
+    const handleToggleSubtask = (subtaskId: string) => {
+        const subtask = localSubtasks.find(s => s.id === subtaskId);
+        setLocalSubtasks(prev =>
+            prev.map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s)
+        );
+        // Play sound if completing (not uncompleting)
+        if (subtask && !subtask.completed && currentUser?.soundEnabled !== false) {
+            playSubtaskComplete();
+        }
+    };
+
+    const handleCompleteAllSubtasks = () => {
+        setLocalSubtasks(prev => prev.map(s => ({ ...s, completed: true })));
+        if (currentUser?.soundEnabled !== false) {
+            playAllComplete();
+        }
+    };
+
+    const handleSubtaskDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setLocalSubtasks(prev => {
+                const oldIndex = prev.findIndex(s => s.id === active.id);
+                const newIndex = prev.findIndex(s => s.id === over.id);
+                const reordered = arrayMove(prev, oldIndex, newIndex);
+                return reordered.map((s, i) => ({ ...s, orderIndex: i }));
+            });
+        }
+    };
+
     const projectTags = tags.filter(t => !t.projectId || t.projectId === task.projectId);
     const priorityTags = projectTags.filter(t => t.type === 'Priority');
     const typeTags = projectTags.filter(t => t.type !== 'Priority');
@@ -361,9 +519,13 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assignee</label>
                             <div className="relative" ref={assigneeDropdownRef}>
-                                <div
+                                <button
+                                    type="button"
                                     onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
-                                    className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-primary transition-colors"
+                                    className="w-full p-2 border rounded dark:bg-slate-800 dark:border-slate-600 flex items-center justify-between cursor-pointer hover:border-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                                    aria-haspopup="listbox"
+                                    aria-expanded={isAssigneeDropdownOpen}
+                                    aria-label="Assign task to user"
                                 >
                                     <div className="flex items-center gap-2">
                                         {localAssignee ? (
@@ -387,17 +549,20 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                         )}
                                     </div>
                                     <Users size={14} className="text-slate-400" />
-                                </div>
+                                </button>
 
                                 {isAssigneeDropdownOpen && (
                                     <>
-                                        <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto">
-                                            <div
+                                        <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto" role="listbox">
+                                            <button
+                                                type="button"
                                                 onClick={() => { setLocalAssignee(''); setIsAssigneeDropdownOpen(false); }}
-                                                className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm text-slate-500"
+                                                className="w-full text-left p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm text-slate-500 focus-visible:bg-slate-50 focus-visible:outline-none"
+                                                role="option"
+                                                aria-selected={localAssignee === ''}
                                             >
                                                 Unassigned
-                                            </div>
+                                            </button>
                                             {users
                                                 .filter(u =>
                                                     !activeProject ? false :
@@ -406,10 +571,13 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                                         activeProject.resourceIds.includes(u.id)
                                                 )
                                                 .map(u => (
-                                                    <div
+                                                    <button
+                                                        type="button"
                                                         key={u.id}
                                                         onClick={() => { setLocalAssignee(u.id); setIsAssigneeDropdownOpen(false); }}
-                                                        className="p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer flex items-center gap-2"
+                                                        className="w-full text-left p-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer flex items-center gap-2 focus-visible:bg-slate-50 focus-visible:outline-none"
+                                                        role="option"
+                                                        aria-selected={localAssignee === u.id}
                                                     >
                                                         {u.avatar ? (
                                                             <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
@@ -419,7 +587,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                                             </div>
                                                         )}
                                                         <span className="text-sm text-slate-700 dark:text-slate-200">{u.name}</span>
-                                                    </div>
+                                                    </button>
                                                 ))
                                             }
                                         </div>
@@ -600,7 +768,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                             color: tag.color,
                                         } : {}}
                                     >
-                                        <button onClick={() => handleTagToggle(tag.id)} className="focus:outline-none">
+                                        <button onClick={() => handleTagToggle(tag.id)} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary rounded" aria-pressed={isSelected}>
                                             {tag.name}
                                         </button>
 
@@ -678,6 +846,76 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                 </button>
                             )}
                         </form>
+                    </div>
+
+                    {/* Subtasks Section */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1.5">
+                                <ListTodo size={12} /> Subtasks ({localSubtasks.filter(s => s.completed).length}/{localSubtasks.length} Completed)
+                            </label>
+                            {localSubtasks.length > 0 && localSubtasks.some(s => !s.completed) && (
+                                <button
+                                    onClick={handleCompleteAllSubtasks}
+                                    className="text-[10px] font-medium text-primary hover:text-primary/80 transition-colors"
+                                >
+                                    Complete All
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Subtask list with timeline */}
+                        {localSubtasks.length > 0 && (
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleSubtaskDragEnd}
+                            >
+                                <SortableContext
+                                    items={localSubtasks.map(s => s.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="space-y-2 max-h-64 overflow-y-auto pl-1 mb-3">
+                                        {[...localSubtasks]
+                                            .sort((a, b) => a.orderIndex - b.orderIndex)
+                                            .map((subtask, index, arr) => (
+                                                <SortableSubtaskItem
+                                                    key={subtask.id}
+                                                    subtask={subtask}
+                                                    onToggle={() => handleToggleSubtask(subtask.id)}
+                                                    onDelete={() => handleDeleteSubtask(subtask.id)}
+                                                    isLast={index === arr.length - 1}
+                                                />
+                                            ))
+                                        }
+                                    </div>
+                                </SortableContext>
+                            </DndContext>
+                        )}
+
+                        {/* Add Subtask Button - Dashed border style */}
+                        {localSubtasks.length < MAX_SUBTASKS ? (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={newSubtaskText}
+                                    onChange={(e) => setNewSubtaskText(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}
+                                    placeholder="Add a subtask..."
+                                    className="flex-1 p-2.5 border-2 border-dashed rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600 dark:focus:border-primary border-slate-300"
+                                />
+                                {newSubtaskText.trim() && (
+                                    <button
+                                        onClick={handleAddSubtask}
+                                        className="p-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-400 text-center py-2">Maximum {MAX_SUBTASKS} subtasks reached</p>
+                        )}
                     </div>
 
                     {/* Discussion Task Section */}

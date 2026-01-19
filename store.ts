@@ -7,6 +7,7 @@ import { DEFAULT_TAGS } from './constants';
 import { supabase } from './supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 import imageCompression from 'browser-image-compression';
+import { playColumnMove } from './utils/sounds';
 
 declare var chrome: any;
 
@@ -1076,10 +1077,8 @@ export const useStore = create<any>((set, get) => ({
       if (freshMe) {
         // Re-apply Plan Limits if Premium (Fixes overwrite issue)
         const isPrem = get().canAccessPremium();
-        // FIXED: Use helper functions instead of hardcoded plan IDs
-        const activePlan = isPrem
-          ? get().getPremiumPlan(freshMe.currency || 'USD')
-          : get().getFreePlan();
+        // Better Plan Inheritance: Prioritize the user's specific Plan ID
+        const activePlan = get().plans.find(pl => pl.id === freshMe.planId) || (isPrem ? get().getPremiumPlan(freshMe.currency || 'USD') : get().getFreePlan());
 
         let effectiveUser = { ...freshMe };
         if (activePlan) {
@@ -1276,7 +1275,9 @@ export const useStore = create<any>((set, get) => ({
       discussionUserIds: t.discussion_user_ids || [],
       discussionEnded: t.discussion_ended || false,
       // Recurrence
-      recurrence: t.recurrence
+      recurrence: t.recurrence,
+      // Subtasks
+      subtasks: t.subtasks || []
     }));
     set({ tasks: processedTasks });
 
@@ -1316,12 +1317,21 @@ export const useStore = create<any>((set, get) => ({
 
       // Catch up
       while (nextTrigger <= now && generatedCount < MAX_GENERATE) {
+        // Find the first column of the project to avoid "todo" UUID error
+        const projectColumns = get().columns.filter(c => c.projectId === masterTask.projectId);
+        const firstColumn = projectColumns.sort((a, b) => a.orderIndex - b.orderIndex)[0];
+
+        if (!firstColumn) {
+          console.warn(`No columns found for project ${masterTask.projectId}, skipping recurring instance`);
+          break;
+        }
+
         const newTaskData = {
           ...masterTask,
           id: crypto.randomUUID(),
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          columnId: 'todo',
+          columnId: firstColumn.id,
           recurrence: undefined, // Child is not recurring
           timerStartedAt: undefined,
           timeTracked: 0,
@@ -1425,41 +1435,39 @@ export const useStore = create<any>((set, get) => ({
       id: p.id,
       name: p.name,
       currency: p.currency || 'USD',
+      description: p.description || '',
 
-      // CamelCase (Legacy for UI & Database quotes)
-      priceMonthly: p.priceMonthly ?? p.price_monthly,
-      priceYearly: p.priceYearly ?? p.price_yearly,
-      maxProjects: p.maxProjects ?? p.max_projects,
-      maxMembersPerProject: p.maxMembersPerProject ?? p.max_members_per_project,
-      maxLeadsPerProject: p.maxLeadsPerProject ?? p.max_leads_per_project,
-      maxUploadSizeMb: p.maxUploadSizeMb ?? p.max_upload_size_mb,
-      maxUploadsPerTaskLimit: p.maxUploadsPerTaskLimit ?? p.max_uploads_per_task_limit,
-      canInviteMembers: p.canInviteMembers ?? p.can_invite_members,
-      canUploadImages: p.canUploadImages ?? p.can_upload_images,
-      canSetReminders: p.canSetReminders ?? p.can_set_reminders,
-      canUseNotifications: p.canUseNotifications ?? p.can_use_notifications,
-      canExportData: p.canExportData ?? p.can_export_data,
-      canViewHistory: p.canViewHistory ?? p.can_view_history,
-      historyRetentionDays: p.historyRetentionDays ?? p.history_retention_days,
+      // Normalized primary fields (snake_case)
+      price_monthly: Number(p.price_monthly) || 0,
+      price_yearly: Number(p.price_yearly) || 0,
+      price_per_seat_monthly: Number(p.price_per_seat_monthly) || (p.currency === 'INR' ? 399 : 5),
+      price_per_seat_yearly: Number(p.price_per_seat_yearly) || (p.currency === 'INR' ? 3990 : 50),
+      max_projects: Number(p.max_projects) || 3,
+      max_members_per_project: Number(p.max_members_per_project) || 5,
+      max_leads_per_project: Number(p.max_leads_per_project) || 5,
+      max_upload_size_mb: Number(p.max_upload_size_mb) || 100,
+      max_images_per_task: Number(p.max_images_per_task) ?? 3,
+      can_invite_members: !!p.can_invite_members,
+      can_upload_images: !!p.can_upload_images,
+      can_set_reminders: !!p.can_set_reminders,
+      can_use_notifications: !!p.can_use_notifications,
+      can_export_data: !!p.can_export_data,
+      can_view_history: !!p.can_view_history,
+      history_retention_days: p.history_retention_days === null ? null : Number(p.history_retention_days) || 30,
 
-      // Snake_Case (Matches DB & Interface)
-      price_monthly: p.priceMonthly ?? p.price_monthly,
-      price_yearly: p.priceYearly ?? p.price_yearly,
-      price_per_seat_monthly: p.pricePerSeatMonthly ?? p.price_per_seat_monthly ?? (p.currency === 'INR' ? 399 : 5),
-      price_per_seat_yearly: p.pricePerSeatYearly ?? p.price_per_seat_yearly ?? (p.currency === 'INR' ? 3990 : 50),
-      max_projects: p.maxProjects ?? p.max_projects,
-      max_members_per_project: p.maxMembersPerProject ?? p.max_members_per_project,
-      max_leads_per_project: p.maxLeadsPerProject ?? p.max_leads_per_project,
-      max_upload_size_mb: p.maxUploadSizeMb ?? p.max_upload_size_mb,
-      max_images_per_task: p.maxUploadsPerTaskLimit ?? p.max_uploads_per_task_limit ?? 3,
-
-      can_invite_members: p.canInviteMembers ?? p.can_invite_members,
-      can_upload_images: p.canUploadImages ?? p.can_upload_images,
-      can_set_reminders: p.canSetReminders ?? p.can_set_reminders,
-      can_use_notifications: p.canUseNotifications ?? p.can_use_notifications,
-      can_export_data: p.canExportData ?? p.can_export_data,
-      can_view_history: p.canViewHistory ?? p.can_view_history,
-      history_retention_days: p.historyRetentionDays ?? p.history_retention_days
+      // Legacy camelCase mapping for safety
+      priceMonthly: Number(p.price_monthly) || 0,
+      priceYearly: Number(p.price_yearly) || 0,
+      maxProjects: Number(p.max_projects) || 3,
+      maxMembersPerProject: Number(p.max_members_per_project) || 5,
+      maxLeadsPerProject: Number(p.max_leads_per_project) || 5,
+      canInviteMembers: !!p.can_invite_members,
+      canUploadImages: !!p.can_upload_images,
+      canSetReminders: !!p.can_set_reminders,
+      canUseNotifications: !!p.can_use_notifications,
+      canExportData: !!p.can_export_data,
+      canViewHistory: !!p.can_view_history,
+      historyRetentionDays: p.history_retention_days === null ? null : Number(p.history_retention_days) || 30
     }));
     set({ plans: mappedPlans });
     return mappedPlans;
@@ -1467,37 +1475,54 @@ export const useStore = create<any>((set, get) => ({
 
   updatePlan: async (id, updates) => {
     const dbUpdates: any = {};
-    // Handle both camelCase and snake_case for compatibility
-    if (updates.priceMonthly !== undefined) dbUpdates.price_monthly = updates.priceMonthly;
-    if (updates.price_monthly !== undefined) dbUpdates.price_monthly = updates.price_monthly;
-    if (updates.priceYearly !== undefined) dbUpdates.price_yearly = updates.priceYearly;
-    if (updates.price_yearly !== undefined) dbUpdates.price_yearly = updates.price_yearly;
-    if (updates.price_per_seat_monthly !== undefined) dbUpdates.price_per_seat_monthly = updates.price_per_seat_monthly;
-    if (updates.price_per_seat_yearly !== undefined) dbUpdates.price_per_seat_yearly = updates.price_per_seat_yearly;
-    if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
-    if (updates.max_projects !== undefined) dbUpdates.max_projects = updates.max_projects;
-    if (updates.maxMembersPerProject !== undefined) dbUpdates.max_members_per_project = updates.maxMembersPerProject;
-    if (updates.max_members_per_project !== undefined) dbUpdates.max_members_per_project = updates.max_members_per_project;
-    if (updates.maxLeadsPerProject !== undefined) dbUpdates.max_leads_per_project = updates.maxLeadsPerProject;
-    if (updates.max_leads_per_project !== undefined) dbUpdates.max_leads_per_project = updates.max_leads_per_project;
-    if (updates.max_images_per_task !== undefined) dbUpdates.max_images_per_task = updates.max_images_per_task;
-    if (updates.maxUploadsPerTaskLimit !== undefined) dbUpdates.max_uploads_per_task_limit = updates.maxUploadsPerTaskLimit;
-    if (updates.canInviteMembers !== undefined) dbUpdates.can_invite_members = updates.canInviteMembers;
-    if (updates.can_invite_members !== undefined) dbUpdates.can_invite_members = updates.can_invite_members;
-    if (updates.canUploadImages !== undefined) dbUpdates.can_upload_images = updates.canUploadImages;
-    if (updates.can_upload_images !== undefined) dbUpdates.can_upload_images = updates.can_upload_images;
-    if (updates.canSetReminders !== undefined) dbUpdates.can_set_reminders = updates.canSetReminders;
-    if (updates.can_set_reminders !== undefined) dbUpdates.can_set_reminders = updates.can_set_reminders;
-    if (updates.canUseNotifications !== undefined) dbUpdates.can_use_notifications = updates.canUseNotifications;
-    if (updates.can_use_notifications !== undefined) dbUpdates.can_use_notifications = updates.can_use_notifications;
-    if (updates.canExportData !== undefined) dbUpdates.can_export_data = updates.canExportData;
-    if (updates.can_export_data !== undefined) dbUpdates.can_export_data = updates.can_export_data;
-    if (updates.historyRetentionDays !== undefined) dbUpdates.history_retention_days = updates.historyRetentionDays;
-    if (updates.history_retention_days !== undefined) dbUpdates.history_retention_days = updates.history_retention_days;
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.description !== undefined) dbUpdates.description = updates.description;
+
+    // Pricing
+    if (updates.price_monthly !== undefined) dbUpdates.price_monthly = updates.price_monthly;
+    else if (updates.priceMonthly !== undefined) dbUpdates.price_monthly = updates.priceMonthly;
+
+    if (updates.price_yearly !== undefined) dbUpdates.price_yearly = updates.price_yearly;
+    else if (updates.priceYearly !== undefined) dbUpdates.price_yearly = updates.priceYearly;
+
+    if (updates.price_per_seat_monthly !== undefined) dbUpdates.price_per_seat_monthly = updates.price_per_seat_monthly;
+    if (updates.price_per_seat_yearly !== undefined) dbUpdates.price_per_seat_yearly = updates.price_per_seat_yearly;
+
+    // Limits
+    if (updates.max_projects !== undefined) dbUpdates.max_projects = updates.max_projects;
+    else if (updates.maxProjects !== undefined) dbUpdates.max_projects = updates.maxProjects;
+
+    if (updates.max_members_per_project !== undefined) dbUpdates.max_members_per_project = updates.max_members_per_project;
+    else if (updates.maxMembersPerProject !== undefined) dbUpdates.max_members_per_project = updates.maxMembersPerProject;
+
+    if (updates.max_leads_per_project !== undefined) dbUpdates.max_leads_per_project = updates.max_leads_per_project;
+    else if (updates.maxLeadsPerProject !== undefined) dbUpdates.max_leads_per_project = updates.maxLeadsPerProject;
+
+    if (updates.max_images_per_task !== undefined) dbUpdates.max_images_per_task = updates.max_images_per_task;
+    if (updates.max_upload_size_mb !== undefined) dbUpdates.max_upload_size_mb = updates.max_upload_size_mb;
+
+    // Boolean Features
+    if (updates.can_invite_members !== undefined) dbUpdates.can_invite_members = updates.can_invite_members;
+    else if (updates.canInviteMembers !== undefined) dbUpdates.can_invite_members = updates.canInviteMembers;
+
+    if (updates.can_upload_images !== undefined) dbUpdates.can_upload_images = updates.can_upload_images;
+    else if (updates.canUploadImages !== undefined) dbUpdates.can_upload_images = updates.canUploadImages;
+
+    if (updates.can_set_reminders !== undefined) dbUpdates.can_set_reminders = updates.can_set_reminders;
+    else if (updates.canSetReminders !== undefined) dbUpdates.can_set_reminders = updates.canSetReminders;
+
+    if (updates.can_use_notifications !== undefined) dbUpdates.can_use_notifications = updates.can_use_notifications;
+    else if (updates.canUseNotifications !== undefined) dbUpdates.can_use_notifications = updates.canUseNotifications;
+
+    if (updates.can_export_data !== undefined) dbUpdates.can_export_data = updates.can_export_data;
+    else if (updates.canExportData !== undefined) dbUpdates.can_export_data = updates.canExportData;
+
     if (updates.can_view_history !== undefined) dbUpdates.can_view_history = updates.can_view_history;
+    else if (updates.canViewHistory !== undefined) dbUpdates.can_view_history = updates.canViewHistory;
+
+    if (updates.history_retention_days !== undefined) dbUpdates.history_retention_days = updates.history_retention_days;
+    else if (updates.historyRetentionDays !== undefined) dbUpdates.history_retention_days = updates.historyRetentionDays;
 
     const { error } = await supabase.from('plans').update(dbUpdates).eq('id', id);
     if (!error) {
@@ -1785,12 +1810,25 @@ export const useStore = create<any>((set, get) => ({
   },
 
   deleteProject: async (id) => {
-    const { projects, currentUser } = get();
+    const { projects, currentUser, teams } = get();
     const project = projects.find(p => p.id === id);
     if (!project) return;
 
-    if (project.ownerId !== currentUser?.id && currentUser?.email !== ADMIN_EMAIL) {
-      alert("Only the Project Owner can delete this project.");
+    const isAdmin = currentUser?.email === ADMIN_EMAIL;
+    const isOwner = project.ownerId === currentUser?.id;
+
+    // Check if Project belongs to a Team (Department)
+    let isDeptHead = false;
+    if (project.teamId) {
+      const team = teams.find(t => t.id === project.teamId);
+      // Check if current user is the Department Head (Team Owner)
+      if (team && team.ownerId === currentUser?.id) {
+        isDeptHead = true;
+      }
+    }
+
+    if (!isOwner && !isAdmin && !isDeptHead) {
+      get().showCustomAlert('Only the Project Owner, Department Head, or Admin can delete this project.', 'error');
       return;
     }
 
@@ -2208,6 +2246,9 @@ export const useStore = create<any>((set, get) => ({
     if (updates.discussionUserIds !== undefined) dbUpdates.discussion_user_ids = updates.discussionUserIds;
     if (updates.discussionEnded !== undefined) dbUpdates.discussion_ended = updates.discussionEnded;
 
+    // Subtasks field
+    if (updates.subtasks !== undefined) dbUpdates.subtasks = updates.subtasks;
+
     console.log("Saving Task Updates:", dbUpdates); // DEBUG
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
     if (error) console.error("Failed to save task:", error);
@@ -2394,6 +2435,11 @@ export const useStore = create<any>((set, get) => ({
     await supabase.from('tasks').upsert(batch);
 
     if (task.columnId !== newColumnId) {
+      // Play column move sound if enabled
+      if (user.soundEnabled !== false) {
+        playColumnMove();
+      }
+
       const owner = state.users.find(u => u.id === project.ownerId);
 
       // Determine recipients based on hierarchy
@@ -3072,6 +3118,54 @@ export const useStore = create<any>((set, get) => ({
       console.error("Delete user exception:", err);
       alert(`Failed to delete user: ${err.message || 'Unknown error'}`);
     }
+  },
+
+  createTeam: async (name) => {
+    const { currentUser, currentCompany, canAccessPremium } = get();
+    if (!currentUser) return null;
+
+    // Strict Access: Only Admin OR Company Owner OR Premium users can create new Departments (Teams)
+    const isOwner = currentCompany?.ownerId === currentUser.id;
+    const isPrem = canAccessPremium();
+    const isSupAdmin = currentUser.email === ADMIN_EMAIL;
+
+    if (!isSupAdmin && !isOwner && !isPrem) {
+      get().showCustomAlert('Upgrade to Premium to create a team and invite members.', 'warning');
+      return null;
+    }
+
+    const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const { data, error } = await supabase.from('teams').insert({
+      name,
+      owner_id: currentUser.id,
+      join_code: joinCode
+    }).select().single();
+
+    if (error) {
+      console.error("Create Team Error:", error);
+      get().showCustomAlert('Failed to create team.', 'error');
+      return null;
+    }
+
+    // Add owner as active member
+    await supabase.from('team_members').insert({
+      team_id: data.id,
+      user_id: currentUser.id,
+      status: 'active'
+    });
+
+    // Create default "General" department
+    await supabase.from('departments').insert({
+      team_id: data.id,
+      name: 'General',
+      color: '#FF6B35'
+    });
+
+    // Refresh data
+    await get().fetchTeams();
+    await get().fetchAllDepartments();
+    return data;
   },
 
   fetchTransactions: async () => {
@@ -4070,63 +4164,6 @@ export const useStore = create<any>((set, get) => ({
 
     set({ teams: processedTeams });
     return processedTeams;
-  },
-
-  createTeam: async (name) => {
-    const { currentUser, canAccessPremium } = get();
-    if (!currentUser) return null;
-
-    // Only premium users can create teams
-    if (!canAccessPremium() && currentUser.email !== ADMIN_EMAIL) {
-      get().showCustomAlert('Upgrade to Premium to create a team and invite members.', 'warning');
-      return null;
-    }
-
-    const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-    const { data, error } = await supabase
-      .from('teams')
-      .insert({
-        owner_id: currentUser.id,
-        name,
-        join_code: joinCode
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating team:', error);
-      get().showCustomAlert('Failed to create team.', 'error');
-      return null;
-    }
-
-    // Add owner as active member
-    await supabase.from('team_members').insert({
-      team_id: data.id,
-      user_id: currentUser.id,
-      status: 'active'
-    });
-
-    // Create default "General" department
-    await supabase.from('departments').insert({
-      team_id: data.id,
-      name: 'General',
-      color: '#6b7280'
-    });
-
-    await get().fetchTeams();
-
-    const newTeam: Team = {
-      id: data.id,
-      ownerId: data.owner_id,
-      name: data.name,
-      joinCode: data.join_code,
-      createdAt: new Date(data.created_at).getTime(),
-      memberCount: 1,
-      effectiveLimit: currentUser.maxResources || 5
-    };
-
-    return newTeam;
   },
 
   updateTeam: async (teamId, updates) => {

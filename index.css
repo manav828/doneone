@@ -53,6 +53,11 @@ samp,
   --priority-high: #EF4444;
   --priority-medium: #F97316;
   --priority-low: #3B82F6;
+
+  /* Premium Soft Priority Colors */
+  --priority-soft-high: #ffa39c;
+  --priority-soft-medium: #ffdc75;
+  --priority-soft-low: #9dc5ff;
 }
 
 /* === STYLE 1: BORDER (Static - Clean) === */
@@ -214,7 +219,39 @@ html[data-priority-style="gradient-animated"] .priority-low {
   }
 }
 
-/* === STYLE 4: CORNER RIBBON === */
+/* === STYLE 4: SOFT BACKGROUND (User Custom) === */
+html[data-priority-style="soft-background"] .priority-high {
+  background-color: rgba(255, 163, 156, 0.2) !important;
+  border-left: 4px solid var(--priority-soft-high) !important;
+  border-color: rgba(255, 163, 156, 0.3) !important;
+}
+
+html[data-priority-style="soft-background"] .priority-medium {
+  background-color: rgba(255, 220, 117, 0.2) !important;
+  border-left: 4px solid var(--priority-soft-medium) !important;
+  border-color: rgba(255, 220, 117, 0.3) !important;
+}
+
+html[data-priority-style="soft-background"] .priority-low {
+  background-color: rgba(157, 197, 255, 0.2) !important;
+  border-left: 4px solid var(--priority-soft-low) !important;
+  border-color: rgba(157, 197, 255, 0.3) !important;
+}
+
+/* Dark mode adjustments for soft background */
+.dark html[data-priority-style="soft-background"] .priority-high {
+  background-color: rgba(255, 163, 156, 0.15) !important;
+}
+
+.dark html[data-priority-style="soft-background"] .priority-medium {
+  background-color: rgba(255, 220, 117, 0.15) !important;
+}
+
+.dark html[data-priority-style="soft-background"] .priority-low {
+  background-color: rgba(157, 197, 255, 0.15) !important;
+}
+
+/* === STYLE 5: CORNER RIBBON === */
 html[data-priority-style="corner-ribbon"] .priority-critical,
 html[data-priority-style="corner-ribbon"] .priority-high,
 html[data-priority-style="corner-ribbon"] .priority-medium,
