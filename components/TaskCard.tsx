@@ -207,7 +207,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
         {/* Header */}
         <div className={`flex items-start justify-between gap-2 ${isCollapsed ? 'mb-0' : 'mb-1.5'}`}>
-          <h4 className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug break-words pr-6 capitalize">
+          <h4 className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug break-words pr-6 capitalize line-clamp-3">
             {task.title}
           </h4>
           {task.reminderAt && remindersEnabled && !isCollapsed && (

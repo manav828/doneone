@@ -47,6 +47,7 @@ interface AppState {
   teamMembers: TeamMember[];
   teamRoles: TeamRole[];
   departments: Department[];
+  fetchAllDepartments: (teamIds: string[]) => Promise<void>;
   departmentMembers: DepartmentMember[];
   activeTeamId: string | null;
   currentCompany: Company | null;
@@ -211,6 +212,7 @@ interface AppState {
 
   // Team Members
   fetchTeamMembers: (teamId: string) => Promise<TeamMember[]>;
+  fetchMembersForTeams: (teamIds: string[]) => Promise<void>;
   joinTeam: (joinCode: string) => Promise<'requested' | 'already_member' | 'already_pending' | 'not_found' | 'error'>;
   approveTeamMember: (teamId: string, userId: string) => Promise<void>;
   rejectTeamMember: (teamId: string, userId: string) => Promise<void>;
@@ -1574,13 +1576,17 @@ export const useStore = create<any>((set, get) => ({
     // 1. Fetch Plans first (needed for team limit calculations)
     await get().fetchPlans();
 
-    // 2. Fetch teams and departments
+    // 2. Fetch teams first (Source of Truth for Access)
+    const fetchedTeams = await get().fetchTeams();
+    const teamIds = fetchedTeams.map((t: Team) => t.id);
+
+    // 3. Parallel fetch of Team-Dependent Data
     await Promise.all([
-      get().fetchTeams(),
-      get().fetchAllDepartments()
+      get().fetchAllDepartments(teamIds),
+      get().fetchMembersForTeams(teamIds)
     ]);
 
-    // 3. Fetch everything else
+    // 4. Fetch Everything Else
     await Promise.all([
       get().fetchUsers(),
       get().fetchProjects(),
@@ -2176,6 +2182,7 @@ export const useStore = create<any>((set, get) => ({
       estimatedTime: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      completedAt: get().columns.find(c => c.id === columnId)?.title === 'Done' ? Date.now() : undefined,
       attachments: []
     };
 
@@ -4120,20 +4127,37 @@ export const useStore = create<any>((set, get) => ({
     });
     const allTeams = Array.from(allTeamMap.values());
 
-    // Get member counts for each team
-    const processedTeams: Team[] = await Promise.all(allTeams.map(async (t) => {
-      const { count } = await supabase
-        .from('team_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('team_id', t.id)
-        .eq('status', 'active');
+    if (allTeams.length === 0) {
+      set({ teams: [] });
+      return [];
+    }
 
-      // Get owner's plan limits for effective limit
-      const { data: owner } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', t.owner_id)
-        .single();
+    const teamIds = allTeams.map(t => t.id);
+    // Batch Fetch 1: All Owners
+    const ownerIds = [...new Set(allTeams.map(t => t.owner_id))];
+    const { data: owners } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', ownerIds);
+    const ownerMap = new Map(owners?.map(o => [o.id, o]));
+
+    // Batch Fetch 2: All Member Counts
+    // fetching just team_id for all active members in these teams
+    const { data: allMembersRaw } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .in('team_id', teamIds)
+      .eq('status', 'active');
+
+    const memberCounts = new Map<string, number>();
+    allMembersRaw?.forEach((m: any) => {
+      memberCounts.set(m.team_id, (memberCounts.get(m.team_id) || 0) + 1);
+    });
+
+    // Get member counts for each team
+    const processedTeams: Team[] = allTeams.map((t) => {
+      const count = memberCounts.get(t.id) || 0;
+      const owner = ownerMap.get(t.owner_id);
 
       // Find plan for owner to get correct base limit
       const ownerPlan = get().plans.find(p => p.id === owner?.plan_id);
@@ -4155,12 +4179,13 @@ export const useStore = create<any>((set, get) => ({
         name: t.name,
         joinCode: t.join_code,
         createdAt: new Date(t.created_at).getTime(),
+        companyId: t.company_id,
         managerIds: t.manager_ids || [], // NEW: Include manager_ids
         memberCount: count || 0,
         effectiveLimit: baseLimit + extraSeats,
         companies: t.companies // Include Company Info
       };
-    }));
+    });
 
     set({ teams: processedTeams });
     return processedTeams;
@@ -4301,6 +4326,52 @@ export const useStore = create<any>((set, get) => ({
       ]
     }));
     return members;
+  },
+
+  fetchMembersForTeams: async (teamIds: string[]) => {
+    if (teamIds.length === 0) return;
+
+    const { data } = await supabase
+      .from('team_members')
+      .select(`
+        *,
+        user:profiles(*),
+        role:team_roles(*)
+      `)
+      .in('team_id', teamIds);
+
+    const members: TeamMember[] = (data || []).map((m: any) => ({
+      id: m.id,
+      teamId: m.team_id,
+      userId: m.user_id,
+      roleId: m.role_id,
+      status: m.status,
+      joinedAt: new Date(m.joined_at).getTime(),
+      user: m.user ? {
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        role: m.user.role,
+        currency: m.user.currency || 'INR',
+        remindersEnabled: m.user.reminders_enabled,
+        timeTrackingEnabled: m.user.time_tracking_enabled,
+        imageUploadEnabled: m.user.image_upload_enabled,
+        maxAttachmentsPerTask: m.user.max_attachments_per_task || 3
+      } as User : undefined,
+      role: m.role ? {
+        id: m.role.id,
+        teamId: m.role.team_id,
+        name: m.role.name,
+        color: m.role.color
+      } : undefined
+    }));
+
+    // Update state - replace members for these teams
+    set((state: AppState) => {
+      // Remove old members of these teams
+      const others = state.teamMembers.filter(m => !teamIds.includes(m.teamId));
+      return { teamMembers: [...others, ...members] };
+    });
   },
 
   addTeamMember: async (teamId, userId, roleId = null) => {
@@ -4504,196 +4575,49 @@ export const useStore = create<any>((set, get) => ({
     await get().fetchTeamMembers(teamId);
   },
 
-  // Departments
+  // Departments - Deprecated/Neutralized
+
+
   fetchDepartments: async (teamId) => {
-    const { data } = await supabase
-      .from('departments')
-      .select('*')
-      .eq('team_id', teamId);
-
-    // Get member counts
-    const departments: Department[] = await Promise.all((data || []).map(async (d) => {
-      const { count } = await supabase
-        .from('department_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('department_id', d.id);
-
-      return {
-        id: d.id,
-        teamId: d.team_id,
-        name: d.name,
-        color: d.color,
-        createdAt: new Date(d.created_at).getTime(),
-        memberCount: count || 0,
-        managerIds: d.manager_ids || []
-      };
-    }));
-
-    // MERGE: Keep departments from other teams, only update this team's departments
+    // Departments removed - no-op
     set(state => ({
-      departments: [
-        ...state.departments.filter(d => d.teamId !== teamId),
-        ...departments
-      ]
+      departments: state.departments.filter(d => d.teamId !== teamId)
     }));
-    return departments;
+    return [];
   },
 
-  // NEW: Fetch all departments globally (for Department Head visibility)
   fetchAllDepartments: async () => {
-    console.log('🏢 fetchAllDepartments: Starting...');
-    const { data, error } = await supabase
-      .from('departments')
-      .select('*');
-
-    console.log('🏢 fetchAllDepartments: Raw response', { data, error });
-
-    const departments: Department[] = (data || []).map((d) => ({
-      id: d.id,
-      teamId: d.team_id,
-      name: d.name,
-      color: d.color,
-      createdAt: new Date(d.created_at).getTime(),
-      managerIds: d.manager_ids || []
-    }));
-
-    console.log('🏢 fetchAllDepartments: Processed departments', departments);
-
-    set({ departments });
-    return departments;
+    set({ departments: [] });
+    return [];
   },
 
   createDepartment: async (teamId, name, color = '#3b82f6') => {
-    const { data, error } = await supabase
-      .from('departments')
-      .insert({ team_id: teamId, name, color })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating department:', error);
-      return null;
-    }
-
-    await get().fetchDepartments(teamId);
-    return {
-      id: data.id,
-      teamId: data.team_id,
-      name: data.name,
-      color: data.color
-    };
+    return null;
   },
 
   updateDepartment: async (departmentId, updates) => {
-    const dbUpdates: any = {};
-    if (updates.name) dbUpdates.name = updates.name;
-    if (updates.color) dbUpdates.color = updates.color;
-
-    const { data: dept } = await supabase
-      .from('departments')
-      .select('team_id')
-      .eq('id', departmentId)
-      .single();
-
-    await supabase.from('departments').update(dbUpdates).eq('id', departmentId);
-
-    if (dept) {
-      await get().fetchDepartments(dept.team_id);
-    }
+    // no-op
   },
 
   deleteDepartment: async (departmentId) => {
-    const { data: dept } = await supabase
-      .from('departments')
-      .select('team_id')
-      .eq('id', departmentId)
-      .single();
-
-    await supabase.from('departments').delete().eq('id', departmentId);
-
-    if (dept) {
-      await get().fetchDepartments(dept.team_id);
-    }
+    // no-op
   },
 
-  // Department Members
+  // Department Members - Neutralized
   addMemberToDepartment: async (departmentId, userId) => {
-    await supabase.from('department_members').insert({
-      department_id: departmentId,
-      user_id: userId
-    });
-
-    const { data: dept } = await supabase
-      .from('departments')
-      .select('team_id')
-      .eq('id', departmentId)
-      .single();
-
-    if (dept) {
-      await get().fetchDepartments(dept.team_id);
-    }
+    // no-op
   },
 
   removeMemberFromDepartment: async (departmentId, userId) => {
-    await supabase
-      .from('department_members')
-      .delete()
-      .eq('department_id', departmentId)
-      .eq('user_id', userId);
-
-    const { data: dept } = await supabase
-      .from('departments')
-      .select('team_id')
-      .eq('id', departmentId)
-      .single();
-
-    if (dept) {
-      await get().fetchDepartments(dept.team_id);
-    }
+    // no-op
   },
 
   assignDepartmentHead: async (departmentId, userId) => {
-    const { departments } = get();
-    const dept = departments.find(d => d.id === departmentId);
-    if (!dept) return;
-
-    const currentManagers = dept.managerIds || [];
-    if (currentManagers.includes(userId)) return;
-
-    const newManagers = [...currentManagers, userId];
-
-    set(state => ({
-      departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: newManagers } : d)
-    }));
-
-    const { error } = await supabase.from('departments').update({ manager_ids: newManagers }).eq('id', departmentId);
-    if (error) {
-      console.error('Failed to assign dept head:', error);
-      set(state => ({
-        departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: currentManagers } : d)
-      }));
-    }
+    // no-op
   },
 
   removeDepartmentHead: async (departmentId, userId) => {
-    const { departments } = get();
-    const dept = departments.find(d => d.id === departmentId);
-    if (!dept) return;
-
-    const currentManagers = dept.managerIds || [];
-    const newManagers = currentManagers.filter(id => id !== userId);
-
-    set(state => ({
-      departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: newManagers } : d)
-    }));
-
-    const { error } = await supabase.from('departments').update({ manager_ids: newManagers }).eq('id', departmentId);
-    if (error) {
-      console.error('Failed to remove dept head:', error);
-      set(state => ({
-        departments: state.departments.map(d => d.id === departmentId ? { ...d, managerIds: currentManagers } : d)
-      }));
-    }
+    // no-op
   },
 
   assignProjectManager: async (projectId, userId) => {
@@ -4984,18 +4908,27 @@ export const useStore = create<any>((set, get) => ({
       (!projectId || t.projectId === projectId)
     );
 
-    const projectCols = projectId ? columns.filter(c => c.projectId === projectId) : columns;
-    const doneColumn = projectCols.find(c => c.title === 'Done');
-    const inProgressColumn = projectCols.find(c => c.title === 'In Progress');
-    const pendingColumn = projectCols.find(c => c.title === 'Pending');
-
     const now = Date.now();
-    const completedTasks = userTasks.filter(t => doneColumn && t.columnId === doneColumn.id);
-    const inProgressTasks = userTasks.filter(t => inProgressColumn && t.columnId === inProgressColumn.id);
-    const pendingTasks = userTasks.filter(t => pendingColumn && t.columnId === pendingColumn.id);
-    const overdueTasks = userTasks.filter(t => t.reminderAt && t.reminderAt < now && (!doneColumn || t.columnId !== doneColumn.id));
+
+    // Helper: Check status based on column title
+    const getStatus = (colId: string) => {
+      const col = columns.find(c => c.id === colId);
+      if (!col) return 'unknown';
+      const t = col.title.trim().toLowerCase();
+      if (t === 'done' || t === 'completed' || t.includes('complete')) return 'done';
+      if (t === 'in progress' || t === 'doing' || t === 'progress') return 'inprogress';
+      return 'pending';
+    };
+
+    const completedTasks = userTasks.filter(t => getStatus(t.columnId) === 'done');
+    const inProgressTasks = userTasks.filter(t => getStatus(t.columnId) === 'inprogress');
+    const pendingTasks = userTasks.filter(t => getStatus(t.columnId) === 'pending');
+
+    // Note: Overdue is independent of status, but usually relevant for non-done tasks
+    const overdueTasks = userTasks.filter(t => t.reminderAt && t.reminderAt < now && getStatus(t.columnId) !== 'done');
 
     const totalTimeTracked = userTasks.reduce((sum, t) => sum + (t.timeTracked || 0), 0);
+    const totalEstimatedTime = userTasks.reduce((sum, t) => sum + (t.estimatedTime || 0), 0);
 
     // Average completion time (from startedAt to completedAt)
     const completedWithTime = completedTasks.filter(t => t.startedAt && t.completedAt);
@@ -5009,7 +4942,10 @@ export const useStore = create<any>((set, get) => ({
     for (let i = 6; i >= 0; i--) {
       const dayStart = now - ((i + 1) * 24 * 60 * 60 * 1000);
       const dayEnd = now - (i * 24 * 60 * 60 * 1000);
-      const count = completedTasks.filter(t => t.completedAt && t.completedAt >= dayStart && t.completedAt < dayEnd).length;
+      const count = completedTasks.filter(t => {
+        const timestamp = t.completedAt || t.updatedAt;
+        return timestamp && timestamp >= dayStart && timestamp < dayEnd;
+      }).length;
       productivityTrend.push(count);
     }
 
@@ -5017,6 +4953,14 @@ export const useStore = create<any>((set, get) => ({
     const totalAssigned = userTasks.length;
     const completionRate = totalAssigned > 0 ? (completedTasks.length / totalAssigned) * 100 : 0;
     const velocityScore = Math.min(100, Math.round(completionRate * 0.7 + (productivityTrend.reduce((a, b) => a + b, 0) * 3)));
+
+    // Column Breakdown (Group by Title) and Tasks List
+    const columnBreakdown: Record<string, number> = {};
+    userTasks.forEach(t => {
+      const col = columns.find(c => c.id === t.columnId);
+      const title = col ? col.title : 'Unknown';
+      columnBreakdown[title] = (columnBreakdown[title] || 0) + 1;
+    });
 
     return {
       userId,
@@ -5026,9 +4970,12 @@ export const useStore = create<any>((set, get) => ({
       tasksPending: pendingTasks.length,
       tasksOverdue: overdueTasks.length,
       totalTimeTracked,
+      totalEstimatedTime,
       avgCompletionTime,
       productivityTrend,
       velocityScore,
+      tasks: userTasks,
+      columnBreakdown
     };
   },
 
@@ -5041,17 +4988,24 @@ export const useStore = create<any>((set, get) => ({
     const projectTasks = tasks.filter(t => t.projectId === projectId);
     const projectCols = columns.filter(c => c.projectId === projectId);
 
-    const doneColumn = projectCols.find(c => c.title === 'Done');
-    const inProgressColumn = projectCols.find(c => c.title === 'In Progress');
-    const pendingColumn = projectCols.find(c => c.title === 'Pending');
+    // Helper: Check status
+    const getStatus = (colId: string) => {
+      const col = columns.find(c => c.id === colId);
+      if (!col) return 'unknown';
+      const t = col.title.trim().toLowerCase();
+      if (t === 'done' || t === 'completed' || t.includes('complete')) return 'done';
+      if (t === 'in progress' || t === 'doing' || t === 'progress') return 'inprogress';
+      return 'pending';
+    };
 
     const now = Date.now();
-    const completedTasks = projectTasks.filter(t => doneColumn && t.columnId === doneColumn.id);
-    const inProgressTasks = projectTasks.filter(t => inProgressColumn && t.columnId === inProgressColumn.id);
-    const pendingTasks = projectTasks.filter(t => pendingColumn && t.columnId === pendingColumn.id);
-    const overdueTasks = projectTasks.filter(t => t.reminderAt && t.reminderAt < now && (!doneColumn || t.columnId !== doneColumn.id));
+    const completedTasks = projectTasks.filter(t => getStatus(t.columnId) === 'done');
+    const inProgressTasks = projectTasks.filter(t => getStatus(t.columnId) === 'inprogress');
+    const pendingTasks = projectTasks.filter(t => getStatus(t.columnId) === 'pending');
+    const overdueTasks = projectTasks.filter(t => t.reminderAt && t.reminderAt < now && getStatus(t.columnId) !== 'done');
 
     const totalTimeTracked = projectTasks.reduce((sum, t) => sum + (t.timeTracked || 0), 0);
+    const totalEstimatedTime = projectTasks.reduce((sum, t) => sum + (t.estimatedTime || 0), 0);
 
     // On-time rate: completed tasks that were done before reminder
     const completedWithDeadline = completedTasks.filter(t => t.reminderAt);
@@ -5071,10 +5025,13 @@ export const useStore = create<any>((set, get) => ({
     })).filter(c => c.column !== 'Done').sort((a, b) => b.count - a.count);
     const bottleneckColumn = columnTaskCounts.length > 0 && columnTaskCounts[0].count > 5 ? columnTaskCounts[0].column : undefined;
 
-    // Health score: combination of on-time, completion rate, overdue ratio
-    const completionRate = projectTasks.length > 0 ? (completedTasks.length / projectTasks.length) * 100 : 0;
-    const overdueRatio = projectTasks.length > 0 ? (overdueTasks.length / projectTasks.length) * 100 : 0;
-    const healthScore = Math.round(Math.max(0, Math.min(100, (onTimeRate * 0.4) + (completionRate * 0.4) - (overdueRatio * 0.5) + 30)));
+    // Health score: 100 - (Overdue Percentage)
+    // Simple, intuitive: Perfect health unless you have overdue tasks.
+    let healthScore = 0;
+    if (projectTasks.length > 0) {
+      const overdueRatio = (overdueTasks.length / projectTasks.length) * 100;
+      healthScore = Math.max(0, Math.round(100 - overdueRatio));
+    }
 
     // Member metrics
     const memberIds = [...new Set([project.ownerId, ...(project.leadIds || []), ...(project.resourceIds || [])])];
@@ -5089,6 +5046,7 @@ export const useStore = create<any>((set, get) => ({
       pendingTasks: pendingTasks.length,
       overdueTasks: overdueTasks.length,
       totalTimeTracked,
+      totalEstimatedTime,
       healthScore,
       onTimeRate: Math.round(onTimeRate),
       avgCycleTime,
@@ -5097,14 +5055,14 @@ export const useStore = create<any>((set, get) => ({
     };
   },
 
-  // Calculate metrics for a department (aggregates projects)
-  calculateDepartmentMetrics: (departmentId: string): any => {
-    const { departments, projects } = get();
-    const department = departments.find(d => d.id === departmentId);
-    if (!department) return null;
+  // Calculate metrics for entire workspace (Team)
+  calculateWorkspaceMetrics: (teamId: string): any => {
+    const { teams, projects } = get();
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return null;
 
-    const deptProjects = projects.filter(p => p.departmentId === departmentId);
-    const projectMetrics = deptProjects.map(p => get().calculateProjectMetrics(p.id)).filter(Boolean);
+    const teamProjects = projects.filter(p => p.teamId === teamId);
+    const projectMetrics = teamProjects.map(p => get().calculateProjectMetrics(p.id)).filter(Boolean);
 
     const totalTasks = projectMetrics.reduce((sum, p) => sum + p.totalTasks, 0);
     const completedTasks = projectMetrics.reduce((sum, p) => sum + p.completedTasks, 0);
@@ -5117,56 +5075,16 @@ export const useStore = create<any>((set, get) => ({
     projectMetrics.forEach(p => p.memberMetrics.forEach((m: any) => uniqueMembers.add(m.userId)));
 
     return {
-      departmentId,
-      departmentName: department.name,
-      totalProjects: deptProjects.length,
-      activeMembers: uniqueMembers.size,
-      totalTasks,
-      completedTasks,
-      totalTimeTracked,
-      avgHealthScore,
-      projectMetrics,
-    };
-  },
-
-  // Calculate metrics for entire workspace
-  calculateWorkspaceMetrics: (teamId: string): any => {
-    const { teams, departments, projects } = get();
-    const team = teams.find(t => t.id === teamId);
-    if (!team) return null;
-
-    const teamDepartments = departments.filter(d => d.teamId === teamId);
-    const teamProjects = projects.filter(p => p.teamId === teamId);
-
-    const departmentMetrics = teamDepartments.map(d => get().calculateDepartmentMetrics(d.id)).filter(Boolean);
-
-    // Also include projects not in any department
-    const unassignedProjects = teamProjects.filter(p => !p.departmentId);
-    const unassignedProjectMetrics = unassignedProjects.map(p => get().calculateProjectMetrics(p.id)).filter(Boolean);
-
-    const allProjectMetrics = [...departmentMetrics.flatMap(d => d.projectMetrics), ...unassignedProjectMetrics];
-
-    const totalTasks = allProjectMetrics.reduce((sum, p) => sum + p.totalTasks, 0);
-    const completedTasks = allProjectMetrics.reduce((sum, p) => sum + p.completedTasks, 0);
-    const totalTimeTracked = allProjectMetrics.reduce((sum, p) => sum + p.totalTimeTracked, 0);
-    const avgHealthScore = allProjectMetrics.length > 0
-      ? Math.round(allProjectMetrics.reduce((sum, p) => sum + p.healthScore, 0) / allProjectMetrics.length)
-      : 0;
-
-    const uniqueMembers = new Set<string>();
-    allProjectMetrics.forEach(p => p.memberMetrics.forEach((m: any) => uniqueMembers.add(m.userId)));
-
-    return {
       workspaceId: teamId,
       workspaceName: team.name,
-      totalDepartments: teamDepartments.length,
+      totalDepartments: 0,
       totalProjects: teamProjects.length,
       totalMembers: uniqueMembers.size,
       totalTasks,
       completedTasks,
       totalTimeTracked,
       avgHealthScore,
-      departmentMetrics,
+      projectMetrics,
     };
   },
 
@@ -5184,9 +5102,9 @@ export const useStore = create<any>((set, get) => ({
     const ownedTeam = teams.find(t => t.ownerId === currentUser.id);
     if (ownedTeam) return 'admin';
 
-    // Check if DeptHead (manages a department)
-    const managedDept = departments.find(d => d.managerIds?.includes(currentUser.id));
-    if (managedDept) return 'depthead';
+    // Check if DeptHead (manages a department) - Removed
+    // const managedDept = departments.find(d => d.managerIds?.includes(currentUser.id));
+    // if (managedDept) return 'depthead';
 
     if (projectId) {
       const project = projects.find(p => p.id === projectId);

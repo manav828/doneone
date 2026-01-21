@@ -8,7 +8,7 @@ import {
 import {
     Download, User as UserIcon, CheckCircle, Search, Clock, TrendingUp,
     Target, AlertTriangle, Users, Briefcase, Building2, ChevronDown,
-    Zap, Award, Activity, BarChart3
+    Zap, Award, Activity, BarChart3, Filter, X, HelpCircle, Info, PieChart as PieChartIcon
 } from 'lucide-react';
 import type { ReportScope } from '../types';
 
@@ -26,34 +26,92 @@ export const ReportsPage: React.FC = () => {
         columns,
         currentUser,
         teams,
-        departments,
+        teamMembers,
         calculateUserMetrics,
         calculateProjectMetrics,
-        calculateDepartmentMetrics,
         calculateWorkspaceMetrics,
         getUserRoleLevel,
+        currentCompany,
     } = useStore();
+
+    // Filter teams by Current Company
+    const companyTeams = useMemo(() => {
+        if (!currentCompany) return teams;
+        return teams.filter(t => t.companyId === currentCompany.id);
+    }, [teams, currentCompany]);
 
     // Scope State
     const [scope, setScope] = useState<ReportScope>('personal');
     const [selectedTeamId, setSelectedTeamId] = useState<string>('');
-    const [selectedDeptId, setSelectedDeptId] = useState<string>('');
 
     // Project Dropdown State
     const [isProjectOpen, setIsProjectOpen] = useState(false);
     const [projectSearch, setProjectSearch] = useState('');
 
+    // Team Dropdown State
+    const [isTeamSelectorOpen, setIsTeamSelectorOpen] = useState(false);
+    const [teamSearch, setTeamSearch] = useState('');
+
+    // Member Selector State
+    const [isMemberSelectorOpen, setIsMemberSelectorOpen] = useState(false);
+    const [selectedMemberId, setSelectedMemberId] = useState<string>('');
+    const [memberSearch, setMemberSearch] = useState('');
+
     const activeProject = projects.find(p => p.id === activeProjectId);
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()));
+    const filteredTeams = companyTeams.filter(t => t.name.toLowerCase().includes(teamSearch.toLowerCase()));
+
+    // Filter members for the selected team
+    const currentTeamMembers = useMemo(() => {
+        if (!selectedTeamId) return [];
+        return teamMembers
+            .filter(m => m.teamId === selectedTeamId)
+            .map(m => users.find(u => u.id === m.userId))
+            .filter(Boolean);
+    }, [selectedTeamId, teamMembers, users]);
+
+    const filteredMembers = currentTeamMembers.filter(u => u?.name.toLowerCase().includes(memberSearch.toLowerCase()));
+
     const roleLevel = getUserRoleLevel(activeProjectId || undefined);
 
-    // Set default team
+    // Dynamic Column Selection State
+    const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([]);
+    const [isColumnSelectorOpen, setIsColumnSelectorOpen] = useState(false);
+
+    // Initialize default visible columns when project changes
     useEffect(() => {
-        if (teams.length > 0 && !selectedTeamId) {
-            const ownedTeam = teams.find(t => t.ownerId === currentUser?.id);
-            setSelectedTeamId(ownedTeam?.id || teams[0].id);
+        if (activeProjectId && columns.length > 0) {
+            const projCols = columns.filter(c => c.projectId === activeProjectId);
+            // Default to common status columns if they exist
+            const defaultNames = ['Done', 'In Progress', 'Pending', 'To Do', 'Backlog'];
+            const defaultIds = projCols
+                .filter(c => defaultNames.includes(c.title))
+                .map(c => c.id);
+
+            if (defaultIds.length > 0) {
+                setVisibleColumnIds(defaultIds);
+            } else {
+                // Fallback to first 3 columns
+                setVisibleColumnIds(projCols.slice(0, 3).map(c => c.id));
+            }
         }
-    }, [teams, currentUser, selectedTeamId]);
+    }, [activeProjectId, columns]);
+
+    // Set default team and validate selection
+    useEffect(() => {
+        if (companyTeams.length > 0) {
+            const isValid = companyTeams.some(t => t.id === selectedTeamId);
+            if (!isValid) {
+                const ownedTeam = companyTeams.find(t => t.ownerId === currentUser?.id);
+                setSelectedTeamId(ownedTeam?.id || companyTeams[0].id);
+            }
+        }
+    }, [companyTeams, currentUser, selectedTeamId]);
+
+    // Reset member selection when team changes
+    useEffect(() => {
+        setSelectedMemberId('');
+    }, [selectedTeamId]);
 
     // Default Selection Logic
     useEffect(() => {
@@ -67,17 +125,17 @@ export const ReportsPage: React.FC = () => {
         if (scope === 'personal' && currentUser) {
             return calculateUserMetrics(currentUser.id, activeProjectId || undefined);
         }
+        if (scope === 'member' && selectedMemberId) {
+            return calculateUserMetrics(selectedMemberId, undefined);
+        }
         if (scope === 'project' && activeProjectId) {
             return calculateProjectMetrics(activeProjectId);
-        }
-        if (scope === 'department' && selectedDeptId) {
-            return calculateDepartmentMetrics(selectedDeptId);
         }
         if (scope === 'workspace' && selectedTeamId) {
             return calculateWorkspaceMetrics(selectedTeamId);
         }
         return null;
-    }, [scope, currentUser, activeProjectId, selectedDeptId, selectedTeamId, tasks, columns]);
+    }, [scope, currentUser, activeProjectId, selectedTeamId, selectedMemberId, tasks, columns]);
 
     const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#14b8a6'];
 
@@ -98,8 +156,8 @@ export const ReportsPage: React.FC = () => {
         if (roleLevel === 'lead' || roleLevel === 'manager' || roleLevel === 'depthead' || roleLevel === 'admin') {
             scopes.push({ value: 'project', label: 'Project', icon: Briefcase });
         }
-        if (roleLevel === 'depthead' || roleLevel === 'admin') {
-            scopes.push({ value: 'department', label: 'Department', icon: Building2 });
+        if (roleLevel === 'manager' || roleLevel === 'admin') {
+            scopes.push({ value: 'member', label: 'Member', icon: UserIcon });
         }
         if (roleLevel === 'admin') {
             scopes.push({ value: 'workspace', label: 'Workspace', icon: Users });
@@ -133,9 +191,9 @@ export const ReportsPage: React.FC = () => {
                             <h1 className="text-xl font-bold text-slate-900 dark:text-white">Analytics Dashboard</h1>
                             <p className="text-sm text-slate-500 dark:text-slate-400">
                                 {scope === 'personal' && 'Your personal performance metrics'}
+                                {scope === 'member' && `Member Report: ${users.find(u => u.id === selectedMemberId)?.name || 'Select a member'}`}
                                 {scope === 'project' && `Project: ${activeProject?.name || 'Select a project'}`}
-                                {scope === 'department' && 'Department-wide analytics'}
-                                {scope === 'workspace' && 'Organization overview'}
+                                {scope === 'workspace' && `Workspace: ${teams.find(t => t.id === selectedTeamId)?.name || 'Organization overview'}`}
                             </p>
                         </div>
                     </div>
@@ -147,8 +205,8 @@ export const ReportsPage: React.FC = () => {
                                 key={s.value}
                                 onClick={() => setScope(s.value)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${scope === s.value
-                                        ? 'bg-white dark:bg-slate-600 text-primary shadow-sm'
-                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                    ? 'bg-white dark:bg-slate-600 text-primary shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                             >
                                 <s.icon size={16} />
@@ -193,8 +251,8 @@ export const ReportsPage: React.FC = () => {
                                                 key={p.id}
                                                 onClick={() => { setActiveProject(p.id); setIsProjectOpen(false); }}
                                                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeProjectId === p.id
-                                                        ? 'bg-primary/5 text-primary font-medium'
-                                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                                    ? 'bg-primary/5 text-primary font-medium'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                                                     }`}
                                             >
                                                 <span className="w-2 h-2 rounded-full shrink-0 bg-primary"></span>
@@ -208,12 +266,229 @@ export const ReportsPage: React.FC = () => {
                         )}
                     </div>
                 )}
+
+                {/* Team Selector (for workspace scope) */}
+                {scope === 'workspace' && (
+                    <div className="mt-4 relative">
+                        <button
+                            onClick={() => setIsTeamSelectorOpen(!isTeamSelectorOpen)}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        >
+                            <Users size={16} className="text-primary" />
+                            {companyTeams.find(t => t.id === selectedTeamId)?.name || 'Select Workspace'}
+                            <ChevronDown size={16} className={`transition-transform ${isTeamSelectorOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isTeamSelectorOpen && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setIsTeamSelectorOpen(false)}></div>
+                                <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                                    <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                            <input
+                                                type="text"
+                                                placeholder="Search workspaces..."
+                                                className="w-full pl-8 pr-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 dark:text-white"
+                                                value={teamSearch}
+                                                onChange={(e) => setTeamSearch(e.target.value)}
+                                                autoFocus
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                                        {filteredTeams.map(t => (
+                                            <button
+                                                key={t.id}
+                                                onClick={() => { setSelectedTeamId(t.id); setIsTeamSelectorOpen(false); }}
+                                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${selectedTeamId === t.id
+                                                    ? 'bg-primary/5 text-primary font-medium'
+                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                                    }`}
+                                            >
+                                                <div className="w-6 h-6 rounded flex items-center justify-center bg-slate-200 dark:bg-slate-600 text-xs font-bold text-slate-600 dark:text-slate-300">
+                                                    {t.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className="truncate">{t.name}</span>
+                                                {selectedTeamId === t.id && <CheckCircle size={14} className="ml-auto opacity-50" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {/* Member Selector (for member scope) */}
+                {scope === 'member' && (
+                    <div className="mt-4 flex gap-4">
+                        {/* Reuse Team Selector concept for context if needed, but primary is Member */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsTeamSelectorOpen(!isTeamSelectorOpen)}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            >
+                                <Users size={16} className="text-primary" />
+                                {companyTeams.find(t => t.id === selectedTeamId)?.name || 'Select Workspace'}
+                                <ChevronDown size={16} className={`transition-transform ${isTeamSelectorOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isTeamSelectorOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setIsTeamSelectorOpen(false)}></div>
+                                    <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                                        <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                                            <input
+                                                type="text"
+                                                placeholder="Search workspaces..."
+                                                className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 dark:text-white"
+                                                value={teamSearch}
+                                                onChange={(e) => setTeamSearch(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto p-1">
+                                            {filteredTeams.map(t => (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => { setSelectedTeamId(t.id); setIsTeamSelectorOpen(false); }}
+                                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${selectedTeamId === t.id ? 'bg-primary/5 text-primary' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                                >
+                                                    <span className="truncate">{t.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsMemberSelectorOpen(!isMemberSelectorOpen)}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            >
+                                <UserIcon size={16} className="text-primary" />
+                                {users.find(u => u.id === selectedMemberId)?.name || 'Select Member'}
+                                <ChevronDown size={16} className={`transition-transform ${isMemberSelectorOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isMemberSelectorOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setIsMemberSelectorOpen(false)}></div>
+                                    <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                                        <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+                                            <input
+                                                type="text"
+                                                placeholder="Search members..."
+                                                className="w-full px-3 py-1.5 text-sm bg-slate-50 dark:bg-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-primary/20 dark:text-white"
+                                                value={memberSearch}
+                                                onChange={(e) => setMemberSearch(e.target.value)}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto p-1 text-slate-900 dark:text-slate-100">
+                                            {filteredMembers.map((u: any) => (
+                                                <button
+                                                    key={u.id}
+                                                    onClick={() => { setSelectedMemberId(u.id); setIsMemberSelectorOpen(false); }}
+                                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${selectedMemberId === u.id ? 'bg-primary/5 text-primary' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                                >
+                                                    <span className="truncate">{u.name}</span>
+                                                </button>
+                                            ))}
+                                            {filteredMembers.length === 0 && <div className="p-3 text-xs text-slate-500 text-center">No members found in this team</div>}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Main Content */}
+            {/* Charts Section (For Project & Workspace) */}
+            {(scope === 'project' || scope === 'workspace') && metrics && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    {/* Pie Chart: Task Status */}
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                        <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <PieChartIcon size={18} className="text-primary" /> Task Breakdown
+                        </h3>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={[
+                                            { name: 'Done', value: metrics.completedTasks || metrics.tasksCompleted, color: '#22c55e' },
+                                            { name: 'In Progress', value: metrics.inProgressTasks || metrics.tasksInProgress, color: '#3b82f6' },
+                                            { name: 'Pending', value: metrics.pendingTasks || metrics.tasksPending, color: '#f59e0b' },
+                                            { name: 'Overdue', value: metrics.overdueTasks || metrics.tasksOverdue || 0, color: '#ef4444' }
+                                        ].filter(i => i.value > 0)}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {[
+                                            { name: 'Done', value: metrics.completedTasks || metrics.tasksCompleted, color: '#22c55e' },
+                                            { name: 'In Progress', value: metrics.inProgressTasks || metrics.tasksInProgress, color: '#3b82f6' },
+                                            { name: 'Pending', value: metrics.pendingTasks || metrics.tasksPending, color: '#f59e0b' },
+                                            { name: 'Overdue', value: metrics.overdueTasks || metrics.tasksOverdue || 0, color: '#ef4444' }
+                                        ].filter(i => i.value > 0).map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                                        itemStyle={{ color: '#fff' }}
+                                    />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Bar Chart: Workload */}
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                        <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <BarChart3 size={18} className="text-primary" />
+                            Workload Distribution
+                        </h3>
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={
+                                    scope === 'project'
+                                        ? metrics.memberMetrics?.map((m: any) => ({ name: m.userName?.split(' ')[0], tasks: m.tasksCompleted + m.tasksInProgress }))
+                                        : (metrics.projectMetrics?.reduce((acc: any[], p: any) => {
+                                            // Aggregate members across projects for workspace view
+                                            p.memberMetrics?.forEach((m: any) => {
+                                                const existing = acc.find(x => x.name === m.userName?.split(' ')[0]);
+                                                if (existing) existing.tasks += (m.tasksCompleted + m.tasksInProgress);
+                                                else acc.push({ name: m.userName?.split(' ')[0], tasks: m.tasksCompleted + m.tasksInProgress });
+                                            });
+                                            return acc;
+                                        }, []) || []).slice(0, 10) // Limit to top 10
+                                }>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.1} />
+                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                                    <Tooltip
+                                        cursor={{ fill: 'transparent' }}
+                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                                    />
+                                    <Bar dataKey="tasks" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={30} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="flex-1 p-6 space-y-6">
-                {/* Personal Scope Dashboard */}
-                {scope === 'personal' && metrics && (
+                {/* Personal & Member Scope Dashboard */}
+                {(scope === 'personal' || scope === 'member') && metrics && (
                     <>
                         {/* Key Metrics Cards */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -300,12 +575,7 @@ export const ReportsPage: React.FC = () => {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={[
-                                                    { name: 'Completed', value: metrics.tasksCompleted },
-                                                    { name: 'In Progress', value: metrics.tasksInProgress },
-                                                    { name: 'Pending', value: metrics.tasksPending },
-                                                    { name: 'Overdue', value: metrics.tasksOverdue },
-                                                ].filter(d => d.value > 0)}
+                                                data={Object.entries(metrics.columnBreakdown || {}).map(([name, value]) => ({ name, value }))}
                                                 cx="50%"
                                                 cy="50%"
                                                 innerRadius={50}
@@ -313,7 +583,7 @@ export const ReportsPage: React.FC = () => {
                                                 paddingAngle={4}
                                                 dataKey="value"
                                             >
-                                                {[0, 1, 2, 3].map((_, index) => (
+                                                {Object.entries(metrics.columnBreakdown || {}).map((_, index) => (
                                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                 ))}
                                             </Pie>
@@ -323,40 +593,92 @@ export const ReportsPage: React.FC = () => {
                                     </ResponsiveContainer>
                                 </div>
                             </div>
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                                        <TrendingUp className="text-pink-600" size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 dark:text-white">Efficiency</h3>
+                                        <p className="text-xs text-slate-500">Actual vs Estimated Time</p>
+                                    </div>
+                                </div>
+                                <div className="h-48">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={[
+                                            { name: 'Estimated', value: (metrics.totalEstimatedTime || 0) / 3600, fill: '#94a3b8' },
+                                            { name: 'Actual', value: (metrics.totalTimeTracked || 0) / 3600, fill: (metrics.totalTimeTracked > (metrics.totalEstimatedTime || 0)) && metrics.totalEstimatedTime > 0 ? '#ef4444' : '#22c55e' }
+                                        ]} layout="vertical" barSize={20}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                                            <XAxis type="number" stroke="#94a3b8" fontSize={12} unit="h" />
+                                            <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} width={70} />
+                                            <Tooltip
+                                                cursor={{ fill: 'transparent' }}
+                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                formatter={(value: number) => [`${value.toFixed(1)}h`, 'Hours']}
+                                            />
+                                            <Bar dataKey="value" radius={[0, 4, 4, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Performance Summary */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                                    <Award className="text-orange-600" size={20} />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-slate-900 dark:text-white">Performance Summary</h3>
-                                    <p className="text-xs text-slate-500">Key insights about your work</p>
-                                </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+                                <h3 className="font-bold text-slate-900 dark:text-white">Detailed Task Report</h3>
+                                <p className="text-xs text-slate-500">Breakdown of all assigned tasks</p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <InsightCard
-                                    title="Average Completion Time"
-                                    value={formatTime(metrics.avgCompletionTime)}
-                                    description="Time from start to done"
-                                    icon={Clock}
-                                />
-                                <InsightCard
-                                    title="Pending Tasks"
-                                    value={metrics.tasksPending}
-                                    description={metrics.tasksPending > 5 ? 'Consider prioritizing' : 'Looking good!'}
-                                    icon={Target}
-                                    warning={metrics.tasksPending > 5}
-                                />
-                                <InsightCard
-                                    title="Overdue Count"
-                                    value={metrics.tasksOverdue}
-                                    description={metrics.tasksOverdue > 0 ? 'Needs attention' : 'All on track!'}
-                                    icon={AlertTriangle}
-                                    warning={metrics.tasksOverdue > 0}
-                                />
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-medium border-b dark:border-slate-700">
+                                        <tr>
+                                            <th className="px-6 py-3">Task Name</th>
+                                            <th className="px-6 py-3">Project</th>
+                                            <th className="px-6 py-3">Status</th>
+                                            <th className="px-6 py-3 text-right">Estimated</th>
+                                            <th className="px-6 py-3 text-right">Actual</th>
+                                            <th className="px-6 py-3 text-right">Variance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                        {(metrics.tasks || []).map((t: any) => {
+                                            const project = projects.find(p => p.id === t.projectId);
+                                            const column = columns.find(c => c.id === t.columnId);
+                                            const est = t.estimatedTime || 0;
+                                            const act = t.timeTracked || 0;
+                                            const diff = est - act;
+                                            const isOver = diff < 0;
+
+                                            return (
+                                                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                    <td className="px-6 py-3 font-medium text-slate-900 dark:text-white">
+                                                        <div className="max-w-[200px] truncate" title={t.title}>{t.title}</div>
+                                                    </td>
+                                                    <td className="px-6 py-3 text-slate-500">{project?.name || 'Unknown'}</td>
+                                                    <td className="px-6 py-3">
+                                                        <span className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                                                            {column?.title || 'Unknown'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-3 text-right text-slate-500">{formatTime(est)}</td>
+                                                    <td className="px-6 py-3 text-right text-slate-500">{formatTime(act)}</td>
+                                                    <td className={`px-6 py-3 text-right font-medium ${isOver && est > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                                        {est > 0 ? (isOver ? '+' : '-') + formatTime(Math.abs(diff)) : '-'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {(!metrics.tasks || metrics.tasks.length === 0) && (
+                                            <tr>
+                                                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                                                    No tasks found for this member
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </>
@@ -366,10 +688,45 @@ export const ReportsPage: React.FC = () => {
                 {scope === 'project' && metrics && (
                     <>
                         {/* Health Score Banner */}
-                        <div className="bg-gradient-to-r from-primary to-orange-500 rounded-2xl p-6 text-white shadow-lg shadow-primary/20">
-                            <div className="flex items-center justify-between">
+                        {/* Health Score Banner - Removed overflow-hidden to allow tooltip to show */}
+                        <div className="bg-gradient-to-r from-primary to-orange-500 rounded-2xl p-6 text-white shadow-lg shadow-primary/20 relative">
+                            {/* Explanation Tooltip */}
+                            <div className="absolute top-4 right-4 group">
+                                <button className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors relative z-20">
+                                    <HelpCircle size={16} className="text-white" />
+                                </button>
+                                {/* Tooltip Content */}
+                                <div className="absolute right-0 top-8 mt-2 w-64 p-3 bg-white dark:bg-slate-800 rounded-xl shadow-xl text-slate-600 dark:text-slate-300 text-xs leading-relaxed opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none transform translate-y-2 group-hover:translate-y-0 border border-slate-100 dark:border-slate-700">
+                                    <div className="absolute -top-2 right-3 w-4 h-4 bg-white dark:bg-slate-800 transform rotate-45 border-t border-l border-slate-100 dark:border-slate-700"></div>
+                                    <div className="relative z-10">
+                                        <p className="font-bold mb-2 text-slate-900 dark:text-white text-sm">How is this calculated?</p>
+                                        <ul className="space-y-1.5">
+                                            <li className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                                                <span><b>+40%</b> On-Time Rate</span>
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                                <span><b>+40%</b> Completion Rate</span>
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+                                                <span><b>-50%</b> Overdue Penalty</span>
+                                            </li>
+                                            <li className="flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 bg-slate-300 rounded-full"></div>
+                                                <span>Base Score: <b>30 pts</b></span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between relative z-10">
                                 <div>
-                                    <p className="text-white/80 text-sm font-medium">Project Health Score</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-white/80 text-sm font-medium">Project Health Score</p>
+                                    </div>
                                     <div className="flex items-baseline gap-2 mt-1">
                                         <span className="text-5xl font-bold">{metrics.healthScore}</span>
                                         <span className="text-2xl text-white/80">/100</span>
@@ -380,7 +737,7 @@ export const ReportsPage: React.FC = () => {
                                                 metrics.healthScore >= 40 ? '⚠️ Needs attention' : '🚨 Critical - immediate action required'}
                                     </p>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right pr-12">
                                     <p className="text-white/80 text-sm">On-Time Rate</p>
                                     <p className="text-3xl font-bold">{metrics.onTimeRate}%</p>
                                 </div>
@@ -388,10 +745,92 @@ export const ReportsPage: React.FC = () => {
                         </div>
 
                         {/* Project Metrics Cards */}
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                            <MetricCard icon={CheckCircle} label="Completed" value={metrics.completedTasks} color="green" />
-                            <MetricCard icon={Activity} label="In Progress" value={metrics.inProgressTasks} color="blue" />
-                            <MetricCard icon={Clock} label="Pending" value={metrics.pendingTasks} color="slate" />
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-slate-900 dark:text-white">Column Metrics</h3>
+
+                            {/* Column Visibility Selector */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsColumnSelectorOpen(!isColumnSelectorOpen)}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    <Filter size={14} />
+                                    Customize Columns
+                                    <ChevronDown size={14} />
+                                </button>
+
+                                {isColumnSelectorOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setIsColumnSelectorOpen(false)}></div>
+                                        <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                                            <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+                                                <span className="font-medium text-xs text-slate-500 uppercase">Show Columns</span>
+                                                <button onClick={() => setIsColumnSelectorOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
+                                            </div>
+                                            <div className="p-2 max-h-60 overflow-y-auto">
+                                                {columns.filter(c => c.projectId === activeProjectId).map(col => (
+                                                    <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors">
+                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${visibleColumnIds.includes(col.id)
+                                                            ? 'bg-primary border-primary text-white'
+                                                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                                                            }`}>
+                                                            {visibleColumnIds.includes(col.id) && <CheckCircle size={10} fill="currentColor" />}
+                                                        </div>
+                                                        <input
+                                                            type="checkbox"
+                                                            className="hidden"
+                                                            checked={visibleColumnIds.includes(col.id)}
+                                                            onChange={() => {
+                                                                if (visibleColumnIds.includes(col.id)) {
+                                                                    setVisibleColumnIds(prev => prev.filter(id => id !== col.id));
+                                                                } else {
+                                                                    setVisibleColumnIds(prev => [...prev, col.id]);
+                                                                }
+                                                            }}
+                                                        />
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{col.title}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {/* Dynamic Column Cards */}
+                            {columns
+                                .filter(c => c.projectId === activeProjectId && visibleColumnIds.includes(c.id))
+                                .map(col => {
+                                    // Calculate count specifically for this column
+                                    const count = tasks.filter(t => t.projectId === activeProjectId && t.columnId === col.id).length;
+
+                                    // Determine color based on title (heuristic)
+                                    let color: 'green' | 'blue' | 'slate' | 'purple' | 'orange' | 'red' = 'slate';
+                                    const title = col.title.toLowerCase();
+                                    if (title.includes('done') || title.includes('complete')) color = 'green';
+                                    else if (title.includes('progress') || title.includes('doing')) color = 'blue';
+                                    else if (title.includes('review') || title.includes('test')) color = 'orange';
+                                    else if (title.includes('backlog')) color = 'purple';
+
+                                    // Choose icon
+                                    const Icon = title.includes('done') ? CheckCircle :
+                                        title.includes('progress') ? Activity :
+                                            title.includes('review') ? Target : Clock;
+
+                                    return (
+                                        <MetricCard
+                                            key={col.id}
+                                            icon={Icon}
+                                            label={col.title}
+                                            value={count}
+                                            color={color}
+                                        />
+                                    );
+                                })}
+
+                            {/* Standard Metrics (Always Visible) */}
                             <MetricCard icon={AlertTriangle} label="Overdue" value={metrics.overdueTasks} color="red" />
                             <MetricCard icon={Clock} label="Total Time" value={formatTime(metrics.totalTimeTracked)} color="purple" isText />
                         </div>
@@ -427,14 +866,33 @@ export const ReportsPage: React.FC = () => {
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
-                                        <thead className="bg-slate-50 dark:bg-slate-900">
+                                        <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0">
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Member</th>
-                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Completed</th>
-                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">In Progress</th>
-                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Pending</th>
+
+                                                {/* Dynamic Column Headers */}
+                                                {columns
+                                                    .filter(c => c.projectId === activeProjectId && visibleColumnIds.includes(c.id))
+                                                    .map(col => (
+                                                        <th key={col.id} className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase whitespace-nowrap">
+                                                            {col.title}
+                                                        </th>
+                                                    ))
+                                                }
+
                                                 <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Time Tracked</th>
-                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Velocity</th>
+                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase group relative cursor-help">
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        Velocity
+                                                        <Info size={12} />
+                                                    </div>
+                                                    {/* Velocity Tooltip */}
+                                                    <div className="absolute right-0 top-full mt-1 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg invisible group-hover:visible z-10 font-normal normal-case">
+                                                        Score (0-100) based on:
+                                                        <br />• Completion Rate (70%)
+                                                        <br />• Last 7 days activity (30%)
+                                                    </div>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -448,21 +906,34 @@ export const ReportsPage: React.FC = () => {
                                                             <span className="font-medium text-slate-900 dark:text-white">{member.userName}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                                                            {member.tasksCompleted}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                                            {member.tasksInProgress}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
-                                                            {member.tasksPending}
-                                                        </span>
-                                                    </td>
+
+                                                    {/* Dynamic Cells */}
+                                                    {columns
+                                                        .filter(c => c.projectId === activeProjectId && visibleColumnIds.includes(c.id))
+                                                        .map(col => {
+                                                            const count = tasks.filter(t =>
+                                                                t.projectId === activeProjectId &&
+                                                                t.columnId === col.id &&
+                                                                t.assigneeId === member.userId
+                                                            ).length;
+
+                                                            // Determine styling based on column title
+                                                            let badgeClass = 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
+                                                            const title = col.title.toLowerCase();
+                                                            if (title.includes('done') || title.includes('complete')) badgeClass = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+                                                            else if (title.includes('progress')) badgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+                                                            else if (title.includes('review')) badgeClass = 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
+
+                                                            return (
+                                                                <td key={col.id} className="px-6 py-4 text-center">
+                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badgeClass}`}>
+                                                                        {count}
+                                                                    </span>
+                                                                </td>
+                                                            );
+                                                        })
+                                                    }
+
                                                     <td className="px-6 py-4 text-center text-sm text-slate-600 dark:text-slate-400">
                                                         {formatTime(member.totalTimeTracked)}
                                                     </td>
@@ -479,8 +950,8 @@ export const ReportsPage: React.FC = () => {
                     </>
                 )}
 
-                {/* Workspace/Department Scope - Summary View */}
-                {(scope === 'workspace' || scope === 'department') && metrics && (
+                {/* Workspace Scope - Summary View */}
+                {scope === 'workspace' && metrics && (
                     <>
                         {/* Overview Cards */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -490,43 +961,40 @@ export const ReportsPage: React.FC = () => {
                             <MetricCard icon={Target} label="Avg Health" value={metrics.avgHealthScore} color="orange" suffix="/100" />
                         </div>
 
-                        {/* Projects/Departments List */}
+                        {/* Projects List */}
                         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div className="p-6 border-b border-slate-200 dark:border-slate-700">
                                 <h3 className="font-bold text-slate-900 dark:text-white">
-                                    {scope === 'workspace' ? 'Department Overview' : 'Project Overview'}
+                                    Project Overview
                                 </h3>
                             </div>
                             <div className="p-4 space-y-3">
-                                {(scope === 'workspace' ? metrics.departmentMetrics : metrics.projectMetrics)?.map((item: any) => (
+                                {metrics.projectMetrics?.map((item: any) => (
                                     <div
-                                        key={item.departmentId || item.projectId}
+                                        key={item.projectId}
                                         className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="p-2 bg-primary/10 rounded-lg">
-                                                {scope === 'workspace' ? <Building2 className="text-primary" size={18} /> : <Briefcase className="text-primary" size={18} />}
+                                                <Briefcase className="text-primary" size={18} />
                                             </div>
                                             <div>
-                                                <p className="font-medium text-slate-900 dark:text-white">{item.departmentName || item.projectName}</p>
+                                                <p className="font-medium text-slate-900 dark:text-white">{item.projectName}</p>
                                                 <p className="text-xs text-slate-500">
-                                                    {scope === 'workspace'
-                                                        ? `${item.totalProjects} projects • ${item.activeMembers} members`
-                                                        : `${item.completedTasks}/${item.totalTasks} tasks completed`
-                                                    }
+                                                    {`${item.completedTasks}/${item.totalTasks} tasks completed`}
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <div className="text-right">
-                                                <p className="text-sm font-bold text-slate-900 dark:text-white">{item.avgHealthScore || item.healthScore}%</p>
+                                                <p className="text-sm font-bold text-slate-900 dark:text-white">{item.healthScore}%</p>
                                                 <p className="text-xs text-slate-500">Health</p>
                                             </div>
-                                            <HealthBar score={item.avgHealthScore || item.healthScore} />
+                                            <HealthBar score={item.healthScore} />
                                         </div>
                                     </div>
                                 ))}
-                                {(!metrics.departmentMetrics?.length && !metrics.projectMetrics?.length) && (
+                                {!metrics.projectMetrics?.length && (
                                     <div className="text-center py-8 text-slate-500">
                                         No data available for this scope
                                     </div>
@@ -576,23 +1044,23 @@ const MetricCard: React.FC<MetricCardProps> = ({ icon: Icon, label, value, color
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
-            <div className="flex items-center gap-3 mb-3">
-                <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-                    <Icon size={18} />
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-3 h-full flex flex-col justify-center">
+            <div className="flex items-center gap-2 mb-0.5">
+                <div className={`p-1 rounded-md ${colorClasses[color]}`}>
+                    <Icon size={14} />
                 </div>
-                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</span>
+                <span className="text-[10px] uppercase font-bold tracking-wide text-slate-500 dark:text-slate-400 truncate">{label}</span>
             </div>
-            <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-slate-900 dark:text-white">{value}</span>
-                {suffix && <span className="text-lg text-slate-400">{suffix}</span>}
+            <div className="flex items-baseline gap-1 mt-1">
+                <span className={`font-bold text-slate-900 dark:text-white ${isText ? 'text-lg' : 'text-xl'}`}>{value}</span>
+                {suffix && <span className="text-[10px] text-slate-400">{suffix}</span>}
             </div>
             {trend && trend.length > 0 && (
-                <div className="mt-3 flex items-end gap-0.5 h-8">
+                <div className="mt-2 flex items-end gap-0.5 h-6 opacity-80">
                     {trend.map((val, idx) => (
                         <div
                             key={idx}
-                            className="flex-1 bg-primary/20 rounded-t"
+                            className="flex-1 bg-primary/20 rounded-t-sm"
                             style={{ height: `${Math.max(10, (val / Math.max(...trend)) * 100)}%` }}
                         />
                     ))}
