@@ -7,6 +7,8 @@ import { Plus, Trash2, ArrowLeft, ArrowRight, Timer, ChevronsUp, ChevronsDown, A
 import { useStore } from '../store';
 import { sortTasksByPriority } from '../utils/taskPriority';
 import { ConfirmModal } from './ConfirmModal';
+import { TaskEditModal } from './TaskEditModal';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
   column: ColumnType;
@@ -16,9 +18,8 @@ interface Props {
 }
 
 export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) => {
-  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags } = useStore();
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags, updateTask } = useStore();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -65,14 +66,36 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
     data: { type: 'Column', column }
   });
 
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newTaskTitle.trim()) {
-      addTask(column.projectId, column.id, newTaskTitle);
-      setNewTaskTitle('');
-      setIsAddingTask(false);
+
+
+  const handleCreateTask = async (taskData: Partial<TaskType>) => {
+    if (!taskData.title) return;
+    const newTask = await addTask(column.projectId, column.id, taskData.title);
+    if (newTask) {
+      // Update with other fields
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { title, ...updates } = taskData;
+      // We need to cast updates because Partial<Task> might have undefineds that updateTask handles
+      await updateTask(newTask.id, updates as any);
     }
   };
+
+  const dummyTask = React.useMemo<TaskType>(() => ({
+    id: uuidv4(),
+    projectId: column.projectId,
+    columnId: column.id,
+    title: '',
+    creatorId: currentUser?.id || '',
+    assigneeId: currentUser?.id,
+    orderIndex: tasks.length,
+    tagIds: [],
+    estimatedTime: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    attachments: [],
+    subtasks: [],
+    timeTracked: 0
+  }), [column.projectId, column.id, currentUser?.id, tasks.length]);
 
   return (
     <div
@@ -201,40 +224,13 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
       {/* Footer / Add Task */}
       <div className="p-3">
         {can('manageTasks') ? (
-          isAddingTask ? (
-            <form onSubmit={handleAddTask} className="bg-white dark:bg-slate-800 p-2.5 rounded-lg shadow-lg border border-primary ring-1 ring-primary/20 animate-in fade-in zoom-in-95 duration-200">
-              <input
-                autoFocus
-                className="w-full text-sm bg-transparent outline-none placeholder-slate-400 text-slate-700 dark:text-white"
-                placeholder="What needs to be done?"
-                value={newTaskTitle}
-                onChange={e => setNewTaskTitle(e.target.value)}
-              />
-              <div className="flex justify-end gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingTask(false)}
-                  className="text-xs px-2.5 py-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700 rounded-md font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="text-xs px-2.5 py-1.5 bg-primary text-white rounded-md hover:bg-primary-hover font-medium shadow-sm"
-                >
-                  Add Task
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button
-              onClick={() => setIsAddingTask(true)}
-              className="flex items-center gap-2 w-full py-2 px-3 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700/50 rounded-lg transition-all text-sm font-medium border border-transparent hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm"
-            >
-              <Plus size={16} />
-              <span className="text-xs">Add Task</span>
-            </button>
-          )
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 w-full py-2 px-3 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-slate-700/50 rounded-lg transition-all text-sm font-medium border border-transparent hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm"
+          >
+            <Plus size={16} />
+            <span className="text-xs">Add Task</span>
+          </button>
         ) : null}
       </div>
 
@@ -247,6 +243,17 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
         isDestructive={confirmModal.isDestructive}
         confirmText={confirmModal.confirmText || 'Confirm'}
       />
+
+      {/* Create Task Modal */}
+      {isCreateModalOpen && (
+        <TaskEditModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          task={dummyTask}
+          isCreating={true}
+          onSaveNew={handleCreateTask}
+        />
+      )}
     </div>
   );
 };

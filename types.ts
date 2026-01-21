@@ -184,6 +184,7 @@ export interface Team {
   name: string;
   joinCode: string;
   createdAt: number;
+  companyId?: string; // Links to companies table
   managerIds?: string[]; // Team Heads (Department Heads)
   // Computed/Joined
   owner?: User;
@@ -447,7 +448,7 @@ export interface Transaction {
 // ANALYTICS & REPORTING TYPES
 // ============================================================
 
-export type ReportScope = 'personal' | 'team' | 'project' | 'department' | 'workspace';
+export type ReportScope = 'personal' | 'team' | 'project' | 'department' | 'workspace' | 'member';
 
 export interface UserMetrics {
   userId: string;

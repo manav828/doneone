@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock, ChevronLeft } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock, ChevronLeft, CreditCard } from 'lucide-react';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
@@ -447,41 +447,15 @@ export const TopBar: React.FC = () => {
 
                 </div>
 
-                {!canAccessPremium() && (
-                  <button
-                    onClick={() => {
-                      setIsProfileOpen(false);
-                      setPricingModalOpen(true);
-                    }}
-                    className="w-full text-left px-5 py-3 text-sm text-yellow-600 dark:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/10 flex items-center gap-2 transition-colors font-bold border-b border-slate-100 dark:border-slate-700"
-                  >
-                    <Crown size={16} />
-                    Upgrade to Premium
-                  </button>
-                )}
-                {canAccessPremium() && (
-                  <button
-                    onClick={() => {
-                      setIsProfileOpen(false);
-                      setPricingModalOpen(true);
-                    }}
-                    className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
-                  >
-                    <Crown size={16} className="text-yellow-500" />
-                    View Plan & Billing
-                  </button>
-                )}
-
-                {/* Billing History Link */}
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);
-                    window.location.hash = '#/billing'; // Using hash router direct manipulation if useNavigate isn't handy or just link
+                    navigate('/billing');
                   }}
                   className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
                 >
-                  <Crown size={16} className="text-blue-500" />
-                  Billing History
+                  <CreditCard size={16} className="text-slate-500" />
+                  Billing & Plans
                 </button>
                 <button
                   onClick={() => {
