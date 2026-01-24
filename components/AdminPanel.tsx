@@ -8,7 +8,8 @@ import { User, StorageStats } from '../types';
 import { AdminFeedback } from './admin/AdminFeedback';
 import { SuperAdminPayments } from './admin/SuperAdminPayments';
 import { SuperAdminPlans } from './admin/SuperAdminPlans';
-import { MessageSquare, CreditCard } from 'lucide-react';
+import { AdminEnterpriseInquiries } from './admin/AdminEnterpriseInquiries';
+import { MessageSquare, CreditCard, Building2 } from 'lucide-react';
 export const AdminPanel: React.FC = () => {
     const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects, teams, teamMembers, plans, fetchPlans } = useStore();
     const navigate = useNavigate();
@@ -18,7 +19,7 @@ export const AdminPanel: React.FC = () => {
     const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
     const [editingUser, setEditingUser] = useState<string | null>(null);
     const [regOpen, setRegOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState<'overview' | 'custom_users' | 'feedback' | 'payments' | 'plans'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'custom_users' | 'feedback' | 'enterprise_inquiries' | 'payments' | 'plans'>('overview');
     const [currencyFilter, setCurrencyFilter] = useState<'ALL' | 'USD' | 'INR'>('ALL');
 
     // Derived Roles
@@ -324,6 +325,13 @@ export const AdminPanel: React.FC = () => {
                     User Feedback
                 </button>
                 <button
+                    onClick={() => setActiveTab('enterprise_inquiries')}
+                    className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'enterprise_inquiries' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                >
+                    <Building2 size={16} />
+                    Enterprise Inquiries
+                </button>
+                <button
                     onClick={() => setActiveTab('payments')}
                     className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'payments' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
                 >
@@ -345,6 +353,8 @@ export const AdminPanel: React.FC = () => {
                     <SuperAdminPlans />
                 ) : activeTab === 'feedback' ? (
                     <AdminFeedback />
+                ) : activeTab === 'enterprise_inquiries' ? (
+                    <AdminEnterpriseInquiries />
                 ) : activeTab === 'custom_users' ? (
                     <div className="space-y-8 animate-in fade-in duration-300">
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700">

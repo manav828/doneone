@@ -115,6 +115,24 @@ export interface User {
 
 export type CurrencyType = 'USD' | 'INR';
 
+export interface EnterpriseInquiry {
+  id: string;
+  userId?: string;
+  email: string;
+  phone?: string;
+  country?: string;
+  companyName?: string;
+  teamSize?: string;
+  requiredFeatures?: string[];
+  requirements?: string;
+  status: 'pending' | 'contacted' | 'converted' | 'dismissed';
+  adminNotes?: string;
+  createdAt: number;
+  updatedAt: number;
+  // Computed
+  userName?: string;
+}
+
 export interface Tag {
   id: string;
   projectId?: string; // Linked to specific project

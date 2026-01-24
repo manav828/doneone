@@ -460,6 +460,16 @@ export const TopBar: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);
+                    navigate('/billing-history');
+                  }}
+                  className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                >
+                  <CreditCard size={16} className="text-slate-500" />
+                  Billing History
+                </button>
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
                     setIsUserTicketsModalOpen(true);
                   }}
                   className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
