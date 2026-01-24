@@ -815,8 +815,8 @@ export const useStore = create<any>((set, get) => ({
               createdAt: new Date(profile.created_at).getTime(),
               premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
 
-              // Flags
-              isPremium: isCustom || (!!plan && plan.price_monthly > 0),
+              // Flags - FIXED: isPremium ONLY checks expiration date
+              isPremium: profile.premium_until ? new Date(profile.premium_until).getTime() > Date.now() : false,
               isCustomPlan: isCustom,
               customPlanData: isCustom ? cpd : undefined,
 
@@ -1039,8 +1039,8 @@ export const useStore = create<any>((set, get) => ({
         createdAt: new Date(p.created_at).getTime(),
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
 
-        // Calculated Flags
-        isPremium: isCustom || (!!plan && (plan.price_monthly > 0 || Number(plan.price_monthly) > 0)) || (p.premium_until && new Date(p.premium_until).getTime() > Date.now()) || (new Date(p.created_at).getTime() + (30 * 24 * 60 * 60 * 1000) > Date.now()),
+        // Calculated Flags - FIXED: isPremium ONLY checks expiration date
+        isPremium: p.premium_until ? new Date(p.premium_until).getTime() > Date.now() : false,
         isCustomPlan: isCustom,
         customPlanData: isCustom ? cpd : undefined,
 
@@ -1139,13 +1139,9 @@ export const useStore = create<any>((set, get) => ({
         const plan = get().plans.find(pl => pl.id === ownerUser.plan_id);
         const hasPremiumPlan = !!plan && (plan.price_monthly > 0 || Number(plan.price_monthly) > 0);
 
+        // FIXED: Removed createdAt trial fallback - only use premiumUntil
         if (ownerUser.is_custom_plan || oPremiumUntil > now || hasPremiumPlan) {
           ownerHasPremium = true;
-        } else {
-          const oCreatedAt = new Date(ownerUser.created_at).getTime();
-          if (oCreatedAt + (30 * 24 * 60 * 60 * 1000) > now) {
-            ownerHasPremium = true;
-          }
         }
       }
 
@@ -3004,6 +3000,92 @@ export const useStore = create<any>((set, get) => ({
     } else {
       console.error("Resolve Error:", error);
     }
+  },
+
+  // Enterprise Inquiries
+  enterpriseInquiries: [],
+
+  submitEnterpriseInquiry: async (data: {
+    email: string;
+    phone?: string;
+    country?: string;
+    companyName?: string;
+    teamSize?: string;
+    requiredFeatures?: string[];
+    requirements?: string;
+  }) => {
+    const { currentUser } = get();
+    if (!currentUser) return false;
+
+    const { error } = await supabase.from('enterprise_inquiries').insert({
+      user_id: currentUser.id,
+      email: data.email,
+      phone: data.phone || null,
+      country: data.country || null,
+      company_name: data.companyName || null,
+      team_size: data.teamSize || null,
+      required_features: data.requiredFeatures || [],
+      requirements: data.requirements || null,
+      status: 'pending'
+    });
+
+    if (error) {
+      console.error('Failed to submit enterprise inquiry:', error);
+      return false;
+    }
+    return true;
+  },
+
+  fetchEnterpriseInquiries: async () => {
+    const { data, error } = await supabase
+      .from('enterprise_inquiries')
+      .select('*, profiles:user_id(name, email)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to fetch enterprise inquiries:', error);
+      return;
+    }
+
+    const mapped = (data || []).map((i: any) => ({
+      id: i.id,
+      userId: i.user_id,
+      email: i.email,
+      phone: i.phone,
+      country: i.country,
+      companyName: i.company_name,
+      teamSize: i.team_size,
+      requiredFeatures: i.required_features || [],
+      requirements: i.requirements,
+      status: i.status,
+      adminNotes: i.admin_notes,
+      createdAt: new Date(i.created_at).getTime(),
+      updatedAt: new Date(i.updated_at).getTime(),
+      userName: i.profiles?.name || 'Unknown'
+    }));
+
+    set({ enterpriseInquiries: mapped });
+  },
+
+  updateEnterpriseInquiry: async (id: string, updates: { status?: string; adminNotes?: string }) => {
+    const dbUpdates: any = { updated_at: new Date().toISOString() };
+    if (updates.status) dbUpdates.status = updates.status;
+    if (updates.adminNotes !== undefined) dbUpdates.admin_notes = updates.adminNotes;
+
+    const { error } = await supabase.from('enterprise_inquiries').update(dbUpdates).eq('id', id);
+
+    if (error) {
+      console.error('Failed to update enterprise inquiry:', error);
+      return false;
+    }
+
+    // Update local state
+    set(state => ({
+      enterpriseInquiries: state.enterpriseInquiries.map((i: any) =>
+        i.id === id ? { ...i, ...updates, updatedAt: Date.now() } : i
+      )
+    }));
+    return true;
   },
 
   // ... (Helpers remain same)

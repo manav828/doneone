@@ -465,7 +465,7 @@ export const CheckoutPage: React.FC = () => {
                                                         const clamped = Math.max(val, minAllowed);
                                                         setQuantity(clamped);
                                                     }}
-                                                    className="w-14 bg-transparent text-center font-black text-lg text-slate-900 outline-none"
+                                                    className="w-14 bg-transparent text-center font-black text-lg text-slate-900 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 />
                                                 <button
                                                     onClick={() => setQuantity(quantity + 1)}
@@ -499,6 +499,25 @@ export const CheckoutPage: React.FC = () => {
                             <h2 className="text-xl font-black text-slate-900 mb-6 tracking-tight text-center md:text-left">Summary</h2>
 
                             <div className="space-y-6 mb-8">
+                                {/* Billing Toggle */}
+                                <div className="flex items-center justify-center gap-3 p-3 bg-slate-100 rounded-xl">
+                                    <span className={`text-xs font-bold transition-colors ${!isAnnual ? 'text-slate-900' : 'text-slate-400'}`}>Monthly</span>
+                                    <button
+                                        onClick={() => {
+                                            const newBilling = !isAnnual ? 'annual' : 'monthly';
+                                            const params = new URLSearchParams(searchParams);
+                                            params.set('billing', newBilling);
+                                            window.history.replaceState({}, '', `?${params.toString()}`);
+                                            window.location.reload();
+                                        }}
+                                        className={`relative w-12 h-6 rounded-full transition-colors ${isAnnual ? 'bg-primary' : 'bg-slate-300'}`}
+                                    >
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isAnnual ? 'translate-x-7' : 'translate-x-1'}`} />
+                                    </button>
+                                    <span className={`text-xs font-bold transition-colors ${isAnnual ? 'text-slate-900' : 'text-slate-400'}`}>Yearly</span>
+                                    {isAnnual && <span className="text-[9px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Save 25%</span>}
+                                </div>
+
                                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-4">
                                     <div className="flex justify-between items-center">
                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recurring Subscription</p>
@@ -539,7 +558,10 @@ export const CheckoutPage: React.FC = () => {
                                     )}
 
                                     <div className="flex justify-between items-center pt-1">
-                                        <span className="text-xs font-black text-slate-900">Total Recurring {intervalLabel}ly</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-black text-slate-900">From Next Billing Cycle</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">{intervalLabel}ly recurring amount</span>
+                                        </div>
                                         <span className="text-xl font-black text-slate-900">{currencySymbol}{totalRecurring.toFixed(2)}</span>
                                     </div>
                                 </div>

@@ -14,6 +14,7 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { PricingModal } from './components/PricingModal';
 import { CheckoutPage } from './components/CheckoutPage';
 import BillingPage from './components/BillingPage';
+import BillingHistoryPage from './components/BillingHistoryPage';
 import ComparePlansPage from './components/ComparePlansPage';
 import LandingPage from './components/landing/LandingPage';
 import { WorkspaceSettings } from './components/WorkspaceSettings';
@@ -142,6 +143,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/billing" element={<BillingPage />} />
+            <Route path="/billing-history" element={<BillingHistoryPage />} />
             <Route path="/compare" element={<ComparePlansPage />} />
             <Route path="/workspace" element={<WorkspaceSettings />} />
             <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />

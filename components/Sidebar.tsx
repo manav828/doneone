@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import {
   FolderKanban, Plus, Trash2, Hash, Settings, Edit2, ChevronLeft, ChevronRight,
   Shield, HelpCircle, Grip, LayoutTemplate, Archive, BarChart2, Camera,
-  Building2, Users, ChevronDown, UserPlus, FolderOpen, CreditCard
+  Building2, Users, ChevronDown, UserPlus, FolderOpen, CreditCard, Lock, AlertTriangle
 } from 'lucide-react';
 import { Modal } from './Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -121,7 +121,9 @@ const SidebarTeamSection = ({
   can,
   onEditProject,
   onDeleteProject,
-  onSelectProject
+  onSelectProject,
+  isOwnerExpired,
+  onExpiredClick
 }: any) => {
   const { departments, getTeamProjects } = useStore();
   // No local fetch needed - handled by store.refreshData()
@@ -132,36 +134,48 @@ const SidebarTeamSection = ({
   return (
     <div className="mb-2">
       <div
-        className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer group"
+        className={`flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer group ${isOwnerExpired ? 'bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2 min-w-0 w-full">
           <ChevronDown size={12} className={`text-slate-400 transition-transform ${!isExpanded ? '-rotate-90' : ''}`} />
           {!isCollapsed && (
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">
+            <span className={`text-sm font-semibold truncate ${isOwnerExpired ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
               {team.name}
             </span>
+          )}
+          {isOwnerExpired && !isCollapsed && (
+            <Lock size={12} className="text-red-500 flex-shrink-0" />
           )}
         </div>
       </div>
 
       {isExpanded && !isCollapsed && (
-        <div className="ml-4 mt-1 space-y-0.5 border-l border-slate-200 dark:border-slate-700 pl-2">
-
-
-
+        <div className={`ml-4 mt-1 space-y-0.5 border-l pl-2 ${isOwnerExpired ? 'border-red-200 dark:border-red-800 opacity-60' : 'border-slate-200 dark:border-slate-700'}`}>
           {teamProjects.map((project: any) => (
-            <SidebarProjectCard
+            <div
               key={project.id}
-              project={project}
-              activeProjectId={activeProjectId}
-              isCollapsed={isCollapsed}
-              can={can}
-              onEdit={onEditProject}
-              onDelete={onDeleteProject}
-              onMigrate={() => { }} // No migration for team projects
-              onSelect={onSelectProject}
-            />
+              onClick={() => isOwnerExpired ? onExpiredClick() : onSelectProject(project.id)}
+              className={`sidebar-item group flex items-center justify-between relative px-3 py-1.5 cursor-pointer transition-all duration-200 
+                ${isOwnerExpired
+                  ? 'text-red-400 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10'
+                  : activeProjectId === project.id
+                    ? 'bg-[#FF6B35]/10 text-slate-900 dark:text-white font-medium'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              title={isOwnerExpired ? 'Plan Expired - Click to renew' : project.name}
+            >
+              <div className="flex items-center gap-3 truncate">
+                {isOwnerExpired ? (
+                  <Lock size={12} className="text-red-400 flex-shrink-0" />
+                ) : project.logo ? (
+                  <img src={project.logo} alt={project.name} className="w-5 h-5 rounded object-cover bg-white shrink-0" />
+                ) : (
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${activeProjectId === project.id ? 'bg-[#FF6B35]' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                )}
+                <span className="truncate text-sm">{project.name}</span>
+              </div>
+            </div>
           ))}
 
           {teamProjects.length === 0 && !isOwned && (
@@ -189,6 +203,7 @@ export const Sidebar: React.FC = () => {
     currentUser,
     canAccessPremium,
     uploadFile,
+    users,
     // Team-related
     teams,
     teamMembers,
@@ -243,6 +258,9 @@ export const Sidebar: React.FC = () => {
     personal: true
   });
 
+  // Plan expired modal
+  const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
+
   const isSuperAdmin = currentUser?.email?.toLowerCase() === 'manavss828@gmail.com';
 
   // Fetch teams on mount
@@ -253,6 +271,21 @@ export const Sidebar: React.FC = () => {
   const joinedTeams = getJoinedTeams();
 
   const personalProjects = getPersonalProjects();
+
+  // Check if current user's (owner) plan is expired
+  const isOwnerPlanExpired = !currentUser?.isPremium && currentUser?.premiumUntil !== undefined;
+
+  // Check if a team owner's plan is expired (for joined teams)
+  const isTeamOwnerExpired = (team: any) => {
+    const owner = users.find(u => u.id === team.ownerId);
+    if (!owner) return false;
+    return !owner.isPremium && owner.premiumUntil !== undefined;
+  };
+
+  // Calculate days until expiry for warning
+  const daysUntilExpiry = currentUser?.premiumUntil
+    ? Math.ceil((currentUser.premiumUntil - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -407,6 +440,26 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
+      {/* 7-Day Expiry Warning Banner */}
+      {!isCollapsed && daysUntilExpiry !== null && daysUntilExpiry > 0 && daysUntilExpiry <= 7 && (
+        <div
+          className="mx-3 mb-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+          onClick={() => navigate('/billing')}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                Plan expires in {daysUntilExpiry} day{daysUntilExpiry > 1 ? 's' : ''}
+              </p>
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                Renew now to avoid losing access
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4 space-y-4">
         {/* My Teams Section */}
@@ -445,6 +498,8 @@ export const Sidebar: React.FC = () => {
                     onEditProject={openEditModal}
                     onDeleteProject={handleDelete}
                     onSelectProject={handleProjectSelect}
+                    isOwnerExpired={isOwnerPlanExpired}
+                    onExpiredClick={() => setIsExpiredModalOpen(true)}
                   />
                 ))}
               </div>
@@ -495,6 +550,8 @@ export const Sidebar: React.FC = () => {
                     onEditProject={openEditModal}
                     onDeleteProject={handleDelete}
                     onSelectProject={handleProjectSelect}
+                    isOwnerExpired={isTeamOwnerExpired(team)}
+                    onExpiredClick={() => setIsExpiredModalOpen(true)}
                   />
                 ))}
               </div>
@@ -928,6 +985,41 @@ export const Sidebar: React.FC = () => {
       <JoinTeamModal isOpen={isJoinTeamModalOpen} onClose={() => setIsJoinTeamModalOpen(false)} />
       <CreateTeamModal isOpen={isCreateTeamModalOpen} onClose={() => setIsCreateTeamModalOpen(false)} />
       <TeamSettingsModal isOpen={isTeamSettingsOpen} onClose={() => setIsTeamSettingsOpen(false)} team={selectedTeam} />
+
+      {/* Plan Expired Modal */}
+      <Modal isOpen={isExpiredModalOpen} onClose={() => setIsExpiredModalOpen(false)} title="Plan Expired">
+        <div className="space-y-4">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/50 flex gap-3 text-red-600 dark:text-red-400">
+            <div className="shrink-0 pt-0.5">
+              <Lock size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg">Your subscription has expired</h3>
+              <p className="text-sm mt-2 opacity-90">
+                Your organization projects are locked. Renew your subscription to restore access for you and your team members.
+              </p>
+              <p className="text-xs mt-2 opacity-75">
+                Personal projects remain accessible on the free plan.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setIsExpiredModalOpen(false)}
+              className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 font-medium text-sm transition-colors"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => { setIsExpiredModalOpen(false); navigate('/billing'); }}
+              className="px-5 py-2 rounded-lg bg-primary text-white hover:bg-primary-hover shadow-sm hover:shadow font-medium text-sm transition-all flex items-center gap-2"
+            >
+              <CreditCard size={16} />
+              Renew Subscription
+            </button>
+          </div>
+        </div>
+      </Modal>
 
     </aside >
   );
