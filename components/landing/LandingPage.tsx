@@ -10,6 +10,8 @@ import LandingSecurityTrust from './LandingSecurityTrust';
 import LandingCTASection from './LandingCTASection';
 import LandingFooter from './LandingFooter';
 
+import LandingBentoFeatures from './LandingBentoFeatures';
+
 interface LandingPageProps {
     onLogin: () => void;
     onRegister: () => void;
@@ -26,6 +28,9 @@ const LandingPage = ({ onLogin, onRegister }: LandingPageProps) => {
 
             {/* Trust Bar - Logo Carousel */}
             <LandingTrustBar />
+
+            {/* Powerful Features - Bento Grid */}
+            <LandingBentoFeatures />
 
             {/* Features Timeline */}
             <TimelineFeatures />

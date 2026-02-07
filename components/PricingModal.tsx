@@ -9,14 +9,19 @@ interface Props {
 }
 
 export const PricingModal: React.FC<Props> = ({ isOpen, onClose }) => {
-    const { canAccessPremium } = useStore();
+    const { canAccessPremium, plans: dbPlans } = useStore();
     const isPremium = canAccessPremium();
     const [annual, setAnnual] = useState(true);
 
+    const getDbDescription = (name: string, fallback: string) => {
+        const dbPlan = dbPlans.find(p => p.name === name || (name === 'Enterprise' && p.name === 'Scale') || (name === 'Growth' && p.name === 'Standard'));
+        return dbPlan?.description || fallback;
+    };
+
     const plans = [
         {
-            name: 'Starter',
-            description: 'Perfect for individuals getting started',
+            name: 'Solo',
+            description: getDbDescription('Solo', 'Essential tools for individual professionals and creators'),
             price: { monthly: 0, annual: 0 },
             features: [
                 'Unlimited tasks',
@@ -30,11 +35,11 @@ export const PricingModal: React.FC<Props> = ({ isOpen, onClose }) => {
             action: () => onClose(),
         },
         {
-            name: 'Pro',
-            description: 'For growing teams with premium needs',
+            name: 'Growth',
+            description: getDbDescription('Growth', 'Powerful collaboration for expanding teams and organizations'),
             price: { monthly: 12, annual: 9 },
             features: [
-                'Everything in Starter',
+                'Everything in Solo',
                 'Unlimited projects',
                 'List & Calendar views',
                 'Team collaboration (up to 10)',
@@ -56,10 +61,10 @@ export const PricingModal: React.FC<Props> = ({ isOpen, onClose }) => {
         },
         {
             name: 'Enterprise',
-            description: 'For organizations that demand the best',
+            description: getDbDescription('Enterprise', 'Tailored solutions with advanced security and dedicated support'),
             price: { monthly: 39, annual: 29 },
             features: [
-                'Everything in Pro',
+                'Everything in Growth',
                 'Unlimited team members',
                 'Admin controls',
                 'SSO integration',
@@ -180,10 +185,10 @@ export const PricingModal: React.FC<Props> = ({ isOpen, onClose }) => {
                             <button
                                 onClick={plan.action}
                                 className={`block w-full text-center py-4 rounded-full font-semibold transition-all duration-300 ${plan.ctaStyle === 'primary'
-                                        ? 'bg-primary text-white shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
-                                        : plan.ctaStyle === 'dark'
-                                            ? 'bg-slate-900 text-white hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98]'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:scale-[1.02] active:scale-[0.98]'
+                                    ? 'bg-primary text-white shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
+                                    : plan.ctaStyle === 'dark'
+                                        ? 'bg-slate-900 text-white hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98]'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:scale-[1.02] active:scale-[0.98]'
                                     }`}
                             >
                                 {plan.cta}
