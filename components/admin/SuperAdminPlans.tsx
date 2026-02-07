@@ -1,73 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../../store';
-import { Plus, Check, Trash2, X } from 'lucide-react';
+import { Plus, Check, Trash2, X, Pencil, ShieldCheck, Settings, Users, Briefcase, IndianRupee, DollarSign, Info } from 'lucide-react';
 import { Plan } from '../../types';
 
 export const SuperAdminPlans: React.FC = () => {
     const { plans, fetchPlans, updatePlan, addPlan, deletePlan } = useStore();
-    const [localPlans, setLocalPlans] = useState<Plan[]>([]);
-    const [isAddPlanModalOpen, setIsAddPlanModalOpen] = useState(false);
-
-    // New Plan State - Snake Case
-    const [newPlan, setNewPlan] = useState<Partial<Plan>>({
-        name: '',
-        currency: 'USD',
-        description: '',
-
-        price_monthly: 0,
-        price_yearly: 0,
-        price_per_seat_monthly: 0,
-        price_per_seat_yearly: 0,
-
-        max_projects: 3,
-        max_members_per_project: 5,
-        max_leads_per_project: 5,
-        max_images_per_task: 0, // 0 = Unlimited
-        history_retention_days: 30,
-
-        can_invite_members: false,
-        can_upload_images: false,
-        can_set_reminders: false,
-        can_use_notifications: false,
-        can_export_data: false,
-        can_view_history: false
-    });
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+    const [currentPlan, setCurrentPlan] = useState<Partial<Plan>>({});
 
     useEffect(() => {
         fetchPlans();
     }, []);
 
-    useEffect(() => {
-        // Sort by ID to keep order stable
-        const sorted = [...plans].sort((a, b) => a.name.localeCompare(b.name));
-        setLocalPlans(sorted);
-    }, [plans]);
-
-    const handlePlanChange = (planId: string, field: keyof Plan, value: any) => {
-        setLocalPlans(prev => prev.map(p => p.id === planId ? { ...p, [field]: value } : p));
-    };
-
-    const savePlan = async (planId: string) => {
-        const plan = localPlans.find(p => p.id === planId);
-        if (!plan) return;
-
-        await updatePlan(planId, plan);
-    };
-
-    const handleDeletePlan = async (planId: string, planName: string) => {
-        if (window.confirm(`Are you sure you want to delete the plan "${planName}"? This cannot be undone.`)) {
-            await deletePlan(planId);
-            fetchPlans();
-        }
-    };
-
-    const handleCreatePlan = async () => {
-        if (!newPlan.name || !newPlan.currency) return;
-
-        await addPlan(newPlan as Omit<Plan, 'id'>);
-        setIsAddPlanModalOpen(false);
-        // Reset form
-        setNewPlan({
+    const openAddModal = () => {
+        setModalMode('add');
+        setCurrentPlan({
             name: '',
             currency: 'USD',
             description: '',
@@ -87,208 +35,148 @@ export const SuperAdminPlans: React.FC = () => {
             can_export_data: false,
             can_view_history: false
         });
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (plan: Plan) => {
+        setModalMode('edit');
+        setCurrentPlan({ ...plan });
+        setIsModalOpen(true);
+    };
+
+    const handleDeletePlan = async (planId: string, planName: string) => {
+        if (window.confirm(`Are you sure you want to delete the plan "${planName}"? This cannot be undone.`)) {
+            await deletePlan(planId);
+            fetchPlans();
+        }
+    };
+
+    const handleSavePlan = async () => {
+        if (!currentPlan.name || !currentPlan.currency) return;
+
+        if (modalMode === 'add') {
+            await addPlan(currentPlan as Omit<Plan, 'id'>);
+        } else {
+            if (currentPlan.id) {
+                await updatePlan(currentPlan.id, currentPlan);
+            }
+        }
+
+        setIsModalOpen(false);
         fetchPlans();
+    };
+
+    const sortedPlans = [...plans].sort((a, b) => {
+        const order: Record<string, number> = { 'Solo': 1, 'Free': 1, 'Growth': 2, 'Standard': 2, 'Enterprise': 3 };
+        return (order[a.name] || 99) - (order[b.name] || 99) || a.currency.localeCompare(b.currency);
+    });
+
+    const getFeatureCount = (p: Plan) => {
+        return [p.can_invite_members, p.can_upload_images, p.can_set_reminders, p.can_use_notifications, p.can_export_data, p.can_view_history].filter(Boolean).length;
     };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                        <span className="text-yellow-500">👑</span> Manage Plans & Pricing
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Configure subscription limits, pricing, features, and currencies.
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="p-2 bg-orange-100 dark:bg-orange-950/30 rounded-lg text-orange-600">
+                            <Briefcase size={20} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                            Plans & Pricing
+                        </h3>
+                    </div>
+                    <p className="text-sm text-slate-500 font-medium">
+                        Configure subscription tiers, feature gates, and tiered pricing.
                     </p>
                 </div>
                 <button
-                    onClick={() => setIsAddPlanModalOpen(true)}
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+                    onClick={openAddModal}
+                    className="bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-slate-200 dark:shadow-none"
                 >
-                    <Plus size={18} /> Add New Plan
+                    <Plus size={16} /> Add New Plan
                 </button>
             </div>
 
-            {/* Plans Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Plans List */}
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-800 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-gray-500 font-bold uppercase text-xs">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
                             <tr>
-                                <th className="px-4 py-3 min-w-[150px]">Plan Name</th>
-                                <th className="px-4 py-3 w-20 text-center">Curr</th>
-                                <th className="px-4 py-3 w-24">Base/Mo</th>
-                                <th className="px-4 py-3 w-24">Base/Yr</th>
-                                <th className="px-4 py-3 w-24">User/Mo</th>
-                                <th className="px-4 py-3 w-24">User/Yr</th>
-                                <th className="px-4 py-3 w-20 text-center" title="Max Projects">Projs</th>
-                                <th className="px-4 py-3 w-20 text-center" title="Max Members per Project">Mem/Pr</th>
-                                <th className="px-4 py-3 w-20 text-center" title="Max Leads per Project">Lead/Pr</th>
-                                <th className="px-4 py-3 w-20 text-center" title="Max Images per Task">Img/Task</th>
-                                <th className="px-4 py-3 text-center">Features</th>
-                                <th className="px-4 py-3 text-right">Actions</th>
+                                <th className="px-8 py-5">Plan Identity</th>
+                                <th className="px-6 py-5 text-center">Currency</th>
+                                <th className="px-6 py-5">Base Pricing</th>
+                                <th className="px-6 py-5">Per Seat</th>
+                                <th className="px-6 py-5 text-center">Limits</th>
+                                <th className="px-6 py-5 text-center">Access</th>
+                                <th className="px-8 py-5 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                            {localPlans.map(plan => (
-                                <tr key={plan.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                    {/* Name & ID */}
-                                    <td className="px-4 py-3">
-                                        <input
-                                            type="text"
-                                            value={plan.name}
-                                            onChange={e => handlePlanChange(plan.id, 'name', e.target.value)}
-                                            className="w-full bg-transparent font-bold text-gray-800 dark:text-white border-b border-transparent focus:border-blue-500 outline-none transition-colors"
-                                        />
-                                        <div className="text-[10px] text-gray-400 truncate max-w-[120px]">{plan.id}</div>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {sortedPlans.map(plan => (
+                                <tr key={plan.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                                    <td className="px-8 py-6">
+                                        <div className="flex flex-col">
+                                            <span className="font-black text-slate-900 dark:text-white text-base leading-tight mb-1">{plan.name}</span>
+                                            <span className="text-[11px] text-slate-400 font-medium line-clamp-1 max-w-[200px]" title={plan.description}>
+                                                {plan.description || 'No description provided.'}
+                                            </span>
+                                            <span className="text-[9px] text-slate-300 font-mono mt-1">{plan.id}</span>
+                                        </div>
                                     </td>
 
-                                    {/* Currency */}
-                                    <td className="px-4 py-3 text-center">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${plan.currency === 'INR' ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'}`}>
+                                    <td className="px-6 py-6 text-center">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest ${plan.currency === 'INR' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                             {plan.currency}
                                         </span>
                                     </td>
 
-                                    {/* Detailed Pricing */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
-                                            <input
-                                                type="number"
-                                                value={plan.price_monthly}
-                                                onChange={e => handlePlanChange(plan.id, 'price_monthly', parseInt(e.target.value) || 0)}
-                                                className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
-                                                placeholder="Base"
-                                                title="Base Monthly Price"
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
-                                            <input
-                                                type="number"
-                                                value={plan.price_yearly}
-                                                onChange={e => handlePlanChange(plan.id, 'price_yearly', parseInt(e.target.value) || 0)}
-                                                className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
-                                                placeholder="Yearly"
-                                                title="Base Yearly Price"
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
-                                            <input
-                                                type="number"
-                                                value={plan.price_per_seat_monthly}
-                                                onChange={e => handlePlanChange(plan.id, 'price_per_seat_monthly', parseInt(e.target.value) || 0)}
-                                                className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
-                                                placeholder="Seat"
-                                                title="Per User Monthly Price"
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-gray-400 text-xs">{plan.currency === 'INR' ? '₹' : '$'}</span>
-                                            <input
-                                                type="number"
-                                                value={plan.price_per_seat_yearly}
-                                                onChange={e => handlePlanChange(plan.id, 'price_per_seat_yearly', parseInt(e.target.value) || 0)}
-                                                className="w-16 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-1 text-right"
-                                                placeholder="Yearly"
-                                                title="Per User Yearly Price"
-                                            />
+                                    <td className="px-6 py-6 font-bold text-slate-700 dark:text-slate-300">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm">{plan.currency === 'INR' ? '₹' : '$'}{plan.price_monthly}<span className="text-[10px] text-slate-400 ml-1">/mo</span></span>
+                                            <span className="text-[11px] text-slate-400">{plan.currency === 'INR' ? '₹' : '$'}{plan.price_yearly}<span className="text-[10px] text-slate-400 ml-1">/yr</span></span>
                                         </div>
                                     </td>
 
-                                    {/* Limits */}
-                                    <td className="px-4 py-3 text-center">
-                                        <input
-                                            type="number"
-                                            value={plan.max_projects}
-                                            onChange={e => handlePlanChange(plan.id, 'max_projects', parseInt(e.target.value))}
-                                            className="w-12 text-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
-                                            title="Max Projects (999=Unl)"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <input
-                                            type="number"
-                                            value={plan.max_members_per_project}
-                                            onChange={e => handlePlanChange(plan.id, 'max_members_per_project', parseInt(e.target.value))}
-                                            className="w-12 text-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <input
-                                            type="number"
-                                            value={plan.max_leads_per_project}
-                                            onChange={e => handlePlanChange(plan.id, 'max_leads_per_project', parseInt(e.target.value))}
-                                            className="w-12 text-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <input
-                                            type="number"
-                                            value={plan.max_images_per_task || 0}
-                                            onChange={e => handlePlanChange(plan.id, 'max_images_per_task', parseInt(e.target.value))}
-                                            className="w-12 text-center bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
-                                            title="0 = Unlimited"
-                                        />
-                                    </td>
-
-                                    {/* Features Checkboxes */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex justify-center gap-2">
-                                            {[
-                                                { key: 'can_invite_members', label: 'Invite' },
-                                                { key: 'can_upload_images', label: 'Upload' },
-                                                { key: 'can_set_reminders', label: 'Remind' },
-                                                { key: 'can_use_notifications', label: 'Notif' },
-                                                { key: 'can_export_data', label: 'Export' },
-                                                { key: 'can_view_history', label: 'History' },
-                                            ].map(feat => (
-                                                <div key={feat.key} className="relative group cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={plan[feat.key as keyof Plan] as boolean}
-                                                        onChange={e => handlePlanChange(plan.id, feat.key as keyof Plan, e.target.checked)}
-                                                        className="peer sr-only "
-                                                        id={`${plan.id}-${feat.key}`}
-                                                    />
-                                                    <label
-                                                        htmlFor={`${plan.id}-${feat.key}`}
-                                                        className={`block w-4 h-4 rounded border cursor-pointer transition-colors ${(plan[feat.key as keyof Plan] as boolean)
-                                                            ? 'bg-blue-500 border-blue-500'
-                                                            : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600'
-                                                            }`}
-                                                    ></label>
-                                                    {/* Tooltip */}
-                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] text-white bg-black rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                                                        {feat.label}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                    <td className="px-6 py-6 font-bold text-slate-700 dark:text-slate-300">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm">{plan.currency === 'INR' ? '₹' : '$'}{plan.price_per_seat_monthly}<span className="text-[10px] text-slate-400 ml-1">/mo</span></span>
+                                            <span className="text-[11px] text-slate-400">{plan.currency === 'INR' ? '₹' : '$'}{plan.price_per_seat_yearly}<span className="text-[10px] text-slate-400 ml-1">/yr</span></span>
                                         </div>
                                     </td>
 
-                                    {/* Actions */}
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="flex justify-end gap-2">
+                                    <td className="px-6 py-6">
+                                        <div className="flex flex-col items-center gap-1">
+                                            <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 tracking-tighter">
+                                                <div className="flex flex-col items-center"><span className="text-slate-900 dark:text-white text-sm">{plan.max_projects === 999 ? '∞' : plan.max_projects}</span>P</div>
+                                                <div className="flex flex-col items-center"><span className="text-slate-900 dark:text-white text-sm">{plan.max_members_per_project === 999 ? '∞' : plan.max_members_per_project}</span>M</div>
+                                                <div className="flex flex-col items-center"><span className="text-slate-900 dark:text-white text-sm">{plan.history_retention_days}</span>D</div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td className="px-6 py-6 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                            <span className="text-sm font-black text-indigo-600">{getFeatureCount(plan)}/6</span>
+                                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Enables</span>
+                                        </div>
+                                    </td>
+
+                                    <td className="px-8 py-6 text-right">
+                                        <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button
-                                                onClick={() => savePlan(plan.id)}
-                                                className="p-1.5 text-green-600 hover:bg-green-100 rounded transition-colors"
-                                                title="Save Changes"
+                                                onClick={() => openEditModal(plan)}
+                                                className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-900 hover:text-white dark:hover:bg-white dark:hover:text-slate-900 rounded-xl transition-all"
+                                                title="Edit Plan"
                                             >
-                                                <Check size={16} />
+                                                <Pencil size={16} />
                                             </button>
                                             <button
                                                 onClick={() => handleDeletePlan(plan.id, plan.name)}
-                                                className="p-1.5 text-red-500 hover:bg-red-100 rounded transition-colors"
+                                                className="p-2.5 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-xl transition-all"
                                                 title="Delete Plan"
                                             >
                                                 <Trash2 size={16} />
@@ -297,156 +185,180 @@ export const SuperAdminPlans: React.FC = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {localPlans.length === 0 && (
-                                <tr>
-                                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500 italic">
-                                        No plans found. Add one to get started.
-                                    </td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Add Plan Modal */}
-            {isAddPlanModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
-                            <h3 className="text-xl font-bold dark:text-white">Add New Plan</h3>
-                            <button onClick={() => setIsAddPlanModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-200">
+            {/* Plan Configuration Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl w-full max-w-3xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="px-10 py-8 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                                    {modalMode === 'add' ? 'Create New Plan' : `Configure ${currentPlan.name}`}
+                                </h3>
+                                <p className="text-sm text-slate-500 font-medium">Define pricing, limits, and feature gates for this tier.</p>
+                            </div>
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="p-3 bg-white dark:bg-slate-800 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all"
+                            >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="p-6 overflow-y-auto space-y-6">
-                            {/* Basic Info */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Plan Name</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. Premium Plan"
-                                        value={newPlan.name}
-                                        onChange={e => setNewPlan({ ...newPlan, name: e.target.value })}
-                                        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Currency</label>
-                                    <select
-                                        value={newPlan.currency}
-                                        onChange={e => setNewPlan({ ...newPlan, currency: e.target.value })}
-                                        className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    >
-                                        <option value="USD">USD ($)</option>
-                                        <option value="INR">INR (₹)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Pricing */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Base Price (Monthly)</label>
-                                    <input
-                                        type="number"
-                                        value={newPlan.price_monthly}
-                                        onChange={e => setNewPlan({ ...newPlan, price_monthly: parseInt(e.target.value) })}
-                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Base Price (Yearly)</label>
-                                    <input
-                                        type="number"
-                                        value={newPlan.price_yearly}
-                                        onChange={e => setNewPlan({ ...newPlan, price_yearly: parseInt(e.target.value) })}
-                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Per User (Monthly)</label>
-                                    <input
-                                        type="number"
-                                        value={newPlan.price_per_seat_monthly}
-                                        onChange={e => setNewPlan({ ...newPlan, price_per_seat_monthly: parseInt(e.target.value) })}
-                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase text-gray-500">Per User (Yearly)</label>
-                                    <input
-                                        type="number"
-                                        value={newPlan.price_per_seat_yearly}
-                                        onChange={e => setNewPlan({ ...newPlan, price_per_seat_yearly: parseInt(e.target.value) })}
-                                        className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Limits */}
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">Limits & Quotas</h4>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="text-xs text-gray-500">Max Projects</label>
-                                        <input type="number" value={newPlan.max_projects} onChange={e => setNewPlan({ ...newPlan, max_projects: parseInt(e.target.value) })} className="w-full p-2 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        {/* Modal Body */}
+                        <div className="p-10 overflow-y-auto space-y-8 scrollbar-hide">
+                            {/* Identity Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="md:col-span-2 space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+                                        <Info size={12} /> Plan Identity
+                                    </label>
+                                    <div className="space-y-3">
+                                        <input
+                                            type="text"
+                                            placeholder="Plan Name (e.g. Pro, Growth)"
+                                            value={currentPlan.name}
+                                            onChange={e => setCurrentPlan({ ...currentPlan, name: e.target.value })}
+                                            className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-slate-900 transition-all"
+                                        />
+                                        <textarea
+                                            placeholder="Detailed description for marketing copy..."
+                                            value={currentPlan.description || ''}
+                                            onChange={e => setCurrentPlan({ ...currentPlan, description: e.target.value })}
+                                            className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-slate-900 dark:text-white text-sm font-medium focus:ring-2 focus:ring-slate-900 transition-all h-24 resize-none"
+                                        />
                                     </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">Members/Proj</label>
-                                        <input type="number" value={newPlan.max_members_per_project} onChange={e => setNewPlan({ ...newPlan, max_members_per_project: parseInt(e.target.value) })} className="w-full p-2 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Currency</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {['USD', 'INR'].map(c => (
+                                                <button
+                                                    key={c}
+                                                    onClick={() => setCurrentPlan({ ...currentPlan, currency: c })}
+                                                    className={`py-3 rounded-xl font-black text-xs transition-all ${currentPlan.currency === c
+                                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100'}`}
+                                                >
+                                                    {c}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">Leads/Proj</label>
-                                        <input type="number" value={newPlan.max_leads_per_project} onChange={e => setNewPlan({ ...newPlan, max_leads_per_project: parseInt(e.target.value) })} className="w-full p-2 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">Max Images/Task</label>
-                                        <input type="number" value={newPlan.max_images_per_task || 0} onChange={e => setNewPlan({ ...newPlan, max_images_per_task: parseInt(e.target.value) })} className="w-full p-2 border rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="0=Unlimited" />
+                                    <div className="p-4 bg-indigo-50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
+                                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold leading-tight">
+                                            Note: Subscription currencies must match the target market (USD/Global or INR/India).
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Features */}
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">Enabled Features</h4>
-                                <div className="grid grid-cols-2 gap-2">
+                            {/* Pricing Grid */}
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+                                    <DollarSign size={12} /> Commercial Configuration
+                                </label>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     {[
-                                        { key: 'can_invite_members', label: 'Invite Members' },
-                                        { key: 'can_upload_images', label: 'Image Uploads' },
-                                        { key: 'can_set_reminders', label: 'Reminders' },
-                                        { key: 'can_use_notifications', label: 'Notifications' },
-                                        { key: 'can_export_data', label: 'Export Data' },
-                                        { key: 'can_view_history', label: 'View Full History' },
-                                    ].map(feat => (
-                                        <label key={feat.key} className="flex items-center gap-2 text-sm cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors dark:text-gray-300">
+                                        { label: 'Base / Mo', key: 'price_monthly', icon: currentPlan.currency === 'INR' ? <IndianRupee size={12} /> : <DollarSign size={12} /> },
+                                        { label: 'Base / Yr', key: 'price_yearly', icon: currentPlan.currency === 'INR' ? <IndianRupee size={12} /> : <DollarSign size={12} /> },
+                                        { label: 'User / Mo', key: 'price_per_seat_monthly', icon: <Users size={12} /> },
+                                        { label: 'User / Yr', key: 'price_per_seat_yearly', icon: <Users size={12} /> },
+                                    ].map(f => (
+                                        <div key={f.key} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl space-y-2 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                                            <div className="flex items-center gap-1.5 text-slate-400">
+                                                {f.icon}
+                                                <span className="text-[10px] font-black uppercase tracking-widest">{f.label}</span>
+                                            </div>
                                             <input
-                                                type="checkbox"
-                                                checked={newPlan[feat.key as keyof Plan] as boolean || false}
-                                                onChange={e => setNewPlan({ ...newPlan, [feat.key]: e.target.checked })}
-                                                className="w-4 h-4 text-orange-600 rounded"
+                                                type="number"
+                                                value={(currentPlan[f.key as keyof Plan] as number) || 0}
+                                                onChange={e => setCurrentPlan({ ...currentPlan, [f.key]: parseInt(e.target.value) || 0 })}
+                                                className="w-full bg-transparent text-xl font-black text-slate-900 dark:text-white border-none focus:ring-0 p-0"
                                             />
-                                            {feat.label}
-                                        </label>
+                                        </div>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Limits Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+                                        <Settings size={12} /> Resource Limits
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {[
+                                            { label: 'Max Projects', key: 'max_projects', hint: '999 = Unl' },
+                                            { label: 'Members/Proj', key: 'max_members_per_project', hint: '999 = Unl' },
+                                            { label: 'Leads/Proj', key: 'max_leads_per_project', hint: 'Admin Role' },
+                                            { label: 'History Days', key: 'history_retention_days', hint: 'Data Life' },
+                                        ].map(f => (
+                                            <div key={f.key} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl relative">
+                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">{f.label}</label>
+                                                <input
+                                                    type="number"
+                                                    value={(currentPlan[f.key as keyof Plan] as number) || 0}
+                                                    onChange={e => setCurrentPlan({ ...currentPlan, [f.key]: parseInt(e.target.value) || 0 })}
+                                                    className="w-full bg-transparent text-lg font-black text-slate-900 dark:text-white border-none focus:ring-0 p-0"
+                                                />
+                                                <span className="absolute top-4 right-4 text-[8px] font-bold text-slate-300 dark:text-slate-600">{f.hint}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+                                        <ShieldCheck size={12} /> Feature Availability
+                                    </label>
+                                    <div className="bg-slate-50 dark:bg-slate-800 rounded-[2rem] p-6 space-y-3 border border-slate-100 dark:border-slate-700/50">
+                                        {[
+                                            { key: 'can_invite_members', label: 'External Invitations' },
+                                            { key: 'can_upload_images', label: 'Image Assets Upload' },
+                                            { key: 'can_set_reminders', label: 'Push & Mail Reminders' },
+                                            { key: 'can_use_notifications', label: 'Global Notifications' },
+                                            { key: 'can_export_data', label: 'Advanced Data Export' },
+                                            { key: 'can_view_history', label: 'Full Audit History' },
+                                        ].map(feat => (
+                                            <label key={feat.key} className="flex items-center justify-between group cursor-pointer">
+                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 transition-colors group-hover:text-slate-900 dark:group-hover:text-white">{feat.label}</span>
+                                                <div className="relative">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={currentPlan[feat.key as keyof Plan] as boolean || false}
+                                                        onChange={e => setCurrentPlan({ ...currentPlan, [feat.key]: e.target.checked })}
+                                                        className="peer sr-only"
+                                                    />
+                                                    <div className="w-10 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer-checked:bg-slate-900 dark:peer-checked:bg-white transition-all"></div>
+                                                    <div className="absolute left-1 top-1 w-4 h-4 bg-white dark:bg-slate-900 rounded-full transition-transform peer-checked:translate-x-4"></div>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end gap-3">
+                        {/* Modal Footer */}
+                        <div className="p-10 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 flex justify-end gap-4">
                             <button
-                                onClick={() => setIsAddPlanModalOpen(false)}
-                                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium dark:text-gray-400 dark:hover:text-gray-200"
+                                onClick={() => setIsModalOpen(false)}
+                                className="px-8 py-4 text-slate-500 hover:text-slate-900 font-black text-xs uppercase tracking-widest transition-all"
                             >
-                                Cancel
+                                Discard
                             </button>
                             <button
-                                onClick={handleCreatePlan}
-                                className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-md transition-transform active:scale-95"
+                                onClick={handleSavePlan}
+                                className="px-10 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-slate-200 dark:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all"
                             >
-                                Create Plan
+                                {modalMode === 'add' ? 'Create Tier' : 'Save Changes'}
                             </button>
                         </div>
                     </div>

@@ -40,6 +40,17 @@ const LandingHero = ({ onRegister }: LandingHeroProps) => {
                         transition={{ duration: 0.7, ease: 'easeOut' }}
                         className="max-w-xl"
                     >
+                        {/* Enterprise Badge */}
+                        <motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.2, duration: 0.5 }}
+                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 text-[10px] font-black uppercase tracking-[0.2em] mb-6"
+                        >
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                            Now Enterprise Ready
+                        </motion.div>
+
                         {/* Main Headline - Semi-bold with strong orange "done." */}
                         <h1
                             className="text-4xl md:text-5xl lg:text-6xl text-slate-900 leading-[1.1] mb-6"

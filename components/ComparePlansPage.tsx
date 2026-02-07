@@ -18,7 +18,7 @@ const ComparePlansPage: React.FC = () => {
     const filteredPlans = plans
         .filter((p: any) => p.currency === currencyCode)
         .sort((a: any, b: any) => {
-            const order: Record<string, number> = { 'Free': 1, 'Standard': 2, 'Enterprise': 3 };
+            const order: Record<string, number> = { 'Solo': 1, 'Free': 1, 'Growth': 2, 'Standard': 2, 'Enterprise': 3 };
             return (order[a.name] || 0) - (order[b.name] || 0);
         });
 
@@ -38,7 +38,7 @@ const ComparePlansPage: React.FC = () => {
 
     const renderValue = (plan: any, feature: any) => {
         const val = plan[feature.key];
-        const isEnterprise = plan.name === 'Enterprise';
+        const isEnterprise = plan.name === 'Enterprise' || plan.name === 'Scale';
 
         if (feature.type === 'boolean') {
             const hasFeature = isEnterprise || !!val;
@@ -94,7 +94,10 @@ const ComparePlansPage: React.FC = () => {
                                             <span className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${plan.name === 'Enterprise' ? 'text-[#FF6B35]' : 'text-slate-400'}`}>
                                                 {plan.name} Tier
                                             </span>
-                                            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{plan.name}</h3>
+                                            <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">{plan.name}</h3>
+                                            <p className="text-[10px] text-slate-500 dark:text-slate-400 max-w-[150px] leading-tight font-medium">
+                                                {plan.description || 'Standard features for this tier.'}
+                                            </p>
                                         </div>
                                     </th>
                                 ))}
@@ -242,8 +245,10 @@ const ComparePlansPage: React.FC = () => {
                                 ))}
                                 {features.map(f => (
                                     <div key={f.key} className="space-y-1 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{f.name}</p>
-                                        <div className="text-sm font-bold text-slate-900 dark:text-white">{renderValue(plan, f)}</div>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">{f.name}</p>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{renderValue(plan, f)}</h3>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

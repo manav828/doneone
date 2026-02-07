@@ -30,7 +30,6 @@ const BillingPage: React.FC = () => {
         country: '',
         companyName: '',
         teamSize: '',
-        requiredFeatures: [] as string[],
         requirements: ''
     });
 
@@ -51,7 +50,6 @@ const BillingPage: React.FC = () => {
                     country: '',
                     companyName: '',
                     teamSize: '',
-                    requiredFeatures: [],
                     requirements: ''
                 });
                 setIsEnterpriseModalOpen(false);
@@ -190,13 +188,13 @@ const BillingPage: React.FC = () => {
     return (
         <div className="h-full overflow-hidden bg-slate-50/30 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col">
             <div className="flex-1 overflow-y-auto">
-                <div className="max-w-6xl mx-auto w-full p-6 space-y-6 pb-20">
+                <div className="max-w-6xl mx-auto w-full p-4 space-y-4 pb-20">
 
                     <section>
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                             <div>
-                                <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Subscription Plans</h1>
-                                <p className="text-slate-500 dark:text-slate-400 font-medium text-sm mt-1">Scale your workspace as your team grows.</p>
+                                <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Subscription Plans</h1>
+                                <p className="text-slate-500 dark:text-slate-400 font-medium text-xs mt-0.5">Scale your workspace as your team grows.</p>
                             </div>
                             <div className="flex items-center gap-6">
                                 {/* Billing Toggle */}
@@ -295,50 +293,54 @@ const BillingPage: React.FC = () => {
                                 </div>
 
                                 {/* Right Side: Workspace Capacity */}
-                                <div className="w-full lg:w-[420px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Workspace Capacity</h2>
+                                <div className="w-full lg:w-[380px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                                    <h2 className="text-base font-bold text-slate-900 dark:text-white mb-4">Workspace Capacity</h2>
 
-                                    <div className="text-center mb-6">
-                                        <div className="text-6xl font-black text-slate-900 dark:text-white mb-2">{uniqueEmployeeCount}</div>
-                                        <div className="text-sm text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
+                                    <div className="text-center mb-3">
+                                        <div className="text-4xl font-black text-slate-900 dark:text-white mb-1">{uniqueEmployeeCount}</div>
+                                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
                                             OF {totalSeats} SEATS USED
                                         </div>
                                     </div>
 
-                                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-8">
+                                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-6">
                                         <div
                                             className="h-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-500"
                                             style={{ width: `${Math.min(100, (uniqueEmployeeCount / totalSeats) * 100)}%` }}
                                         />
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="space-y-3">
                                         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Adjust Seats</h3>
 
                                         <div className="flex items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                                            <button
+                                            <motion.button
+                                                whileTap={{ scale: 0.92 }}
+                                                transition={{ type: "spring", stiffness: 600, damping: 25 }}
                                                 onClick={() => setSeatAdjustment(Math.max(seatAdjustment - 1, -(currentUser.extraSeats || 0)))}
-                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all"
+                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all shadow-sm font-black"
                                             >
                                                 <Minus size={18} />
-                                            </button>
+                                            </motion.button>
 
                                             <div className="flex-1 text-center">
                                                 <div className="text-3xl font-black text-slate-900 dark:text-white">{totalSeats + seatAdjustment}</div>
                                             </div>
 
-                                            <button
+                                            <motion.button
+                                                whileTap={{ scale: 0.92 }}
+                                                transition={{ type: "spring", stiffness: 600, damping: 25 }}
                                                 onClick={() => setSeatAdjustment(seatAdjustment + 1)}
-                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all"
+                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all shadow-sm font-black"
                                             >
                                                 <Plus size={18} />
-                                            </button>
+                                            </motion.button>
                                         </div>
 
                                         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-900">
                                             <div className="flex items-start gap-3">
                                                 <Info size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                                                <p className="text-xs text-blue-700 dark:text-blue-300 font-medium leading-relaxed">
+                                                <p className="text-[10px] text-blue-700 dark:text-blue-300 font-medium leading-relaxed">
                                                     Changes to your seat count will be prorated and reflected in your next billing cycle.
                                                 </p>
                                             </div>
@@ -351,14 +353,14 @@ const BillingPage: React.FC = () => {
                         ) : (
                             <div className="flex flex-col lg:flex-row gap-8 items-start">
                                 {/* Left Side: Select Plan */}
-                                <div className="flex-1 w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Select Plan</h2>
+                                <div className="flex-1 w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                                    <h2 className="text-base font-bold text-slate-900 dark:text-white mb-4">Select Plan</h2>
 
-                                    <div className="space-y-4">
+                                    <div className="space-y-3">
                                         {plans
                                             .filter((p: any) => p.currency === currencyCode)
                                             .sort((a: any, b: any) => {
-                                                const order: Record<string, number> = { 'Free': 1, 'Standard': 2, 'Enterprise': 3 };
+                                                const order: Record<string, number> = { 'Solo': 1, 'Free': 1, 'Growth': 2, 'Standard': 2, 'Enterprise': 3 };
                                                 return (order[a.name] || 0) - (order[b.name] || 0);
                                             })
                                             .map((p: any) => {
@@ -376,7 +378,7 @@ const BillingPage: React.FC = () => {
                                                             if (p.name === 'Enterprise') setIsEnterpriseModalOpen(true);
                                                             else navigate(`/checkout?plan=${p.id}${annual ? '&billing=annual' : '&billing=monthly'}`);
                                                         }}
-                                                        className={`relative flex items-center justify-between p-5 rounded-xl border-2 transition-all cursor-pointer select-none
+                                                        className={`relative flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer select-none
                                                         ${isSelected
                                                                 ? 'border-indigo-500 bg-indigo-50/30 dark:bg-indigo-900/10'
                                                                 : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
@@ -389,10 +391,10 @@ const BillingPage: React.FC = () => {
                                                                 {isSelected && <div className="w-3 h-3 rounded-full bg-indigo-500" />}
                                                             </div>
 
-                                                            <div>
+                                                            <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center gap-3">
-                                                                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                                                                        {p.name === 'Enterprise' ? 'Unlimited Plan' : p.name === 'Standard' ? 'Growth Plan' : 'Core Plan'}
+                                                                    <h3 className="text-lg font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                                                                        {p.name === 'Enterprise' || p.name === 'Scale' ? 'Enterprise' : p.name === 'Growth' || p.name === 'Standard' ? 'Growth' : 'Solo'}
                                                                     </h3>
                                                                     {isCurrent && (
                                                                         <span className="bg-[#10B981] text-white text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md">
@@ -400,17 +402,17 @@ const BillingPage: React.FC = () => {
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                                                                    {p.max_members_per_project === 999 ? 'Maximum capacity and scale' : p.price_monthly === 0 ? 'Basic features for small teams' : 'Advanced analytics & priority support'}
+                                                                <p className="text-[10px] text-slate-500 font-medium leading-tight break-words">
+                                                                    {p.description || 'Standard Plan Features'}
                                                                 </p>
                                                             </div>
                                                         </div>
 
-                                                        <div className="text-right">
+                                                        <div className="text-right flex-shrink-0 ml-4">
                                                             <span className="text-lg font-bold text-slate-900 dark:text-white">
-                                                                {price === 0 ? 'Free' : `${currencySymbol}${price}`}
+                                                                {p.name === 'Enterprise' || p.name === 'Scale' ? 'Custom' : price === 0 ? 'Free' : `${currencySymbol}${price}`}
                                                             </span>
-                                                            {price > 0 && <span className="text-xs text-slate-400 font-bold ml-1">/mo</span>}
+                                                            {price > 0 && !(p.name === 'Enterprise' || p.name === 'Scale') && <span className="text-xs text-slate-400 font-bold ml-1">/mo</span>}
                                                         </div>
                                                     </div>
                                                 );
@@ -428,50 +430,54 @@ const BillingPage: React.FC = () => {
                                 </div>
 
                                 {/* Right Side: Workspace Capacity */}
-                                <div className="w-full lg:w-[420px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Workspace Capacity</h2>
+                                <div className="w-full lg:w-[380px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                                    <h2 className="text-base font-bold text-slate-900 dark:text-white mb-4">Workspace Capacity</h2>
 
-                                    <div className="text-center mb-6">
-                                        <div className="text-6xl font-black text-slate-900 dark:text-white mb-2">{uniqueEmployeeCount}</div>
-                                        <div className="text-sm text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
+                                    <div className="text-center mb-3">
+                                        <div className="text-4xl font-black text-slate-900 dark:text-white mb-1">{uniqueEmployeeCount}</div>
+                                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">
                                             OF {totalSeats} SEATS USED
                                         </div>
                                     </div>
 
-                                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-8">
+                                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-6">
                                         <div
                                             className="h-full bg-gradient-to-r from-orange-400 to-orange-500 transition-all duration-500"
                                             style={{ width: `${Math.min(100, (uniqueEmployeeCount / totalSeats) * 100)}%` }}
                                         />
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="space-y-3">
                                         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Adjust Seats</h3>
 
                                         <div className="flex items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                                            <button
+                                            <motion.button
+                                                whileTap={{ scale: 0.92 }}
+                                                transition={{ type: "spring", stiffness: 600, damping: 25 }}
                                                 onClick={() => setSeatAdjustment(Math.max(seatAdjustment - 1, -(currentUser.extraSeats || 0)))}
-                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all"
+                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all shadow-sm font-black"
                                             >
                                                 <Minus size={18} />
-                                            </button>
+                                            </motion.button>
 
                                             <div className="flex-1 text-center">
                                                 <div className="text-3xl font-black text-slate-900 dark:text-white">{totalSeats + seatAdjustment}</div>
                                             </div>
 
-                                            <button
+                                            <motion.button
+                                                whileTap={{ scale: 0.92 }}
+                                                transition={{ type: "spring", stiffness: 600, damping: 25 }}
                                                 onClick={() => setSeatAdjustment(seatAdjustment + 1)}
-                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all"
+                                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-all shadow-sm font-black"
                                             >
                                                 <Plus size={18} />
-                                            </button>
+                                            </motion.button>
                                         </div>
 
                                         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-900">
                                             <div className="flex items-start gap-3">
                                                 <Info size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                                                <p className="text-xs text-blue-700 dark:text-blue-300 font-medium leading-relaxed">
+                                                <p className="text-[10px] text-blue-700 dark:text-blue-300 font-medium leading-relaxed">
                                                     Changes to your seat count will be prorated and reflected in your next billing cycle.
                                                 </p>
                                             </div>
@@ -566,64 +572,57 @@ const BillingPage: React.FC = () => {
                     <div className="max-w-6xl mx-auto px-8 py-3 flex items-center justify-between">
                         <div>
                             {/* Show different label based on what changed */}
-                            {(() => {
-                                const currentPlan = plans.find((p: any) => p.id === currentUser.planId);
-                                const billingChanged = (annual ? 'annual' : 'monthly') !== currentUser.billingInterval;
-                                const seatsChanged = seatAdjustment !== 0;
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={`${seatAdjustment}-${annual}`}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                                >
+                                    {(() => {
+                                        const currentPlan = plans.find((p: any) => p.id === currentUser.planId);
+                                        const billingChanged = (annual ? 'annual' : 'monthly') !== currentUser.billingInterval;
+                                        const seatsChanged = seatAdjustment !== 0;
 
-                                const basePrice = annual
-                                    ? (currentPlan?.price_yearly || (currentPlan?.price_monthly || 0) * 12 * 0.75)
-                                    : (currentPlan?.price_monthly || 0);
-                                const seatPrice = annual
-                                    ? (currentPlan?.price_per_seat_yearly || (currentPlan?.price_per_seat || 0) * 12 * 0.75)
-                                    : (currentPlan?.price_per_seat || currentPlan?.price_per_seat_monthly || 0);
-                                const seatCost = Math.abs(seatAdjustment) * (seatPrice || 0);
+                                        const basePrice = annual
+                                            ? (currentPlan?.price_yearly || (currentPlan?.price_monthly || 0) * 12 * 0.75)
+                                            : (currentPlan?.price_monthly || 0);
+                                        const seatPrice = annual
+                                            ? (currentPlan?.price_per_seat_yearly || (currentPlan?.price_per_seat || 0) * 12 * 0.75)
+                                            : (currentPlan?.price_per_seat || currentPlan?.price_per_seat_monthly || 0);
+                                        const seatCost = Math.abs(seatAdjustment) * (seatPrice || 0);
 
-                                if (billingChanged && seatsChanged) {
-                                    // Both plan and seats changed - show both
-                                    return (
-                                        <div className="flex items-center gap-6">
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Plan ({annual ? 'Yearly' : 'Monthly'})</p>
-                                                <p className="text-lg font-black text-slate-900 dark:text-white">{currencySymbol}{basePrice.toFixed(2)}</p>
-                                            </div>
-                                            <div className="text-slate-300 dark:text-slate-600">+</div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{seatAdjustment > 0 ? '+' : ''}{seatAdjustment} Seat{Math.abs(seatAdjustment) > 1 ? 's' : ''}</p>
-                                                <p className="text-lg font-black text-slate-900 dark:text-white">{currencySymbol}{seatCost.toFixed(2)}<span className="text-xs font-medium text-slate-400 ml-1">/{annual ? 'yr' : 'mo'}</span></p>
-                                            </div>
-                                        </div>
-                                    );
-                                } else if (seatsChanged && !billingChanged) {
-                                    // Only seats changed
-                                    return (
-                                        <>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mb-0.5">
-                                                {seatAdjustment > 0 ? 'Add' : 'Remove'} {Math.abs(seatAdjustment)} Seat{Math.abs(seatAdjustment) > 1 ? 's' : ''}
-                                            </p>
-                                            <p className="text-xl font-black text-slate-900 dark:text-white">
-                                                {currencySymbol}{seatCost.toFixed(2)}
-                                                <span className="text-sm font-medium text-slate-400 ml-1">/ {annual ? 'year' : 'month'}</span>
-                                            </p>
-                                        </>
-                                    );
-                                } else {
-                                    // Only billing interval changed
-                                    const newSeats = (currentUser.extraSeats || 0) + seatAdjustment;
-                                    const totalSeatCost = Math.max(0, newSeats) * (seatPrice || 0);
-                                    const total = basePrice + totalSeatCost;
-                                    return (
-                                        <>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mb-0.5">
-                                                New Total ({annual ? 'Yearly' : 'Monthly'})
-                                            </p>
-                                            <p className="text-xl font-black text-slate-900 dark:text-white">
-                                                {currencySymbol}{total.toFixed(2)}
-                                            </p>
-                                        </>
-                                    );
-                                }
-                            })()}
+                                        if (billingChanged && seatsChanged) {
+                                            return (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Updated Billing:</span>
+                                                    <p className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                                        {currencySymbol}{basePrice.toFixed(0)} <span className="text-slate-300 font-light">+</span> {seatAdjustment > 0 ? '+' : ''}{seatAdjustment} Seats <span className="text-slate-300 font-light">·</span> {currencySymbol}{seatCost.toFixed(0)} <span className="text-xs font-medium text-slate-400">/{annual ? 'yr' : 'mo'}</span>
+                                                    </p>
+                                                </div>
+                                            );
+                                        } else if (seatsChanged && !billingChanged) {
+                                            return (
+                                                <p className="text-lg font-black text-slate-900 dark:text-white">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">{seatAdjustment > 0 ? 'Add' : 'Remove'} Seats:</span>
+                                                    {seatAdjustment > 0 ? '+' : ''}{seatAdjustment} Additional User{Math.abs(seatAdjustment) > 1 ? 's' : ''} <span className="mx-2 text-slate-300 font-light">·</span> {currencySymbol}{seatCost.toFixed(0)} <span className="text-xs font-medium text-slate-400">/ {annual ? 'year' : 'month'}</span>
+                                                </p>
+                                            );
+                                        } else {
+                                            const newSeats = (currentUser.extraSeats || 0) + seatAdjustment;
+                                            const totalSeatCost = Math.max(0, newSeats) * (seatPrice || 0);
+                                            const total = basePrice + totalSeatCost;
+                                            return (
+                                                <p className="text-lg font-black text-slate-900 dark:text-white">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-2">New Total:</span>
+                                                    {currencySymbol}{total.toFixed(0)} <span className="text-xs font-medium text-slate-400 ml-1">/{annual ? 'yr' : 'mo'}</span>
+                                                </p>
+                                            );
+                                        }
+                                    })()}
+                                </motion.div>
+                            </AnimatePresence>
                         </div>
                         <div className="flex items-center gap-3">
                             <button
@@ -762,46 +761,6 @@ const BillingPage: React.FC = () => {
                                 </select>
                             </div>
 
-                            {/* Required Features */}
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-                                    Required Features
-                                </label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {[
-                                        { value: 'custom_branding', label: 'Custom Branding' },
-                                        { value: 'sso', label: 'SSO / SAML Auth' },
-                                        { value: 'api_access', label: 'API Access' },
-                                        { value: 'self_hosted', label: 'Self-Hosted Deployment' },
-                                        { value: 'priority_support', label: '24/7 Priority Support' },
-                                        { value: 'audit_logs', label: 'Advanced Audit Logs' },
-                                        { value: 'custom_integrations', label: 'Custom Integrations' },
-                                        { value: 'dedicated_account', label: 'Dedicated Account Manager' }
-                                    ].map(feature => (
-                                        <label key={feature.value} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors">
-                                            <input
-                                                type="checkbox"
-                                                checked={enterpriseForm.requiredFeatures.includes(feature.value)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setEnterpriseForm({
-                                                            ...enterpriseForm,
-                                                            requiredFeatures: [...enterpriseForm.requiredFeatures, feature.value]
-                                                        });
-                                                    } else {
-                                                        setEnterpriseForm({
-                                                            ...enterpriseForm,
-                                                            requiredFeatures: enterpriseForm.requiredFeatures.filter(f => f !== feature.value)
-                                                        });
-                                                    }
-                                                }}
-                                                className="w-4 h-4 text-primary rounded border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-primary/20"
-                                            />
-                                            <span className="text-sm text-slate-700 dark:text-slate-300">{feature.label}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
 
                             {/* Additional Requirements */}
                             <div>
@@ -842,8 +801,8 @@ const BillingPage: React.FC = () => {
 };
 
 const PlanCard: React.FC<{ plan: any, currencySymbol: string, isCurrent: boolean, annual: boolean, onSwitch: () => void }> = ({ plan, currencySymbol, isCurrent, annual, onSwitch }) => {
-    const isFree = plan.name === 'Free';
-    const isEnterprise = plan.name === 'Enterprise';
+    const isFree = plan.name === 'Solo' || plan.name === 'Free';
+    const isEnterprise = plan.name === 'Enterprise' || plan.name === 'Scale';
 
     const getPrice = () => {
         if (isFree) return 0;
@@ -870,7 +829,7 @@ const PlanCard: React.FC<{ plan: any, currencySymbol: string, isCurrent: boolean
             <div className="space-y-4">
                 <div className="flex items-center gap-1.5">
                     <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
-                        {plan.name === 'Enterprise' ? 'Unlimited' : plan.name === 'Standard' ? 'Growth' : 'Core'}
+                        {plan.name === 'Enterprise' || plan.name === 'Scale' ? 'Enterprise' : plan.name === 'Growth' || plan.name === 'Standard' ? 'Growth' : 'Solo'}
                     </h3>
                     <Info size={12} className="text-slate-300 dark:text-slate-600" />
                 </div>

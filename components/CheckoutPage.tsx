@@ -393,7 +393,7 @@ export const CheckoutPage: React.FC = () => {
                                 <div>
                                     <p className="text-[9px] uppercase tracking-widest font-bold text-slate-400 mb-0.5">Active Plan</p>
                                     <h3 className="text-base font-black text-slate-900">
-                                        {currentUser.isPremium ? 'Premium Core' : 'Free Tier'}
+                                        {currentUser.isPremium ? (currentUser.planId?.includes('enterprise') || currentUser.planId?.includes('scale') ? 'Enterprise' : 'Growth') : 'Solo Tier'}
                                     </h3>
                                 </div>
                             </div>

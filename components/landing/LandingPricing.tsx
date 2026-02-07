@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useStore } from '../../store';
 
 interface LandingPricingProps {
     onRegister: () => void;
@@ -7,11 +8,17 @@ interface LandingPricingProps {
 
 const LandingPricing = ({ onRegister }: LandingPricingProps) => {
     const [annual, setAnnual] = useState(true);
+    const { plans: dbPlans } = useStore();
+
+    const getDbDescription = (name: string, fallback: string) => {
+        const dbPlan = dbPlans.find(p => p.name === name || (name === 'Enterprise' && p.name === 'Scale') || (name === 'Growth' && p.name === 'Standard'));
+        return dbPlan?.description || fallback;
+    };
 
     const plans = [
         {
-            name: 'Starter',
-            description: 'Perfect for individuals getting started',
+            name: 'Solo',
+            description: getDbDescription('Solo', 'Essential tools for individual professionals and creators'),
             price: { monthly: 0, annual: 0 },
             features: [
                 'Unlimited tasks',
@@ -24,11 +31,11 @@ const LandingPricing = ({ onRegister }: LandingPricingProps) => {
             ctaStyle: 'secondary',
         },
         {
-            name: 'Pro',
-            description: 'For growing teams with premium needs',
+            name: 'Growth',
+            description: getDbDescription('Growth', 'Powerful collaboration for expanding teams and organizations'),
             price: { monthly: 12, annual: 9 },
             features: [
-                'Everything in Starter',
+                'Everything in Solo',
                 'Unlimited projects',
                 'List & Calendar views',
                 'Team collaboration (up to 10)',
@@ -42,16 +49,16 @@ const LandingPricing = ({ onRegister }: LandingPricingProps) => {
         },
         {
             name: 'Enterprise',
-            description: 'For organizations that demand the best',
+            description: getDbDescription('Enterprise', 'Tailored solutions with advanced security and dedicated support'),
             price: { monthly: 39, annual: 29 },
             features: [
                 'Customized functionality for you',
-                'Everything in Pro',
-                'Unlimited team members',
-                'Admin controls',
-                'SSO integration',
-                'Custom branding',
-                'Dedicated support',
+                'Self-Hosted Deployment',
+                'Custom Domain SSL',
+                '24/7 Priority Support',
+                'Advanced Audit Logs',
+                'SSO & SAML Auth',
+                'Everything in Growth',
                 'SLA guarantee',
             ],
             cta: 'Contact Sales',

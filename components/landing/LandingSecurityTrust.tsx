@@ -78,7 +78,7 @@ const LandingSecurityTrust = () => {
     };
 
     return (
-        <section className="py-24 bg-slate-50">
+        <section className="py-24 bg-white dark:bg-slate-900 border-y border-slate-100 dark:border-slate-800">
             <div className="max-w-7xl mx-auto px-6">
                 {/* Section Header */}
                 <motion.div
@@ -91,7 +91,7 @@ const LandingSecurityTrust = () => {
                     <span className="inline-block px-4 py-2 rounded-full bg-green-100 text-green-700 text-sm font-medium mb-4">
                         Security First
                     </span>
-                    <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
+                    <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-6">
                         Enterprise-grade <span className="gradient-text">security</span>
                     </h2>
                     <p className="text-xl text-slate-600 max-w-2xl mx-auto">

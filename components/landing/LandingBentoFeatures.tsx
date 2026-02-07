@@ -154,6 +154,49 @@ const LandingBentoFeatures = () => {
                             </div>
                         </motion.div>
                     </div>
+
+                    {/* Row 3: Enterprise Features (Full Width) */}
+                    <motion.div
+                        variants={itemVariants}
+                        className="group overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-800 hover:border-primary/50 hover:shadow-2xl transition-all duration-500 p-8 relative"
+                    >
+                        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            </svg>
+                        </div>
+
+                        <div className="relative z-10">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-black uppercase tracking-widest mb-6">
+                                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                                Enterprise Grade
+                            </div>
+
+                            <h3 className="text-3xl font-black text-white mb-4">Unmatched Security & Control</h3>
+                            <p className="text-slate-400 text-lg max-w-2xl mb-8 font-medium">
+                                Designed for organizations that require the highest standards of security, compliance, and deployment flexibility.
+                            </p>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                <div className="space-y-2 text-center md:text-left">
+                                    <div className="text-white font-bold text-base">Self-Hosted</div>
+                                    <p className="text-slate-500 text-xs">Deploy on your private infrastructure</p>
+                                </div>
+                                <div className="space-y-2 text-center md:text-left border-l border-slate-800 pl-6">
+                                    <div className="text-white font-bold text-base">SSO & SAML</div>
+                                    <p className="text-slate-500 text-xs">Standardized identity management</p>
+                                </div>
+                                <div className="space-y-2 text-center md:text-left border-l border-slate-800 pl-6">
+                                    <div className="text-white font-bold text-base">Custom SSL</div>
+                                    <p className="text-slate-500 text-xs">Your domain, your security</p>
+                                </div>
+                                <div className="space-y-2 text-center md:text-left border-l border-slate-800 pl-6">
+                                    <div className="text-white font-bold text-base">24/7 Support</div>
+                                    <p className="text-slate-500 text-xs">Dedicated account management</p>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
                 </motion.div>
             </div>
         </section>
