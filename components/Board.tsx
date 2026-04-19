@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { useStore } from '../store';
 import { Filter, Tag as TagIcon, X, User, Columns, ArrowLeftRight } from 'lucide-react';
 import { KanbanView } from './views/KanbanView';
+import { KanbanViewMobile } from './views/KanbanViewMobile';
 import { ListView } from './views/ListView';
 import { CalendarView } from './views/CalendarView';
 import { TimelineView } from './views/TimelineView';
 import { ColumnReorderModal } from './ColumnReorderModal';
 import { DailyTimer } from './DailyTimer';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 export const Board: React.FC = () => {
+  const isMobile = useIsMobile();
   const {
     activeProjectId,
     columns,
@@ -72,8 +75,8 @@ export const Board: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Filter Toolbar - Filters LEFT, Timer RIGHT */}
-      <div className="px-6 pt-4 pb-2 flex items-center justify-between gap-3 shrink-0">
+      {/* Filter Toolbar - Filters LEFT, Timer RIGHT - HIDDEN ON MOBILE */}
+      <div className="hidden md:flex px-6 pt-4 pb-2 items-center justify-between gap-3 shrink-0">
         {/* Left Side: Filters */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Member Filter */}
@@ -176,16 +179,39 @@ export const Board: React.FC = () => {
 
       {/* View Content */}
       {currentView === 'board' && (
-        <KanbanView tasks={visibleTasks} columns={projectColumns} />
+        isMobile ? (
+          <KanbanViewMobile
+            columns={projectColumns}
+            tasks={visibleTasks}
+          />
+        ) : (
+          <KanbanView
+            columns={projectColumns}
+            tasks={visibleTasks}
+          />
+        )
       )}
+
       {currentView === 'list' && (
-        <ListView tasks={visibleTasks} columns={projectColumns} users={visibleUsers} />
+        <ListView
+          tasks={visibleTasks}
+          columns={projectColumns}
+          users={visibleUsers}
+        />
       )}
+
       {currentView === 'calendar' && (
-        <CalendarView tasks={visibleTasks} columns={projectColumns} />
+        <CalendarView
+          tasks={visibleTasks}
+          columns={projectColumns}
+        />
       )}
+
       {currentView === 'timeline' && (
-        <TimelineView tasks={visibleTasks} users={visibleUsers} />
+        <TimelineView
+          tasks={visibleTasks}
+          users={visibleUsers}
+        />
       )}
 
       {/* Modals */}

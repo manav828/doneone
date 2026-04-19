@@ -3,6 +3,8 @@ import { useStore } from '../../store';
 import { Task, Column, User } from '../../types';
 import { ChevronDown, ChevronRight, Plus, MoreHorizontal, Calendar, User as UserIcon, Tag } from 'lucide-react';
 import { TaskEditModal } from '../TaskEditModal';
+import { ListViewMobile } from './ListViewMobile';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 interface ListViewProps {
     tasks: Task[];
@@ -201,6 +203,14 @@ const ListRow: React.FC<{ task: Task; users: User[]; tags: any[] }> = ({ task, u
 };
 
 export const ListView: React.FC<ListViewProps> = ({ tasks, columns, users }) => {
+    const isMobile = useIsMobile();
+
+    // Mobile version
+    if (isMobile) {
+        return <ListViewMobile tasks={tasks} columns={columns} />;
+    }
+
+    // Desktop version
     return (
         <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-8">
             {columns.map(column => (

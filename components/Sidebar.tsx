@@ -507,57 +507,84 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Joined Teams Section - Always show if not empty OR if we need to show empty state */}
-        {/* Joined Teams Section - Only show if has actual joined teams */}
-        {joinedTeams.filter(t => t.name !== 'DoneOne' && t.name !== 'Unassigned').length > 0 && (
-          <div className="px-3">
-            <div
-              className="flex items-center justify-between px-2 mb-1 cursor-pointer"
-              onClick={() => toggleSection('joinedTeams')}
-            >
-              {!isCollapsed && (
-                <>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">
-                    {(() => {
-                      // Extract Company Name from first joined team
-                      const firstTeam = joinedTeams.find(t => t.name !== 'DoneOne' && t.name !== 'Unassigned');
-                      // Use 'companies' prop from store (which now holds 'company' data) OR 'company' if direct from DB
-                      const compData = firstTeam?.companies || firstTeam?.company;
+        {/* Joined Teams/Companies Section */}
+        {(() => {
+          // Get all joined teams (not owned by current user)
+          const allJoinedTeams = joinedTeams;
+          
+          // Get the company name from joined teams
+          const joinedCompanyName = (() => {
+            const firstTeam = allJoinedTeams[0];
+            if (!firstTeam) return null;
+            const compData = (firstTeam as any)?.companies || (firstTeam as any)?.company;
+            return compData
+              ? (Array.isArray(compData) ? compData[0]?.name : compData.name)
+              : null;
+          })();
 
-                      const companyName = compData
-                        ? (Array.isArray(compData) ? compData[0]?.name : compData.name)
-                        : null;
-                      return companyName || 'Joined Teams';
-                    })()}
-                  </span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
-                    {joinedTeams.filter(t => t.name !== 'DoneOne' && t.name !== 'Unassigned').length}
-                  </span>
-                </>
+          // Projects assigned to user from joined teams (where user is lead or resource but NOT owner)
+          const joinedTeamIds = new Set(allJoinedTeams.map(t => t.id));
+          
+          // Also find projects where user is lead/resource but team is not in their team list
+          // These are projects from the joined company that are in a different team
+          const assignedProjects = projects.filter(p => {
+            if (!currentUser) return false;
+            // Don't include projects the user owns
+            if (p.ownerId === currentUser.id) return false;
+            // Include if project is in a joined team
+            if (p.teamId && joinedTeamIds.has(p.teamId)) return true;
+            // Include if user is a lead or resource on this project (cross-team assignment)
+            if (p.leadIds?.includes(currentUser.id) || p.resourceIds?.includes(currentUser.id)) {
+              // But only if the project is NOT in an owned team
+              const ownedTeamIds = new Set(getOwnedTeams().map(t => t.id));
+              return !p.teamId || !ownedTeamIds.has(p.teamId);
+            }
+            return false;
+          });
+
+          // Show section if there are any joined teams OR assigned cross-team projects
+          if (allJoinedTeams.length === 0 && assignedProjects.length === 0) return null;
+
+          return (
+            <div className="px-3">
+              <div
+                className="flex items-center justify-between px-2 mb-1 cursor-pointer"
+                onClick={() => toggleSection('joinedTeams')}
+              >
+                {!isCollapsed && (
+                  <>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                      {joinedCompanyName || 'Joined Teams'}
+                    </span>
+                    <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500">
+                      {assignedProjects.length}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {expandedSections.joinedTeams && (
+                <div className="space-y-0.5 ml-4 mt-1 border-l pl-2 border-slate-200 dark:border-slate-700">
+                  {assignedProjects.map(project => (
+                    <SidebarProjectCard
+                      key={project.id}
+                      project={project}
+                      activeProjectId={activeProjectId}
+                      isCollapsed={isCollapsed}
+                      can={can}
+                      onEdit={openEditModal}
+                      onDelete={handleDelete}
+                      onSelect={handleProjectSelect}
+                    />
+                  ))}
+                  {assignedProjects.length === 0 && (
+                    <p className="text-xs text-slate-400 py-2 px-2">No projects assigned yet</p>
+                  )}
+                </div>
               )}
             </div>
-
-            {expandedSections.joinedTeams && (
-              <div className="space-y-1">
-                {joinedTeams.filter(t => t.name !== 'DoneOne' && t.name !== 'Unassigned').map(team => (
-                  <SidebarTeamSection
-                    key={team.id}
-                    team={team}
-                    isOwned={false}
-                    activeProjectId={activeProjectId}
-                    isCollapsed={isCollapsed}
-                    can={can}
-                    onEditProject={openEditModal}
-                    onDeleteProject={handleDelete}
-                    onSelectProject={handleProjectSelect}
-                    isOwnerExpired={isTeamOwnerExpired(team)}
-                    onExpiredClick={() => setIsExpiredModalOpen(true)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* Personal Projects Section */}
         {personalProjects.length > 0 && (

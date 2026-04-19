@@ -37,7 +37,7 @@ export const WelcomeModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         Congratulations!
                     </h2>
                     <p className="text-base font-medium text-slate-700 dark:text-slate-200 mb-4">
-                        You've unlocked a <span className="font-bold text-yellow-600 dark:text-yellow-400">30-Day Premium Free Trial</span>
+                        You've been granted <span className="font-bold text-yellow-600 dark:text-yellow-400">Premium Access</span>
                     </p>
 
                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-6 text-left space-y-2 border border-slate-100 dark:border-slate-700">

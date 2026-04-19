@@ -21,7 +21,7 @@ const styles: StyleConfig[] = [
 
 export const PriorityStyleToggle: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const [currentStyle, setCurrentStyle] = useState<PriorityStyle>('border');
+    const [currentStyle, setCurrentStyle] = useState<PriorityStyle>('soft-background');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -29,6 +29,9 @@ export const PriorityStyleToggle: React.FC = () => {
         if (savedStyle && ['border', 'border-animated', 'accent-bar', 'gradient-glow', 'gradient-animated', 'corner-ribbon', 'soft-background'].includes(savedStyle)) {
             setCurrentStyle(savedStyle);
             document.documentElement.setAttribute('data-priority-style', savedStyle);
+        } else {
+            // Default to soft-background if no preference saved
+            document.documentElement.setAttribute('data-priority-style', 'soft-background');
         }
     }, []);
 

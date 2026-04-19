@@ -32,26 +32,20 @@ const AppRoutes: React.FC = () => {
   useEffect(() => {
     init();
 
+    // Default to the updated soft-background priority style
+    document.documentElement.setAttribute('data-priority-style', 'soft-background');
+
     // Request notification permission
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
   }, []);
 
-  const [showWelcome, setShowWelcome] = React.useState(false);
+  // Welcome modal disabled - prevents false "Congratulations" popup for premium users
+  // const [showWelcome, setShowWelcome] = React.useState(false);
+  const showWelcome = false;
+  const setShowWelcome = (_: boolean) => {};
   const { isPricingModalOpen, setPricingModalOpen } = useStore();
-
-  // Check for Welcome Modal (First Time Trial)
-  useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('doneone_welcome_seen');
-    if (!hasSeenWelcome && currentUser && currentUser.createdAt) {
-      const isTrial = (Date.now() - currentUser.createdAt < 30 * 24 * 60 * 60 * 1000) && !currentUser.premiumUntil;
-      if (isTrial) {
-        setShowWelcome(true);
-        localStorage.setItem('doneone_welcome_seen', 'true');
-      }
-    }
-  }, [currentUser]);
 
   // Poll for Reminders
   useEffect(() => {
@@ -118,8 +112,17 @@ const AppRoutes: React.FC = () => {
       <CustomAlert />
       <WelcomeModal isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <Layout>
-        {/* Waiting Screen for Unassigned Users */}
-        {useStore.getState().getJoinedTeams().length === 1 && useStore.getState().getJoinedTeams()[0].name === 'Unassigned' ? (
+        {/* Waiting Screen for Unassigned Users - Only shows for NON-owners who are pending */}
+        {(() => {
+          const state = useStore.getState();
+          const ownedTeams = state.getOwnedTeams();
+          const joinedTeams = state.getJoinedTeams();
+          // Only block access if user is NOT a company owner AND their only team membership is 'Unassigned'
+          const isBlockedNonOwner = ownedTeams.length === 0 &&
+            joinedTeams.length > 0 &&
+            joinedTeams.every(t => t.name === 'Unassigned');
+          return isBlockedNonOwner;
+        })() ? (
           <div className="flex-1 h-full flex items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-900">
             <div className="max-w-md">
               <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">

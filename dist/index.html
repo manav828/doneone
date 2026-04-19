@@ -3,7 +3,10 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="./manifest.webmanifest" />
 
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-MCC5SBRDQV"></script>
@@ -54,8 +57,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#f97316" />
-  <meta name="msapplication-TileColor" content="#f97316" />
+  <meta name="theme-color" content="#FF6B35" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F172A" />
+  <meta name="msapplication-TileColor" content="#FF6B35" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" sizes="16x16" href="./icon16.png">
@@ -103,15 +107,15 @@
     "offers": [
       {
         "@type": "Offer",
-        "name": "Starter",
+        "name": "Solo",
         "price": "0",
         "priceCurrency": "USD",
         "description": "Free plan with unlimited tasks, Kanban board, and basic time tracking"
       },
       {
         "@type": "Offer",
-        "name": "Pro",
-        "price": "9",
+        "name": "Growth",
+        "price": "12",
         "priceCurrency": "USD",
         "priceValidUntil": "2025-12-31",
         "description": "Professional plan with unlimited projects, calendar views, and team collaboration"
@@ -119,7 +123,7 @@
       {
         "@type": "Offer",
         "name": "Enterprise",
-        "price": "29",
+        "price": "39",
         "priceCurrency": "USD",
         "description": "Enterprise plan with SSO, admin controls, and dedicated support"
       }
@@ -203,7 +207,7 @@
   }
   </script>
 
-
+
   <script type="importmap">
 {
   "imports": {
@@ -226,11 +230,11 @@
 }
 </script>
   <script type="module" crossorigin src="./main.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-BNhyojMJ.css">
+  <link rel="stylesheet" crossorigin href="./assets/main-CexNFonf.css">
 </head>
 
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
-  <div id="root"></div>
+  <div id="root"></div>
 </body>
 
 </html>

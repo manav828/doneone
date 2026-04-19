@@ -21,6 +21,8 @@ const copyManifest = () => ({
 export default defineConfig({
   plugins: [react(), copyManifest()],
   base: './', // CRITICAL: Ensures assets are linked relatively (e.g. ./assets/style.css) for Chrome Extension
+  server: {
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

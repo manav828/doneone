@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock, ChevronLeft, CreditCard } from 'lucide-react';
+import { Moon, Sun, Bell, Users, LogOut, Filter, User as UserIcon, ChevronDown, Check, Layout, List, Calendar, Search, BarChart, Database, Settings, HelpCircle, Crown, Camera, MessageSquare, Lock, ChevronLeft, CreditCard, Menu } from 'lucide-react';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ProjectMembersModal } from './ProjectMembersModal';
 import { ReportsModal } from './ReportsModal';
@@ -14,9 +14,16 @@ import { PriorityStyleToggle } from './PriorityStyleToggle';
 import { LogoToggle } from './LogoToggle';
 import { DevModeWrapper } from './DevModeWrapper';
 import { useNavigate } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useMediaQuery';
+import { TopBarMobile } from './TopBarMobile';
 
-export const TopBar: React.FC = () => {
+interface TopBarProps {
+  onMenuClick?: () => void;
+}
+
+export const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const {
     themeMode,
     setThemeMode,
@@ -138,6 +145,109 @@ export const TopBar: React.FC = () => {
 
   if (!currentUser) return null;
 
+  // Mobile version
+  if (isMobile) {
+    return (
+      <>
+        <TopBarMobile
+          onMenuClick={onMenuClick || (() => { })}
+          onNotificationsClick={() => setIsNotifOpen(true)}
+          onProfileClick={() => setIsProfileOpen(true)}
+        />
+
+        {/* Notification Modal for Mobile */}
+        {isNotifOpen && (
+          <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setIsNotifOpen(false)}>
+            <div className="absolute top-14 left-4 right-4 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[60vh]" onClick={(e) => e.stopPropagation()}>
+              <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                <h3 className="font-semibold text-sm text-slate-800 dark:text-white">Notifications</h3>
+                {unreadCount > 0 && (
+                  <button onClick={clearNotifications} className="text-xs text-primary hover:text-primary-hover font-medium">
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <div className="max-h-[50vh] overflow-y-auto">
+                {myNotifications.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-sm">
+                    <Bell size={24} className="mx-auto mb-2 opacity-20" />
+                    No notifications
+                  </div>
+                ) : (
+                  myNotifications.map(notif => (
+                    <div
+                      key={notif.id}
+                      onClick={() => {
+                        markNotificationRead(notif.id);
+                        setIsNotifOpen(false);
+                      }}
+                      className={`p-3 border-b border-slate-50 dark:border-slate-700/50 active:bg-slate-100 dark:active:bg-slate-700/50 transition-colors ${!notif.read ? 'bg-primary/5' : ''}`}
+                    >
+                      <p className="text-sm text-slate-700 dark:text-slate-200">{notif.message}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-medium">
+                        {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profile Modal for Mobile */}
+        {isProfileOpen && (
+          <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setIsProfileOpen(false)}>
+            <div className="absolute top-14 right-4 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
+                <div className="flex justify-center mb-3">
+                  <div className="relative w-16 h-16 rounded-full ring-4 ring-white dark:ring-slate-700 shadow-md">
+                    {currentUser.avatar ? (
+                      <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                        {currentUser.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-center px-4">
+                  <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser.email}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsProfileOpen(false);
+                  navigate('/billing');
+                }}
+                className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 active:bg-slate-100 dark:active:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+              >
+                <CreditCard size={16} className="text-slate-500" />
+                Billing & Plans
+              </button>
+
+              <button
+                onClick={() => {
+                  signOut();
+                  setIsProfileOpen(false);
+                }}
+                className="w-full text-left px-5 py-3 text-sm text-red-600 active:bg-red-50 dark:active:bg-red-900/10 flex items-center gap-2 transition-colors font-medium"
+              >
+                <LogOut size={16} />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        )}
+
+        <PricingModal isOpen={isPricingModalOpen} onClose={() => setPricingModalOpen(false)} />
+      </>
+    );
+  }
+
+  // Desktop version continues below
   return (
     <>
       <input
@@ -147,8 +257,18 @@ export const TopBar: React.FC = () => {
         className="hidden"
         accept="image/*"
       />
-      <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors duration-300 relative">
-        <div className="flex items-center gap-6">
+      <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-6 shrink-0 transition-colors duration-300 relative">
+        <div className="flex items-center gap-3 md:gap-6 flex-1 min-w-0">
+          {/* Mobile Menu Button */}
+          {isMobile && onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors touch-target"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+          )}
           {location.pathname === '/checkout' ? (
             <h2 className="text-xl font-bold text-primary">DoneOne Checkout</h2>
           ) : location.pathname === '/billing' ? (

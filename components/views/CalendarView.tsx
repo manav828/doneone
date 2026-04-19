@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { DndContext, useDraggable, useDroppable, DragEndEvent, useSensor, useSensors, MouseSensor, TouchSensor } from '@dnd-kit/core';
 import { TaskEditModal } from '../TaskEditModal';
 import { v4 as uuidv4 } from 'uuid';
+import { CalendarViewMobile } from './CalendarViewMobile';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 interface CalendarViewProps {
     tasks: Task[];
@@ -91,6 +93,19 @@ const DroppableDay: React.FC<{ day: number; date: Date; children: React.ReactNod
 };
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ tasks, columns }) => {
+    const isMobile = useIsMobile();
+
+    // Simply render the appropriate component - no early returns
+    if (isMobile) {
+        return <CalendarViewMobile tasks={tasks} />;
+    }
+
+    // Desktop render
+    return <DesktopCalendarView tasks={tasks} columns={columns} />;
+};
+
+// Separate component for desktop to avoid hooks issues
+const DesktopCalendarView: React.FC<CalendarViewProps> = ({ tasks, columns }) => {
     const { updateTask, addTask, activeProjectId, tags, currentUser } = useStore();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [editingTask, setEditingTask] = useState<Task | null>(null);

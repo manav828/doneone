@@ -122,7 +122,7 @@ interface AppState {
   reorderColumns: (projectId: string, newOrderIds: string[]) => Promise<void>;
 
 
-  addTask: (projectId: string, columnId: string, title: string) => Promise<Task | undefined>;
+  addTask: (projectId: string, columnId: string, title: string, extraFields?: Partial<Task>) => Promise<Task | undefined>;
   updateTask: (taskId: string, updates: Partial<Task> & { timerStartedAt?: number | null }) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   moveTask: (taskId: string, newColumnId: string, newIndex: number) => Promise<void>;
@@ -936,7 +936,29 @@ export const useStore = create<any>((set, get) => ({
     const { currentUser } = get();
     if (!currentUser) return;
 
-    // 1. Happy Path: User has companyId
+    // 1. PRIORITY: Check if user OWNS a company first — owners always see their own company
+    const { data: ownedCompanies } = await supabase.from('companies').select('*').eq('owner_id', currentUser.id).limit(1);
+    const ownedCompany = ownedCompanies && ownedCompanies.length > 0 ? ownedCompanies[0] : null;
+
+    if (ownedCompany) {
+      // Heal the profile link if it drifted (e.g. due to joining another company)
+      if (currentUser.companyId !== ownedCompany.id) {
+        await supabase.from('profiles').update({ company_id: ownedCompany.id }).eq('id', currentUser.id);
+      }
+
+      set({
+        currentUser: { ...currentUser, companyId: ownedCompany.id },
+        currentCompany: {
+          id: ownedCompany.id,
+          name: ownedCompany.name,
+          joinCode: ownedCompany.join_code,
+          ownerId: ownedCompany.owner_id
+        }
+      });
+      return;
+    }
+
+    // 2. Non-owner: Use companyId from profile (set when joining a company)
     if (currentUser.companyId) {
       const { data } = await supabase.from('companies').select('*').eq('id', currentUser.companyId).maybeSingle();
       if (data) {
@@ -950,26 +972,6 @@ export const useStore = create<any>((set, get) => ({
         });
         return;
       }
-    }
-
-    // 2. Fallback: User might own a company but profile link is missing
-    const { data: ownedCompanies } = await supabase.from('companies').select('*').eq('owner_id', currentUser.id).limit(1);
-    const ownedCompany = ownedCompanies && ownedCompanies.length > 0 ? ownedCompanies[0] : null;
-
-    if (ownedCompany) {
-      // Heal the link
-      await supabase.from('profiles').update({ company_id: ownedCompany.id }).eq('id', currentUser.id);
-
-      set({
-        currentUser: { ...currentUser, companyId: ownedCompany.id },
-        currentCompany: {
-          id: ownedCompany.id,
-          name: ownedCompany.name,
-          joinCode: ownedCompany.join_code,
-          ownerId: ownedCompany.owner_id
-        }
-      });
-      return;
     }
 
     // 3. Legacy Migration: User owns TEAMS but has NO Company record
@@ -1717,9 +1719,18 @@ export const useStore = create<any>((set, get) => ({
 
       set(state => ({ projects: [...state.projects, newProject], activeProjectId: data.id }));
 
+      // Create default columns with explicit order
+      const defaultColumns = ['Pending', 'In Progress', 'Done'];
+      for (let i = 0; i < defaultColumns.length; i++) {
+        await supabase.from('columns').insert({
+          project_id: data.id,
+          title: defaultColumns[i],
+          order_index: i
+        });
+      }
+
       // Background sync
       await get().fetchColumns();
-      ['Pending', 'In Progress', 'Done'].forEach(title => get().addColumn(data.id, title));
       get().fetchProjects(); // Consolidate later
     }
   },
@@ -2160,7 +2171,7 @@ export const useStore = create<any>((set, get) => ({
     ));
   },
 
-  addTask: async (projectId, columnId, title) => {
+  addTask: async (projectId, columnId, title, extraFields?) => {
     if (!get().checkRateLimit('addTask')) return;
     const user = get().currentUser;
     if (!user) return;
@@ -2172,38 +2183,52 @@ export const useStore = create<any>((set, get) => ({
       columnId,
       title,
       creatorId: user.id,
-      assigneeId: user.id, // Default to current user
+      assigneeId: extraFields?.assigneeId !== undefined ? extraFields.assigneeId : user.id,
       orderIndex: currentTasks.length,
-      tagIds: [],
-      estimatedTime: 0,
+      tagIds: extraFields?.tagIds || [],
+      estimatedTime: extraFields?.estimatedTime || 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       completedAt: get().columns.find(c => c.id === columnId)?.title === 'Done' ? Date.now() : undefined,
-      attachments: []
+      attachments: extraFields?.attachments || [],
+      priority: extraFields?.priority,
+      description: extraFields?.description,
+      subtasks: extraFields?.subtasks || [],
     };
 
-    set(state => ({ tasks: [...state.tasks, newTask] }));
+    const isColumnFullyCollapsed = currentTasks.length > 0 && currentTasks.every(t => get().collapsedTaskIds.includes(t.id));
+    
+    set(state => ({ 
+      tasks: [...state.tasks, newTask],
+      collapsedTaskIds: isColumnFullyCollapsed ? [...state.collapsedTaskIds, newTask.id] : state.collapsedTaskIds
+    }));
 
     if (get().isOffline) {
       const action = { type: 'ADD_TASK', payload: { ...newTask, id: newTask.id }, timestamp: Date.now() };
       const newQueue = [...get().syncQueue, action];
       set({ syncQueue: newQueue });
       localStorage.setItem('flowboard_sync_queue', JSON.stringify(newQueue));
-      return;
+      return newTask;
     }
 
-    await supabase.from('tasks').insert({
+    const dbPayload: any = {
       id: newTask.id,
       project_id: projectId,
       column_id: columnId,
       title,
       creator_id: user.id,
-      assignee_id: user.id,
+      assignee_id: newTask.assigneeId,
       order_index: currentTasks.length,
-      tag_ids: [],
-      estimated_time: 0
-    });
-    get().fetchTasks();
+      tag_ids: newTask.tagIds,
+      estimated_time: newTask.estimatedTime,
+    };
+    if (newTask.priority) dbPayload.priority = newTask.priority;
+    if (newTask.description) dbPayload.description = newTask.description;
+    if (newTask.subtasks && newTask.subtasks.length > 0) dbPayload.subtasks = newTask.subtasks;
+    if (newTask.attachments && newTask.attachments.length > 0) dbPayload.attachments = newTask.attachments;
+
+    await supabase.from('tasks').insert(dbPayload);
+    // Note: fetchTasks() removed here to prevent race condition when caller also calls updateTask
     return newTask;
   },
 
@@ -4760,7 +4785,7 @@ export const useStore = create<any>((set, get) => ({
   },
 
   assignMemberToProject: async (projectId, userId, role) => {
-    const { projects, teamMembers, teams } = get();
+    const { projects, teams } = get();
     const project = projects.find(p => p.id === projectId);
 
     if (!project) return;
@@ -4776,10 +4801,16 @@ export const useStore = create<any>((set, get) => ({
         .filter(t => t.ownerId === projectTeam.ownerId)
         .map(t => t.id);
 
-      // Check if user is a member of ANY department in the company
-      const isCompanyEmployee = teamMembers.some(
-        m => companyTeamIds.includes(m.teamId) && m.userId === userId && m.status === 'active'
-      );
+      // FIX: Query DB directly instead of relying on stale in-memory teamMembers state.
+      // The in-memory state may be outdated if the member was just added/approved.
+      const { data: freshMemberships } = await supabase
+        .from('team_members')
+        .select('user_id, team_id, status')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .in('team_id', companyTeamIds);
+
+      const isCompanyEmployee = (freshMemberships || []).length > 0;
 
       if (!isCompanyEmployee) {
         get().showCustomAlert('User must be a company employee before being assigned to a project.', 'error');
@@ -4876,15 +4907,9 @@ export const useStore = create<any>((set, get) => ({
     const { teams, currentUser } = get();
     if (!currentUser) return [];
 
-    // Include teams where user is a member (not owner) OR is a Team Head (in managerIds)
-    return teams.filter(t =>
-      t.ownerId !== currentUser.id && (
-        // User is a regular member (fetchTeams already includes these)
-        true ||
-        // OR user is a Team Head
-        t.managerIds?.includes(currentUser.id)
-      )
-    );
+    // fetchTeams already only fetches teams where user is owner, active member, or team head.
+    // So any team where user is NOT the owner is a "joined" team.
+    return teams.filter(t => t.ownerId !== currentUser.id);
   },
 
   getTeamProjects: (teamId) => {

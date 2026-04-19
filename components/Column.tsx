@@ -5,7 +5,7 @@ import { Column as ColumnType, Task as TaskType } from '../types';
 import { TaskCard } from './TaskCard';
 import { Plus, Trash2, ArrowLeft, ArrowRight, Timer, ChevronsUp, ChevronsDown, Archive } from 'lucide-react';
 import { useStore } from '../store';
-import { sortTasksByPriority } from '../utils/taskPriority';
+import { sortTasksByPriority } from '../utils/taskPriority'; // kept for potential future use
 import { ConfirmModal } from './ConfirmModal';
 import { TaskEditModal } from './TaskEditModal';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) => {
-  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags, updateTask } = useStore();
+  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags } = useStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -34,15 +34,16 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
     onConfirm: () => { },
   });
 
-  // Sorting: Overdue tasks float to the top
+  // Priority order map for sorting
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+  // Sorting: Overdue tasks float to the top, then sort by priority
   const displayTasks = React.useMemo(() => {
     const now = Date.now();
     const overdue: TaskType[] = [];
     const others: TaskType[] = [];
 
     tasks.forEach(t => {
-      // Only count as overdue if reminders enabled and time passed
-      // Note: checking isOverdue logic. 
       if (t.reminderAt && t.reminderAt < now && column.title !== 'Done') {
         overdue.push(t);
       } else {
@@ -50,9 +51,15 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
       }
     });
 
-    // Sort overdue by time (most overdue first?) or just keep existing order? 
-    // Let's sort by reminderAt ascending.
+    // Sort overdue by reminderAt ascending
     overdue.sort((a, b) => (a.reminderAt || 0) - (b.reminderAt || 0));
+
+    // Sort others by priority: high → medium → low → none
+    others.sort((a, b) => {
+      const aPriority = a.priority ? (PRIORITY_ORDER[a.priority] ?? 3) : 3;
+      const bPriority = b.priority ? (PRIORITY_ORDER[b.priority] ?? 3) : 3;
+      return aPriority - bPriority;
+    });
 
     return [...overdue, ...others];
   }, [tasks, column.title]);
@@ -70,14 +77,10 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
 
   const handleCreateTask = async (taskData: Partial<TaskType>) => {
     if (!taskData.title) return;
-    const newTask = await addTask(column.projectId, column.id, taskData.title);
-    if (newTask) {
-      // Update with other fields
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { title, ...updates } = taskData;
-      // We need to cast updates because Partial<Task> might have undefineds that updateTask handles
-      await updateTask(newTask.id, updates as any);
-    }
+    // Pass all fields directly to addTask so priority (and other fields) are saved
+    // in the initial DB insert — no separate updateTask needed, preserving collapse state.
+    const { title, ...extraFields } = taskData;
+    await addTask(column.projectId, column.id, title, extraFields as Partial<TaskType>);
   };
 
   const dummyTask = React.useMemo<TaskType>(() => ({

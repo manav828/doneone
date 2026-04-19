@@ -1,0 +1,67 @@
+{
+    "name": "DoneOne - Project Management",
+    "short_name": "DoneOne",
+    "description": "Powerful project management with Kanban boards, time tracking, and real-time team collaboration",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#F8FAFC",
+    "theme_color": "#FF6B35",
+    "orientation": "any",
+    "scope": "/",
+    "icons": [
+        {
+            "src": "/icon16.png",
+            "sizes": "16x16",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon48.png",
+            "sizes": "48x48",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon128.png",
+            "sizes": "128x128",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icon128.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Board View",
+            "short_name": "Board",
+            "description": "Open Kanban board view",
+            "url": "/",
+            "icons": [
+                {
+                    "src": "/icon48.png",
+                    "sizes": "48x48"
+                }
+            ]
+        },
+        {
+            "name": "Reports",
+            "short_name": "Reports",
+            "description": "View analytics and reports",
+            "url": "/reports",
+            "icons": [
+                {
+                    "src": "/icon48.png",
+                    "sizes": "48x48"
+                }
+            ]
+        }
+    ],
+    "categories": [
+        "productivity",
+        "business"
+    ],
+    "prefer_related_applications": false
+}

@@ -276,7 +276,6 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
         if (localPriority) {
             const priorityTagIds = tags.filter(t => t.type === 'Priority').map(t => t.id);
             finalTags = finalTags.filter(id => !priorityTagIds.includes(id));
-            finalTags.push(localPriority);
         }
 
         // Recurrence: If newly enabled, ensure next trigger is in the future to avoid immediate duplication
