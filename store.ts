@@ -3719,7 +3719,7 @@ export const useStore = create<any>((set, get) => ({
 
     // Determine the "Authority" - whose plan applies
     let authorityId: string | null = null;
-
+ 
     if (project.teamId) {
       // Organization Project: Find the Team Owner (Company Admin)
       const team = teams.find(t => t.id === project.teamId);
