@@ -3724,7 +3724,7 @@ export const useStore = create<any>((set, get) => ({
       // Organization Project: Find the Team Owner (Company Admin)
       const team = teams.find(t => t.id === project.teamId);
       if (team) {
-        authorityId = team.ownerId;
+        authorityId = team.ownerId; 
       }
     }
 
