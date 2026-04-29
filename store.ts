@@ -3908,7 +3908,11 @@ export const useStore = create<any>((set, get) => ({
         capturedUrl: rawTask.captured_url,
         capturedText: rawTask.captured_text,
         capturedScreenshot: rawTask.captured_screenshot,
-        isHighlighted: rawTask.isHighlighted
+        isHighlighted: rawTask.isHighlighted,
+        priority: rawTask.priority,
+        subtasks: rawTask.subtasks || [],
+        recurrence: rawTask.recurrence,
+        isReminderDismissed: rawTask.is_reminder_dismissed,
       };
 
       return {
@@ -4064,9 +4068,9 @@ export const useStore = create<any>((set, get) => ({
     let dataToExport: TaskHistory[] = [];
 
     if (mode === 'all') {
-      dataToExport = taskHistory;
+      dataToExport = visibleHistory;
     } else if (mode === 'filtered') {
-      dataToExport = taskHistory;
+      dataToExport = visibleHistory;
     } else if (mode === 'selected') {
       dataToExport = taskHistory.filter(h => (selectedIds.length > 0 ? selectedIds : selectedHistoryIds).includes(h.id));
     }

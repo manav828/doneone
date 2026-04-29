@@ -286,6 +286,8 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
             </div>
           ) : location.pathname === '/workspace' ? (
             <h2 className="text-lg font-bold text-slate-800 dark:text-white">Workspace Settings</h2>
+          ) : location.pathname === '/history' ? (
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">History</h2>
           ) : activeProject ? (
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-white leading-tight">

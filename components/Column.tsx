@@ -18,7 +18,7 @@ interface Props {
 }
 
 export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) => {
-  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags } = useStore();
+  const { addTask, deleteColumn, updateColumn, can, moveColumn, currentUser, tags, archiveTaskManually } = useStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -116,9 +116,28 @@ export const Column: React.FC<Props> = ({ column, tasks, index, totalColumns }) 
               </svg>
             )}
             {column.isArchiveEnabled && (
-              <div title="Auto-archiving enabled (Managed in Archive Settings)" className="cursor-help flex items-center">
-                <Archive size={12} className="text-purple-500 ml-1" />
-              </div>
+              <button
+                onClick={() => {
+                  if (tasks.length === 0) return;
+                  setConfirmModal({
+                    isOpen: true,
+                    title: 'Archive All Tasks',
+                    message: `Are you sure you want to archive all ${tasks.length} task${tasks.length > 1 ? 's' : ''} in "${column.title}"? They will be moved to History.`,
+                    confirmText: `Archive ${tasks.length} Task${tasks.length > 1 ? 's' : ''}`,
+                    isDestructive: false,
+                    onConfirm: async () => {
+                      for (const task of tasks) {
+                        await archiveTaskManually(task.id);
+                      }
+                    }
+                  });
+                }}
+                disabled={tasks.length === 0}
+                title={tasks.length > 0 ? `Archive all ${tasks.length} tasks` : 'No tasks to archive'}
+                className={`flex items-center ml-1 p-0.5 rounded transition-all ${tasks.length > 0 ? 'text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`}
+              >
+                <Archive size={12} />
+              </button>
             )}
           </h3>
           <span className="px-2 py-0.5 bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] rounded-full font-bold shadow-sm border border-slate-100 dark:border-slate-600">
