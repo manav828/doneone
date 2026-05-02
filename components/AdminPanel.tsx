@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
-import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database, Trash2 } from 'lucide-react';
+import { Users, FolderKanban, Shield, Check, X, Bell, Crown, Edit2, Clock, Timer, Lock, Unlock, HardDrive, Database, Trash2, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { User, StorageStats } from '../types';
 import { AdminFeedback } from './admin/AdminFeedback';
@@ -11,7 +11,7 @@ import { SuperAdminPlans } from './admin/SuperAdminPlans';
 import { AdminEnterpriseInquiries } from './admin/AdminEnterpriseInquiries';
 import { MessageSquare, CreditCard, Building2 } from 'lucide-react';
 export const AdminPanel: React.FC = () => {
-    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects, teams, teamMembers, plans, fetchPlans } = useStore();
+    const { currentUser, updateUserProfile, deleteUser, setActiveProject, getRegistrationStatus, toggleRegistration, fetchStorageStats, users: storeUsers, projects: storeProjects, fetchUsers, fetchProjects, teams, teamMembers, plans, fetchPlans, signIn, refreshData } = useStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
@@ -158,6 +158,14 @@ export const AdminPanel: React.FC = () => {
 
         if (confirmed) {
             await deleteUser(user.id);
+        }
+    };
+
+    const handleLoginAsUser = async (user: User) => {
+        if (window.confirm(`Are you sure you want to log in as ${user.name}? You can revert back to admin by refreshing the page.`)) {
+            signIn(user);
+            await refreshData();
+            navigate('/');
         }
     };
 
@@ -418,9 +426,14 @@ export const AdminPanel: React.FC = () => {
                                                                     <button onClick={() => setEditingUser(null)} className="text-red-600 hover:bg-red-100 p-1.5 rounded transition-colors"><X size={18} /></button>
                                                                 </div>
                                                             ) : (
-                                                                <button onClick={() => startEdit(u)} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded flex items-center gap-1 ml-auto text-xs font-bold transition-colors">
-                                                                    <Edit2 size={14} /> Edit Plan
-                                                                </button>
+                                                                <div className="flex items-center justify-end gap-2 text-xs font-bold ml-auto">
+                                                                    <button onClick={() => handleLoginAsUser(u)} className="text-green-600 hover:bg-green-50 p-1.5 rounded flex items-center gap-1 transition-colors" title="Login as User">
+                                                                        <LogIn size={14} /> Login
+                                                                    </button>
+                                                                    <button onClick={() => startEdit(u)} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded flex items-center gap-1 transition-colors">
+                                                                        <Edit2 size={14} /> Edit Plan
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -862,6 +875,9 @@ export const AdminPanel: React.FC = () => {
                                                             </div>
                                                         ) : (
                                                             <div className="flex justify-end gap-2">
+                                                                <button onClick={() => handleLoginAsUser(u)} className="text-gray-400 hover:text-green-500 p-1 rounded" title="Login as User">
+                                                                    <LogIn size={16} />
+                                                                </button>
                                                                 <button onClick={() => startEdit(u)} className="text-gray-400 hover:text-blue-500 p-1 rounded" title="Edit User">
                                                                     <Edit2 size={16} />
                                                                 </button>
