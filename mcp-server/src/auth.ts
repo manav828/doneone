@@ -51,8 +51,14 @@ export async function authenticate(rawApiKey: string): Promise<AuthenticatedUser
     .eq('id', apiKey.user_id)
     .maybeSingle();
 
-  if (profileError || !profile) {
-    throw new McpAuthError('User profile not found');
+  if (profileError) {
+    console.error('❌ [MCP Auth Error] Database error when fetching user profile:', profileError);
+    throw new McpAuthError(`Database error: ${profileError.message}`);
+  }
+
+  if (!profile) {
+    console.error(`❌ [MCP Auth Error] Profile not found in database for user_id: ${apiKey.user_id} (linked to API key ID: ${apiKey.id})`);
+    throw new McpAuthError('User profile not found in database');
   }
 
   // Determine premium status
