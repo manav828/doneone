@@ -77,6 +77,14 @@ export async function createTask(user: AuthenticatedUser, params: {
   requirePermission(user.role, 'create_task');
   await assertProjectMember(user.userId, params.projectId);
 
+  // Get count of tasks in this column to determine order_index
+  const { count } = await supabase
+    .from('tasks')
+    .select('*', { count: 'exact', head: true })
+    .eq('column_id', params.columnId);
+
+  const orderIndex = count ?? 0;
+
   const { data, error } = await supabase
     .from('tasks')
     .insert({
@@ -90,7 +98,7 @@ export async function createTask(user: AuthenticatedUser, params: {
       estimated_time: params.estimatedTime ?? null,
       reminder_at: params.reminderAt ?? null,
       tag_ids: [],
-      order_index: Date.now(),
+      order_index: orderIndex,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
