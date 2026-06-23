@@ -47,7 +47,7 @@ export async function authenticate(rawApiKey: string): Promise<AuthenticatedUser
   // Fetch the user's profile (includes role, premium status, plan)
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, name, email, role, is_premium, premium_until, plan_id, company_id')
+    .select('id, name, email, role, premium_until, plan_id, company_id')
     .eq('id', apiKey.user_id)
     .maybeSingle();
 
@@ -61,7 +61,7 @@ export async function authenticate(rawApiKey: string): Promise<AuthenticatedUser
     throw new McpAuthError('User profile not found in database');
   }
 
-  // Determine premium status
+  // Determine premium status based on trial/admin expiration date
   const hasPremiumUntil = profile.premium_until
     ? new Date(profile.premium_until).getTime() > Date.now()
     : false;
@@ -77,7 +77,7 @@ export async function authenticate(rawApiKey: string): Promise<AuthenticatedUser
     hasPaidPlan = !!plan && (Number(plan.price_monthly) > 0);
   }
 
-  const isPremium = profile.is_premium === true || hasPremiumUntil || hasPaidPlan;
+  const isPremium = hasPremiumUntil || hasPaidPlan;
 
   // Update last_used_at in the background (non-blocking)
   supabase
