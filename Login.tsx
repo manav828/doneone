@@ -58,16 +58,21 @@ export const Login: React.FC = () => {
         }
 
         if (user && session) {
-          // Create profile with email, 30-day premium trial, and all required fields
-          await supabase.from('profiles').upsert({
-            id: user.id,
+          // Update profile with email, 30-day premium trial, and all required fields
+          const { error: profileError } = await supabase.from('profiles').update({
             name: name || email.split('@')[0],
             email: email, // FIXED: Include email in profile
             role: 'Resource',
             avatar_url: '',
             premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
             currency: 'INR' // Default currency for all new users
-          });
+          }).eq('id', user.id);
+
+          if (profileError) {
+            console.error('❌ Failed to update user profile on registration:', profileError);
+          } else {
+            console.log('✅ Successfully updated user profile with premium plan');
+          }
         } else if (user && !session) {
           setError("Account created! Check your email to confirm.");
           setLoading(false);

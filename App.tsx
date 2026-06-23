@@ -19,6 +19,8 @@ import ComparePlansPage from './components/ComparePlansPage';
 import LandingPage from './components/landing/LandingPage';
 import { WorkspaceSettings } from './components/WorkspaceSettings';
 import { TermsPage } from './components/TermsPage';
+import { UserSettingsPage } from './components/UserSettingsPage';
+import { HelpPage } from './components/HelpPage';
 
 // Wrapper component that handles routing logic
 const AppRoutes: React.FC = () => {
@@ -151,6 +153,8 @@ const AppRoutes: React.FC = () => {
             <Route path="/workspace" element={<WorkspaceSettings />} />
             <Route path="/workspace/:teamId" element={<WorkspaceSettings />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/settings" element={<UserSettingsPage />} />
+            <Route path="/help" element={<HelpPage />} />
             {/* Redirect /auth to / when logged in */}
             <Route path="/auth" element={<Navigate to="/" replace />} />
           </Routes>

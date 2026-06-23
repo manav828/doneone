@@ -11,6 +11,18 @@ import { playColumnMove } from './utils/sounds';
 
 declare var chrome: any;
 
+// ============================================================
+// API KEY TYPE (for MCP Server integration)
+// ============================================================
+export interface ApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;       // First 12 chars shown to user (e.g. "do_live_a1b2")
+  createdAt: string;
+  lastUsedAt: string | null;
+  isActive: boolean;
+}
+
 interface AppState {
   supportTickets: SupportTicket[];
   // Custom Alert
@@ -185,6 +197,12 @@ interface AppState {
   checkAutoArchive: () => Promise<void>;
   canAccessPremium: () => boolean;
   canProjectUsePremium: (projectId: string) => boolean;
+
+  // MCP API Key Management (Premium only)
+  apiKeys: ApiKey[];
+  generateApiKey: (name: string) => Promise<string | null>; // Returns plaintext key once
+  listApiKeys: () => Promise<void>;
+  revokeApiKey: (keyId: string) => Promise<void>;
 
   // Daily Work Time Tracking
   saveDailyWorkLog: (userId: string, projectId: string, secondsToAdd: number, taskWorked?: boolean, taskCompleted?: boolean) => Promise<void>;
@@ -715,6 +733,7 @@ export const useStore = create<any>((set, get) => ({
         email: session.user.email,
         avatar_url: '',
         premium_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 Days Trial
+        currency: 'INR'
       }).select().single();
 
       console.log('📝 Profile Creation Result:', {
@@ -805,6 +824,7 @@ export const useStore = create<any>((set, get) => ({
             const cpd = profile.custom_plan_data || {};
             const isCustom = Object.keys(cpd).length > 0;
             const plan = get().plans.find(p => p.id === profile.plan_id);
+            const hasPremiumPlan = !!plan && (plan.price_monthly > 0 || Number(plan.price_monthly) > 0);
 
             return {
               id: profile.id,
@@ -815,8 +835,8 @@ export const useStore = create<any>((set, get) => ({
               createdAt: new Date(profile.created_at).getTime(),
               premiumUntil: profile.premium_until ? new Date(profile.premium_until).getTime() : undefined,
 
-              // Flags - FIXED: isPremium ONLY checks expiration date
-              isPremium: profile.premium_until ? new Date(profile.premium_until).getTime() > Date.now() : false,
+              // Flags - isPremium checks plan price or expiration date
+              isPremium: hasPremiumPlan || (profile.premium_until ? new Date(profile.premium_until).getTime() > Date.now() : false),
               isCustomPlan: isCustom,
               customPlanData: isCustom ? cpd : undefined,
 
@@ -1030,6 +1050,7 @@ export const useStore = create<any>((set, get) => ({
       const cpd = p.custom_plan_data || {};
       const isCustom = Object.keys(cpd).length > 0;
       const plan = get().plans.find(pl => pl.id === p.plan_id);
+      const hasPremiumPlan = !!plan && (plan.price_monthly > 0 || Number(plan.price_monthly) > 0);
 
       return {
         id: p.id,
@@ -1041,8 +1062,8 @@ export const useStore = create<any>((set, get) => ({
         createdAt: new Date(p.created_at).getTime(),
         premiumUntil: p.premium_until ? new Date(p.premium_until).getTime() : undefined,
 
-        // Calculated Flags - FIXED: isPremium ONLY checks expiration date
-        isPremium: p.premium_until ? new Date(p.premium_until).getTime() > Date.now() : false,
+        // Calculated Flags - isPremium checks plan price or expiration date
+        isPremium: hasPremiumPlan || (p.premium_until ? new Date(p.premium_until).getTime() > Date.now() : false),
         isCustomPlan: isCustom,
         customPlanData: isCustom ? cpd : undefined,
 
@@ -5240,6 +5261,115 @@ export const useStore = create<any>((set, get) => ({
     if (isLeadAnywhere) return 'lead';
 
     return 'resource';
+  },
+
+  // ============================================================
+  // MCP API KEY MANAGEMENT (Premium-only)
+  // ============================================================
+  apiKeys: [],
+
+  generateApiKey: async (name: string) => {
+    const { currentUser, canAccessPremium, showCustomAlert } = get();
+    if (!currentUser) return null;
+
+    // PREMIUM GATE: Only premium users can generate API keys
+    if (!canAccessPremium()) {
+      showCustomAlert('API Keys are a Premium feature. Please upgrade your plan.', 'warning');
+      return null;
+    }
+
+    if (!name.trim()) {
+      showCustomAlert('Please enter a name for your API key.', 'warning');
+      return null;
+    }
+
+    // Generate a cryptographically random key: do_live_ + 32 random hex chars
+    const randomBytes = crypto.getRandomValues(new Uint8Array(20));
+    const hexString = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const rawKey = `do_live_${hexString}`;
+    const keyPrefix = rawKey.substring(0, 16); // Show first 16 chars
+
+    // Hash the key using SHA-256 via Web Crypto API
+    const encoder = new TextEncoder();
+    const data = encoder.encode(rawKey);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const { data: inserted, error } = await supabase
+      .from('api_keys')
+      .insert({
+        user_id: currentUser.id,
+        name: name.trim(),
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
+        is_active: true,
+        created_at: new Date().toISOString()
+      })
+      .select('id, name, key_prefix, created_at, last_used_at, is_active')
+      .single();
+
+    if (error) {
+      showCustomAlert(`Failed to create API key: ${error.message}`, 'error');
+      return null;
+    }
+
+    // Refresh the list
+    await get().listApiKeys();
+    showCustomAlert('API key created! Copy it now — it will not be shown again.', 'success');
+
+    // Return the PLAINTEXT key — this is the only time it's shown
+    return rawKey;
+  },
+
+  listApiKeys: async () => {
+    const { currentUser, canAccessPremium } = get();
+    if (!currentUser || !canAccessPremium()) {
+      set({ apiKeys: [] });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('api_keys')
+      .select('id, name, key_prefix, created_at, last_used_at, is_active')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Failed to fetch API keys:', error);
+      return;
+    }
+
+    set({
+      apiKeys: (data ?? []).map(k => ({
+        id: k.id,
+        name: k.name,
+        keyPrefix: k.key_prefix,
+        createdAt: k.created_at,
+        lastUsedAt: k.last_used_at,
+        isActive: k.is_active
+      }))
+    });
+  },
+
+  revokeApiKey: async (keyId: string) => {
+    const { currentUser, showCustomAlert } = get();
+    if (!currentUser) return;
+
+    const { error } = await supabase
+      .from('api_keys')
+      .update({ is_active: false })
+      .eq('id', keyId)
+      .eq('user_id', currentUser.id);
+
+    if (error) {
+      showCustomAlert(`Failed to revoke key: ${error.message}`, 'error');
+      return;
+    }
+
+    // Remove from local state
+    set(state => ({ apiKeys: state.apiKeys.filter(k => k.id !== keyId) }));
+    showCustomAlert('API key revoked successfully.', 'success');
   },
 
 }));

@@ -252,13 +252,13 @@ export const AdminPanel: React.FC = () => {
     };
 
     const bulkAssignIndianPlan = async () => {
-        const indianPlan = plans.find((p: any) => p.name === 'Premium Plan (India)');
+        const indianPlan = plans.find((p: any) => p.name === 'Growth' && p.currency === 'INR');
         if (!indianPlan) {
-            alert("Premium Plan (India) not found in plans table.");
+            alert("Growth (INR) Plan not found in plans table.");
             return;
         }
 
-        const confirmAction = window.confirm(`This will assign the '${indianPlan.name}' to ALL users who currently have no plan. Are you sure?`);
+        const confirmAction = window.confirm(`This will assign the '${indianPlan.name} (INR)' to ALL users who currently have no plan. Are you sure?`);
         if (!confirmAction) return;
 
         setLoading(true);
@@ -270,7 +270,7 @@ export const AdminPanel: React.FC = () => {
                 await updateUserProfile(user.id, {
                     planId: indianPlan.id,
                     isCustomPlan: false,
-                    // Optionally set renewal date to 30 days from now if needed
+                    premiumUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime(),
                     renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime()
                 });
             }

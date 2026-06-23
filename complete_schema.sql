@@ -212,6 +212,7 @@ ALTER TABLE task_history ENABLE ROW LEVEL SECURITY;
 -- Profiles Policies
 CREATE POLICY "Allow public read access profiles" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Allow users to update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Allow users to insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Allow admin to update any profile" ON profiles FOR UPDATE USING (auth.jwt() ->> 'email' = 'manavss828@gmail.com');
 
 -- System Settings Policies

@@ -206,13 +206,13 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
                       <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
                     ) : (
                       <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
-                        {currentUser.name.charAt(0)}
+                        {(currentUser.name || currentUser.email || 'User').charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="text-center px-4">
-                  <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name}</p>
+                  <p className="font-bold text-slate-900 dark:text-white text-base">{currentUser.name || currentUser.email || 'User'}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser.email}</p>
                 </div>
               </div>
@@ -480,7 +480,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
                   {currentUser.avatar ? (
                     <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
-                    <span>{currentUser.name.charAt(0)}</span>
+                    <span>{(currentUser.name || currentUser.email || 'U').charAt(0).toUpperCase()}</span>
                   )}
                 </div>
                 {canAccessPremium() && (
@@ -505,7 +505,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
                         <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
                       ) : (
                         <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
-                          {currentUser.name.charAt(0)}
+                          {(currentUser.name || currentUser.email || 'User').charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -569,6 +569,26 @@ export const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
 
                 </div>
 
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    navigate('/settings');
+                  }}
+                  className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                >
+                  <Settings size={16} className="text-slate-500" />
+                  Settings
+                </button>
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    navigate('/help');
+                  }}
+                  className="w-full text-left px-5 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors font-medium border-b border-slate-100 dark:border-slate-700"
+                >
+                  <HelpCircle size={16} className="text-slate-500" />
+                  Help & Docs
+                </button>
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);

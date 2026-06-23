@@ -54,34 +54,41 @@ export const ProjectMembersModal: React.FC<Props> = ({ isOpen, onClose }) => {
       <div className="space-y-6">
 
         {/* Project Code */}
-        <div className={`p-4 rounded-lg flex items-center justify-between border border-dashed ${!invitesAllowed && canManage ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-300 dark:bg-gray-700/50 dark:border-gray-600'}`}>
-          {/* STRICT UI: Only Admin can see/use invites */}
-          {currentUser.role !== 'Admin' ? (
-            <div className="flex items-center gap-3 text-gray-500 w-full">
-              <Lock size={20} />
-              <p className="text-sm">Only Admins can invite new members.</p>
-            </div>
-          ) : !invitesAllowed && canManage ? (
-            <div className="flex items-center gap-3 text-gray-500 w-full">
-              <Lock size={20} />
-              <p className="text-sm">Invites are disabled. Contact Admin to upgrade to Premium.</p>
-            </div>
-          ) : (
-            <>
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Invite via Project Code</p>
-                <p className="text-2xl font-mono font-bold tracking-widest text-primary">{project.code}</p>
+        {!project.teamId ? (
+          <div className="p-4 rounded-lg flex items-center gap-3 border border-dashed border-gray-300 bg-gray-50 dark:bg-gray-700/50 dark:border-gray-600 text-gray-500 w-full">
+            <Lock size={20} className="shrink-0" />
+            <p className="text-sm">Personal projects are private. You cannot invite other members.</p>
+          </div>
+        ) : (
+          <div className={`p-4 rounded-lg flex items-center justify-between border border-dashed ${!invitesAllowed && canManage ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-300 dark:bg-gray-700/50 dark:border-gray-600'}`}>
+            {/* STRICT UI: Only Admin can see/use invites */}
+            {currentUser.role !== 'Admin' ? (
+              <div className="flex items-center gap-3 text-gray-500 w-full">
+                <Lock size={20} />
+                <p className="text-sm">Only Admins can invite new members.</p>
               </div>
-              <button
-                onClick={handleCopyCode}
-                className="p-2 text-gray-500 hover:text-primary transition-colors relative"
-                title="Copy Code"
-              >
-                {copied ? <Check size={20} className="text-green-500" /> : <Copy size={20} />}
-              </button>
-            </>
-          )}
-        </div>
+            ) : !invitesAllowed && canManage ? (
+              <div className="flex items-center gap-3 text-gray-500 w-full">
+                <Lock size={20} />
+                <p className="text-sm">Invites are disabled. Contact Admin to upgrade to Premium.</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-1">Invite via Project Code</p>
+                  <p className="text-2xl font-mono font-bold tracking-widest text-primary">{project.code}</p>
+                </div>
+                <button
+                  onClick={handleCopyCode}
+                  className="p-2 text-gray-500 hover:text-primary transition-colors relative"
+                  title="Copy Code"
+                >
+                  {copied ? <Check size={20} className="text-green-500" /> : <Copy size={20} />}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Pending Requests */}
         {canManage && pendingUsers.length > 0 && (

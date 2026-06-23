@@ -61,7 +61,7 @@ export const TopBarMobile: React.FC<TopBarMobileProps> = ({
                         {currentUser?.avatar ? (
                             <img src={currentUser.avatar} alt="Profile" className="w-full h-full rounded-full object-cover" />
                         ) : (
-                            <span>{currentUser?.name.charAt(0) || 'U'}</span>
+                            <span>{(currentUser?.name || currentUser?.email || 'U').charAt(0).toUpperCase()}</span>
                         )}
                     </div>
                 </button>
