@@ -5333,6 +5333,7 @@ export const useStore = create<any>((set, get) => ({
       .from('api_keys')
       .select('id, name, key_prefix, created_at, last_used_at, is_active')
       .eq('user_id', currentUser.id)
+      .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (error) {
