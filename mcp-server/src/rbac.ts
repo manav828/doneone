@@ -46,12 +46,12 @@ export type Permission =
 // Minimum role level required for each permission
 const PERMISSION_REQUIREMENTS: Record<Permission, number> = {
   // Tasks
-  create_task: ROLE_LEVEL.Lead,
-  update_task: ROLE_LEVEL.Resource,      // Resources can update own tasks (checked separately)
+  create_task: ROLE_LEVEL.Resource,      // Anyone can create tasks
+  update_task: ROLE_LEVEL.Resource,      // Anyone can update tasks
   delete_task: ROLE_LEVEL.Manager,
-  move_task: ROLE_LEVEL.Resource,        // Resources can move own tasks (checked separately)
-  assign_task: ROLE_LEVEL.Lead,
-  manage_subtasks: ROLE_LEVEL.Lead,
+  move_task: ROLE_LEVEL.Resource,        // Anyone can move tasks
+  assign_task: ROLE_LEVEL.Resource,      // Anyone can assign tasks
+  manage_subtasks: ROLE_LEVEL.Resource,  // Anyone can manage subtasks
   manage_reminders: ROLE_LEVEL.Resource, // Everyone can set reminders
   manage_timers: ROLE_LEVEL.Resource,    // Everyone can track time
 
