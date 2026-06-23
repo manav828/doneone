@@ -456,7 +456,7 @@ export const UserSettingsPage: React.FC = () => {
   "mcpServers": {
     "doneone": {
       "type": "http",
-      "url": "https://mcp.doneone.app",
+      "url": "https://doneone-production.up.railway.app",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
