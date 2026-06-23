@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "doneone": {
+      "serverUrl": "https://doneone-production.up.railway.app/mcp",
+      "headers": {
+        "Authorization": "Bearer do_live_c7c65dd451119bd3f91f10664c9fe5ae87f1a1fb"
+      }
+    }
+  }
+}
