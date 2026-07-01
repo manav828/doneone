@@ -25,6 +25,7 @@ import {
     X
 } from 'lucide-react';
 import { ManageMemberDepartmentsModal } from './ManageMemberDepartmentsModal';
+import { Team } from '../types';
 
 export const WorkspaceSettings: React.FC = () => {
     const navigate = useNavigate();
@@ -103,6 +104,12 @@ export const WorkspaceSettings: React.FC = () => {
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
     const [managingMemberDeptsId, setManagingMemberDeptsId] = useState<string | null>(null);
+
+    // Custom popup states for departments
+    const [isAddDeptModalOpen, setIsAddDeptModalOpen] = useState(false);
+    const [newDeptInputName, setNewDeptInputName] = useState('');
+    const [deptToDelete, setDeptToDelete] = useState<Team | null>(null);
+    const [memberToRemove, setMemberToRemove] = useState<{ userId: string, userName: string, depts: Team[] } | null>(null);
 
     // Get ALL manageable teams (Owned by me OR where I am Team Head)
     // Team Heads need access to Workspace Settings for their teams
@@ -495,9 +502,11 @@ export const WorkspaceSettings: React.FC = () => {
                                                                 </button>
                                                                 <button
                                                                     onClick={() => {
-                                                                        if (confirm(`Remove ${user?.name} from all departments?`)) {
-                                                                            employeeDepts.forEach(dept => removeTeamMember(dept.id, member.userId));
-                                                                        }
+                                                                        setMemberToRemove({
+                                                                            userId: member.userId,
+                                                                            userName: user?.name || 'this employee',
+                                                                            depts: employeeDepts
+                                                                        });
                                                                     }}
                                                                     className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
                                                                     title="Remove from Company"
@@ -528,12 +537,9 @@ export const WorkspaceSettings: React.FC = () => {
                                 {/* Check for Admin Role OR Company Owner */}
                                 {(currentUser?.role === 'Admin' || currentUser?.id === currentCompany?.ownerId) && (
                                     <button
-                                        onClick={async () => {
-                                            const name = prompt('Enter department name:');
-                                            if (name && name.trim()) {
-                                                await createTeam(name.trim());
-                                                fetchTeams();
-                                            }
+                                        onClick={() => {
+                                            setNewDeptInputName('');
+                                            setIsAddDeptModalOpen(true);
                                         }}
                                         className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
                                     >
@@ -584,10 +590,8 @@ export const WorkspaceSettings: React.FC = () => {
                                                     </button>
                                                     {ownedTeams.length > 1 && (
                                                         <button
-                                                            onClick={async () => {
-                                                                if (confirm(`Delete "${team.name}" department?\n\nThis will remove all projects and members associated with this department.`)) {
-                                                                    await handleDeleteTeam(team.id);
-                                                                }
+                                                            onClick={() => {
+                                                                setDeptToDelete(team);
                                                             }}
                                                             className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
                                                             title="Delete department"
@@ -1166,6 +1170,134 @@ export const WorkspaceSettings: React.FC = () => {
                                     className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
                                 >
                                     Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {/* Add Department Modal */}
+                    <Modal
+                        isOpen={isAddDeptModalOpen}
+                        onClose={() => setIsAddDeptModalOpen(false)}
+                        title="Add Department"
+                    >
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Department Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newDeptInputName}
+                                    onChange={(e) => setNewDeptInputName(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                                    placeholder="Enter department name"
+                                    autoFocus
+                                    onKeyDown={async (e) => {
+                                        if (e.key === 'Enter' && newDeptInputName.trim()) {
+                                            await createTeam(newDeptInputName.trim());
+                                            await fetchTeams();
+                                            setIsAddDeptModalOpen(false);
+                                            setNewDeptInputName('');
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setIsAddDeptModalOpen(false)}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-lg text-sm font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (newDeptInputName.trim()) {
+                                            await createTeam(newDeptInputName.trim());
+                                            await fetchTeams();
+                                            setIsAddDeptModalOpen(false);
+                                            setNewDeptInputName('');
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
+                                >
+                                    Add Department
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {/* Delete Department Modal */}
+                    <Modal
+                        isOpen={deptToDelete !== null}
+                        onClose={() => setDeptToDelete(null)}
+                        title="Delete Department"
+                    >
+                        <div className="space-y-4">
+                            <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+                                <AlertTriangle size={20} className="shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="font-semibold text-sm">Delete "{deptToDelete?.name}" department?</h4>
+                                    <p className="text-xs mt-1 leading-relaxed">
+                                        This will remove all projects and members associated with this department. This action cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setDeptToDelete(null)}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-lg text-sm font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (deptToDelete) {
+                                            await handleDeleteTeam(deptToDelete.id);
+                                            setDeptToDelete(null);
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {/* Remove Member from All Departments Modal */}
+                    <Modal
+                        isOpen={memberToRemove !== null}
+                        onClose={() => setMemberToRemove(null)}
+                        title="Remove Employee"
+                    >
+                        <div className="space-y-4">
+                            <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-700 dark:text-amber-400">
+                                <AlertTriangle size={20} className="shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="font-semibold text-sm">Remove employee from all departments?</h4>
+                                    <p className="text-xs mt-1 leading-relaxed">
+                                        Are you sure you want to remove <strong>{memberToRemove?.userName}</strong> from all departments?
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setMemberToRemove(null)}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-lg text-sm font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (memberToRemove) {
+                                            memberToRemove.depts.forEach(dept => removeTeamMember(dept.id, memberToRemove.userId));
+                                            setMemberToRemove(null);
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+                                >
+                                    Remove
                                 </button>
                             </div>
                         </div>

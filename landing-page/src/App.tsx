@@ -2,7 +2,7 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import TrustBar from './components/TrustBar';
 import BentoFeatures from './components/BentoFeatures';
-import VideoSection from './components/VideoSection';
+// import VideoSection from './components/VideoSection';
 import Pricing from './components/Pricing';
 import Metrics from './components/Metrics';
 import Testimonials from './components/Testimonials';
@@ -26,7 +26,7 @@ function App() {
             <BentoFeatures />
 
             {/* Video Demo Section */}
-            <VideoSection />
+            {/* <VideoSection /> */}
 
             {/* Metrics / Stats */}
             <Metrics />

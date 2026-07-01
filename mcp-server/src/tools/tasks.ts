@@ -46,13 +46,42 @@ export async function listTasks(user: AuthenticatedUser, params: {
 }
 
 /**
+ * resolveTaskId - Resolves a short ID (like #8c8531 or 8c8531) or a full UUID to a full task UUID
+ */
+async function resolveTaskId(idOrShortId: string): Promise<string> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(idOrShortId)) {
+    return idOrShortId;
+  }
+
+  const cleanId = idOrShortId.startsWith('#') ? idOrShortId.slice(1) : idOrShortId;
+
+  // Query Supabase for tasks where the ID starts with cleanId
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id')
+    .ilike('id', `${cleanId}%`);
+
+  if (error || !data || data.length === 0) {
+    return idOrShortId;
+  }
+
+  if (data.length > 1) {
+    throw new Error(`Ambiguous task ID "${idOrShortId}": matches multiple tasks (${data.map(d => d.id).join(', ')})`);
+  }
+
+  return data[0].id;
+}
+
+/**
  * get_task - Get a single task with full details
  */
 export async function getTask(user: AuthenticatedUser, params: { taskId: string }) {
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error } = await supabase
     .from('tasks')
     .select('*, columns(title), projects(name)')
-    .eq('id', params.taskId)
+    .eq('id', resolvedTaskId)
     .maybeSingle();
 
   if (error || !task) throw new Error('Task not found');
@@ -121,10 +150,11 @@ export async function updateTask(user: AuthenticatedUser, params: {
   assigneeId?: string;
   estimatedTime?: number;
 }) {
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
     .from('tasks')
     .select('project_id, assignee_id, creator_id')
-    .eq('id', params.taskId)
+    .eq('id', resolvedTaskId)
     .maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
@@ -150,7 +180,7 @@ export async function updateTask(user: AuthenticatedUser, params: {
   if (params.estimatedTime !== undefined) updates.estimated_time = params.estimatedTime;
 
   const { data, error } = await supabase
-    .from('tasks').update(updates).eq('id', params.taskId).select().single();
+    .from('tasks').update(updates).eq('id', resolvedTaskId).select().single();
 
   if (error) throw new Error(`Failed to update task: ${error.message}`);
   return data;
@@ -164,8 +194,9 @@ export async function moveTask(user: AuthenticatedUser, params: {
   taskId: string;
   columnId: string;
 }) {
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
-    .from('tasks').select('project_id, assignee_id').eq('id', params.taskId).maybeSingle();
+    .from('tasks').select('project_id, assignee_id').eq('id', resolvedTaskId).maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
   await assertProjectMember(user.userId, task.project_id);
@@ -177,7 +208,7 @@ export async function moveTask(user: AuthenticatedUser, params: {
   const { data, error } = await supabase
     .from('tasks')
     .update({ column_id: params.columnId, updated_at: new Date().toISOString() })
-    .eq('id', params.taskId)
+    .eq('id', resolvedTaskId)
     .select().single();
 
   if (error) throw new Error(`Failed to move task: ${error.message}`);
@@ -191,13 +222,14 @@ export async function moveTask(user: AuthenticatedUser, params: {
 export async function deleteTask(user: AuthenticatedUser, params: { taskId: string }) {
   requirePermission(user.role, 'delete_task');
 
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
-    .from('tasks').select('project_id').eq('id', params.taskId).maybeSingle();
+    .from('tasks').select('project_id').eq('id', resolvedTaskId).maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
   await assertProjectMember(user.userId, task.project_id);
 
-  const { error } = await supabase.from('tasks').delete().eq('id', params.taskId);
+  const { error } = await supabase.from('tasks').delete().eq('id', resolvedTaskId);
   if (error) throw new Error(`Failed to delete task: ${error.message}`);
   return { success: true, message: 'Task deleted successfully' };
 }
@@ -207,8 +239,9 @@ export async function deleteTask(user: AuthenticatedUser, params: { taskId: stri
  * Accessible by: All members
  */
 export async function startTimer(user: AuthenticatedUser, params: { taskId: string }) {
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
-    .from('tasks').select('project_id, timer_started_at').eq('id', params.taskId).maybeSingle();
+    .from('tasks').select('project_id, timer_started_at').eq('id', resolvedTaskId).maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
   await assertProjectMember(user.userId, task.project_id);
@@ -220,7 +253,7 @@ export async function startTimer(user: AuthenticatedUser, params: { taskId: stri
   const { data, error } = await supabase
     .from('tasks')
     .update({ timer_started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('id', params.taskId).select().single();
+    .eq('id', resolvedTaskId).select().single();
 
   if (error) throw new Error(`Failed to start timer: ${error.message}`);
   return { success: true, message: 'Timer started', task: data };
@@ -231,8 +264,9 @@ export async function startTimer(user: AuthenticatedUser, params: { taskId: stri
  * Accessible by: All members
  */
 export async function stopTimer(user: AuthenticatedUser, params: { taskId: string }) {
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
-    .from('tasks').select('project_id, timer_started_at, time_tracked').eq('id', params.taskId).maybeSingle();
+    .from('tasks').select('project_id, timer_started_at, time_tracked').eq('id', resolvedTaskId).maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
   await assertProjectMember(user.userId, task.project_id);
@@ -251,7 +285,7 @@ export async function stopTimer(user: AuthenticatedUser, params: { taskId: strin
       time_tracked: newTotal,
       updated_at: new Date().toISOString()
     })
-    .eq('id', params.taskId).select().single();
+    .eq('id', resolvedTaskId).select().single();
 
   if (error) throw new Error(`Failed to stop timer: ${error.message}`);
   return {
@@ -271,8 +305,9 @@ export async function logTime(user: AuthenticatedUser, params: {
 }) {
   if (params.seconds <= 0) throw new Error('Time must be greater than 0 seconds');
 
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
-    .from('tasks').select('project_id, time_tracked').eq('id', params.taskId).maybeSingle();
+    .from('tasks').select('project_id, time_tracked').eq('id', resolvedTaskId).maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
   await assertProjectMember(user.userId, task.project_id);
@@ -283,7 +318,7 @@ export async function logTime(user: AuthenticatedUser, params: {
       time_tracked: (task.time_tracked ?? 0) + params.seconds,
       updated_at: new Date().toISOString()
     })
-    .eq('id', params.taskId).select().single();
+    .eq('id', resolvedTaskId).select().single();
 
   if (error) throw new Error(`Failed to log time: ${error.message}`);
   return { success: true, message: `Logged ${Math.floor(params.seconds / 60)}m ${params.seconds % 60}s`, task: data };
@@ -300,8 +335,9 @@ export async function setTaskReminder(user: AuthenticatedUser, params: {
   if (isNaN(reminderDate.getTime())) throw new Error('Invalid date format for reminderAt');
   if (reminderDate < new Date()) throw new Error('Reminder must be in the future');
 
+  const resolvedTaskId = await resolveTaskId(params.taskId);
   const { data: task, error: fetchError } = await supabase
-    .from('tasks').select('project_id').eq('id', params.taskId).maybeSingle();
+    .from('tasks').select('project_id').eq('id', resolvedTaskId).maybeSingle();
 
   if (fetchError || !task) throw new Error('Task not found');
   await assertProjectMember(user.userId, task.project_id);
@@ -309,7 +345,7 @@ export async function setTaskReminder(user: AuthenticatedUser, params: {
   const { data, error } = await supabase
     .from('tasks')
     .update({ reminder_at: reminderDate.toISOString(), updated_at: new Date().toISOString() })
-    .eq('id', params.taskId).select().single();
+    .eq('id', resolvedTaskId).select().single();
 
   if (error) throw new Error(`Failed to set reminder: ${error.message}`);
   return { success: true, message: `Reminder set for ${reminderDate.toLocaleString()}`, task: data };

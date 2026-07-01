@@ -140,7 +140,7 @@ const SidebarTeamSection = ({
         <div className="flex items-center gap-2 min-w-0 w-full">
           <ChevronDown size={12} className={`text-slate-400 transition-transform ${!isExpanded ? '-rotate-90' : ''}`} />
           {!isCollapsed && (
-            <span className={`text-sm font-semibold truncate ${isOwnerExpired ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
+            <span className={`text-[13px] font-medium truncate ${isOwnerExpired ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
               {team.name}
             </span>
           )}
@@ -472,7 +472,8 @@ export const Sidebar: React.FC = () => {
               {!isCollapsed && (
                 <>
                   <span
-                    className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1"
+                    className="text-[13px] font-extrabold text-slate-700 dark:text-slate-200 tracking-wide pl-1"
+                    style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}
                   >
                     {currentCompany?.name || 'Company'}
                   </span>

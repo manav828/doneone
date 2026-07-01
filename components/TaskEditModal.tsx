@@ -411,6 +411,27 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
         }
     };
 
+    const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        if (!imageUploadEnabled) {
+            setPremiumModalFeature('Image Uploads');
+            return;
+        }
+        const items = e.clipboardData.items;
+        let imagePasted = false;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                if (file) {
+                    setLocalAttachments(prev => [...prev, file]);
+                    imagePasted = true;
+                }
+            }
+        }
+        if (imagePasted) {
+            e.preventDefault();
+        }
+    };
+
     const handleTagToggle = (tagId: string) => {
         if (localTags.includes(tagId)) {
             setLocalTags(localTags.filter(id => id !== tagId));
@@ -487,31 +508,102 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
     const priorityTags = projectTags.filter(t => t.type === 'Priority');
     const typeTags = projectTags.filter(t => t.type !== 'Priority');
 
+    if (!isOpen) return null;
+
     return (
         <>
-            <Modal isOpen={isOpen} onClose={onClose} title={isCreating ? "New Task" : "Edit Task"}>
-                <div className="space-y-4">
-                    {/* Title Input */}
-                    <div>
-                        <input
-                            type="text"
-                            value={localTitle}
-                            onChange={e => setLocalTitle(e.target.value)}
-                            placeholder="Task Title"
-                            className="w-full p-3 border rounded-lg text-lg font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600 dark:text-white placeholder-slate-400"
-                        />
+            {/* Backdrop wrapper */}
+            <div 
+                className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-xs flex justify-end transition-all"
+                onClick={onClose}
+            >
+                {/* Sliding Drawer Panel (30% to 40% screen width) */}
+                <div 
+                    className="h-full w-[35%] min-w-[380px] max-w-[600px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col animate-slide-in-right overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0 bg-slate-50 dark:bg-slate-800/30">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            <span>{isCreating ? "New Task" : "Edit Task"}</span>
+                            {!isCreating && (
+                                <span 
+                                    className="text-xs font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 cursor-help"
+                                    title={`Full ID: ${task.id}`}
+                                >
+                                    #{task.id.slice(0, 6)}
+                                </span>
+                            )}
+                        </h3>
+                        <button
+                            onClick={onClose}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
                     </div>
 
-                    {/* Description */}
-                    <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Description / Discuss Points</label>
-                        <textarea
-                            value={localDesc}
-                            onChange={e => setLocalDesc(e.target.value)}
-                            placeholder="Add description or discussion points..."
-                            className="w-full p-3 border rounded-lg h-24 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600"
-                        />
-                    </div>
+                    {/* Scrollable Form Body */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                        {/* Title Input */}
+                        <div>
+                            <input
+                                type="text"
+                                value={localTitle}
+                                onChange={e => setLocalTitle(e.target.value)}
+                                placeholder="Task Title"
+                                className="w-full p-3 border rounded-lg text-lg font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600 dark:text-white placeholder-slate-400"
+                            />
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Description / Discuss Points</label>
+                            <textarea
+                                value={localDesc}
+                                onChange={e => setLocalDesc(e.target.value)}
+                                onPaste={handlePaste}
+                                placeholder="Add description or discussion points... (Ctrl+V to paste screenshot)"
+                                className="w-full p-3 border rounded-lg h-48 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-slate-800 dark:border-slate-600 dark:text-white resize-y"
+                            />
+                        </div>
+
+                        {/* Attachments */}
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Attachments</label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {localAttachments.map((item, i) => {
+                                    const url = item instanceof File ? URL.createObjectURL(item) : item;
+                                    return (
+                                        <div key={i} className="relative group w-16 h-16 rounded overflow-hidden border border-slate-200">
+                                            <img src={url} alt="Attachment" className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(url)} />
+                                            <button
+                                                onClick={() => setLocalAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                                className="absolute top-0 right-0 bg-red-500 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X size={10} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                                {imageUploadEnabled ? (
+                                    <div className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-300 cursor-pointer hover:border-primary hover:text-primary">
+                                        <label className="w-full h-full flex items-center justify-center cursor-pointer">
+                                            <Plus size={20} />
+                                            <input type="file" className="hidden" onChange={handleFileUpload} />
+                                        </label>
+                                    </div>
+                                ) : (
+                                    <div
+                                        onClick={() => setPremiumModalFeature('Image Uploads')}
+                                        className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-200 bg-slate-50 cursor-not-allowed"
+                                        title="Image Upload Disabled"
+                                    >
+                                        <Lock size={16} className="text-slate-400" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
                     {/* Properties Grid */}
                     <div className="grid grid-cols-2 gap-4">
@@ -699,44 +791,6 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                                     placeholder="0"
                                 />
                             </div>
-                        </div>
-                    </div>
-
-
-                    {/* Attachments */}
-                    <div>
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Attachments</label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {localAttachments.map((item, i) => {
-                                const url = item instanceof File ? URL.createObjectURL(item) : item;
-                                return (
-                                    <div key={i} className="relative group w-16 h-16 rounded overflow-hidden border border-slate-200">
-                                        <img src={url} alt="Attachment" className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
-                                        <button
-                                            onClick={() => setLocalAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                            className="absolute top-0 right-0 bg-red-500 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <X size={10} />
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                            {imageUploadEnabled ? (
-                                <div className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-300 cursor-pointer hover:border-primary hover:text-primary">
-                                    <label className="w-full h-full flex items-center justify-center">
-                                        <Plus size={20} />
-                                        <input type="file" className="hidden" onChange={handleFileUpload} />
-                                    </label>
-                                </div>
-                            ) : (
-                                <div
-                                    onClick={() => setPremiumModalFeature('Image Uploads')}
-                                    className="w-16 h-16 flex items-center justify-center border-2 border-dashed rounded transition-colors border-slate-200 bg-slate-50 cursor-not-allowed"
-                                    title="Image Upload Disabled"
-                                >
-                                    <Lock size={16} className="text-slate-400" />
-                                </div>
-                            )}
                         </div>
                     </div>
 
@@ -1254,7 +1308,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({ isOpen, onClose, t
                         </div>
                     )
                 }
-            </Modal >
+                </div>
+            </div>
 
             <ConfirmModal
                 isOpen={confirmModal.isOpen}

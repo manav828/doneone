@@ -22,7 +22,10 @@ const BentoFeatures = () => {
         gradient: string;
     }) => (
         <motion.div
-            variants={itemVariants}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
             className="flex-1 group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300 flex flex-col"
         >
             <div className={`h-1 bg-gradient-to-r ${gradient} flex-shrink-0`} />

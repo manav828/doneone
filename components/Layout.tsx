@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { ArchiveSettingsModal } from './ArchiveSettingsModal';
@@ -9,6 +10,7 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { themeMode } = useStore();
+  const location = useLocation();
   const [isArchiveSettingsOpen, setIsArchiveSettingsOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -27,6 +29,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     window.addEventListener('openArchiveSettings', handleOpenSettings);
     return () => window.removeEventListener('openArchiveSettings', handleOpenSettings);
   }, []);
+
+  const isSettingsPage = location.pathname === '/settings';
+
+  if (isSettingsPage) {
+    return (
+      <div className="h-screen w-screen overflow-hidden bg-canvas-light dark:bg-canvas-dark transition-colors duration-200 font-sans">
+        <main className="w-full h-full overflow-hidden relative">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-canvas-light dark:bg-canvas-dark transition-colors duration-200 font-sans">

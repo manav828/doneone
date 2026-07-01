@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import type { ApiKey } from '../store';
 import {
@@ -12,13 +12,22 @@ type SettingsTab = 'profile' | 'preferences' | 'api-keys' | 'notifications' | 'p
 
 export const UserSettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     currentUser, updateUserProfile, canAccessPremium, uploadFile,
     apiKeys, generateApiKey, listApiKeys, revokeApiKey,
     themeMode, setThemeMode, signOut
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    (location.state as any)?.tab || 'profile'
+  );
+
+  useEffect(() => {
+    if ((location.state as any)?.tab) {
+      setActiveTab((location.state as any).tab);
+    }
+  }, [location.state]);
   const [nameInput, setNameInput] = useState(currentUser?.name ?? '');
   const [isSavingName, setIsSavingName] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -101,7 +110,7 @@ export const UserSettingsPage: React.FC = () => {
     <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-900">
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
+        <div className="w-full px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors"
@@ -115,7 +124,7 @@ export const UserSettingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8 flex gap-8">
+      <div className="w-full px-6 py-8 flex gap-8">
         {/* Sidebar */}
         <aside className="w-56 flex-shrink-0">
           <nav className="space-y-1 sticky top-8">

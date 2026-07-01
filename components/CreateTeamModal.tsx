@@ -9,7 +9,7 @@ interface CreateTeamModalProps {
 }
 
 export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClose }) => {
-    const { createTeam, canAccessPremium, setPricingModalOpen, getOwnedTeams } = useStore();
+    const { createTeam, canAccessPremium, setPricingModalOpen, getOwnedTeams, currentCompany } = useStore();
     const [teamName, setTeamName] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
@@ -52,9 +52,9 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
                             <div className="flex items-start gap-3">
                                 <CheckCircle className="text-blue-500 shrink-0 mt-0.5" size={18} />
                                 <div>
-                                    <h3 className="font-medium text-blue-800 dark:text-blue-300 text-sm">You already have a workspace</h3>
+                                    <h3 className="font-medium text-blue-800 dark:text-blue-300 text-sm">Workspace already active</h3>
                                     <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                                        Premium users can have one workspace. All your projects and team members belong to "{ownedTeams[0]?.name}".
+                                        Your current plan supports one workspace. You are managing all projects and team members under <strong>"{currentCompany?.name || ownedTeams[0]?.name}"</strong>. To create a new workspace, please manage your existing one first.
                                     </p>
                                 </div>
                             </div>
@@ -63,7 +63,7 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
                             onClick={onClose}
                             className="w-full py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                         >
-                            Got it
+                            OK, Go Back
                         </button>
                     </div>
                 ) : !isPremium ? (

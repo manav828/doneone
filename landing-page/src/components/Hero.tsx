@@ -2,9 +2,8 @@ import { motion } from 'framer-motion';
 
 const Hero = () => {
     const stats = [
-        { value: '50k+', label: 'Active Users' },
-        { value: '4.9★', label: 'Chrome Rating' },
-        { value: '2M+', label: 'Tasks Completed' },
+        { value: '500+', label: 'Active Users' },
+        { value: '10k+', label: 'Tasks Completed' },
     ];
 
     return (

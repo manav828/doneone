@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { Clock, Play, Users } from 'lucide-react';
+import { Clock, Play, Users, Plus, Cpu } from 'lucide-react';
+import { TaskEditModal } from './TaskEditModal';
 
 interface DailyTimeData {
     userId: string;
@@ -16,6 +18,7 @@ interface DailyWorkLog {
 }
 
 export const DailyTimer: React.FC = () => {
+    const navigate = useNavigate();
     const {
         tasks,
         currentUser,
@@ -24,7 +27,43 @@ export const DailyTimer: React.FC = () => {
         users,
         activeMemberFilter,
         fetchDailyWorkLogs,
+        addTask,
+        columns,
     } = useStore();
+
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+    const pendingColumn = useMemo(() => {
+        if (!activeProjectId) return null;
+        return columns.find((c: any) => c.projectId === activeProjectId && c.title === 'Pending')
+            || columns.find((c: any) => c.projectId === activeProjectId);
+    }, [activeProjectId, columns]);
+
+    const templateTask = useMemo(() => {
+        if (!pendingColumn) return null;
+        return {
+            id: '',
+            projectId: activeProjectId || '',
+            columnId: pendingColumn.id,
+            title: '',
+            creatorId: currentUser?.id || '',
+            assigneeId: currentUser?.id,
+            orderIndex: tasks.filter((t: any) => t.columnId === pendingColumn.id).length,
+            tagIds: [],
+            estimatedTime: 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            attachments: [],
+            subtasks: [],
+            timeTracked: 0
+        };
+    }, [activeProjectId, pendingColumn, currentUser?.id, tasks]);
+
+    const handleSaveNewTask = async (taskData: any) => {
+        if (!pendingColumn || !activeProjectId || !taskData.title) return;
+        const { title, ...extraFields } = taskData;
+        await addTask(activeProjectId, pendingColumn.id, title, extraFields);
+    };
 
     const [tick, setTick] = useState(0);
     const [dailyLogs, setDailyLogs] = useState<DailyWorkLog[]>([]);
@@ -189,6 +228,16 @@ export const DailyTimer: React.FC = () => {
 
     return (
         <div className="flex items-center gap-3">
+            {/* Connect MCP Button */}
+            <button
+                onClick={() => navigate('/settings', { state: { tab: 'api-keys' } })}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 rounded-full text-xs font-semibold transition-all border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer"
+                title="Connect MCP Server / API Keys"
+            >
+                <Cpu size={13} className="text-primary" />
+                <span>Connect MCP</span>
+            </button>
+
             {/* Team Stats (for managers/leads viewing all team) */}
             {canViewTeam && isViewingAllTeam && teamDailyTimes.length > 1 && (
                 <div className="relative group">
@@ -260,6 +309,28 @@ export const DailyTimer: React.FC = () => {
                     </>
                 )}
             </div>
+
+            {/* Add New Task Button */}
+            {pendingColumn && (
+                <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/95 text-white rounded-full text-xs font-semibold transition-all border border-transparent shadow-sm hover:shadow-md cursor-pointer"
+                    title="Add new task to Pending"
+                >
+                    <Plus size={14} />
+                    <span>Add New Task</span>
+                </button>
+            )}
+
+            {isCreateModalOpen && templateTask && (
+                <TaskEditModal
+                    isOpen={isCreateModalOpen}
+                    onClose={() => setIsCreateModalOpen(false)}
+                    task={templateTask as any}
+                    isCreating={true}
+                    onSaveNew={handleSaveNewTask}
+                />
+            )}
         </div>
     );
 };

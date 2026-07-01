@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, User, FolderKanban, Bell, Filter, LayoutList, Calendar,
   Archive, Settings, Crown, Clock, Download, Zap, MousePointerClick,
   Users, Lock, BarChart, X, Check, ToggleLeft, ToggleRight, Layout, Quote, Star,
-  ArrowRight, HelpCircle, ChevronDown, ChevronUp, Building2, Search
+  ArrowRight, HelpCircle, ChevronDown, ChevronUp, Building2, Search, Cpu, Terminal
 } from 'lucide-react';
 import { useStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -337,6 +337,104 @@ const GuideModern: React.FC<{ searchQuery: string }> = ({ searchQuery }) => {
               <img src="/guide/board-view.png" alt="Kanban Board View" className="w-full h-auto transform transition-transform duration-700 hover:scale-[1.02]" />
             </div>
           </motion.div>
+        </div>
+      </motion.div>
+
+      {/* AI Agent / MCP Integration Section */}
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true }}
+        variants={fadeUp}
+        className="mb-32 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-[2.5rem] p-8 md:p-12 lg:p-16 border border-slate-800 shadow-2xl relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent_45%)] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/4 w-[300px] h-[300px] bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
+
+        <div className="relative z-10 grid lg:grid-cols-5 gap-12 items-center">
+          <div className="lg:col-span-3 space-y-6 text-left">
+            <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/30 px-3.5 py-1.5 rounded-full text-xs font-bold text-indigo-400">
+              <Cpu size={14} className="animate-pulse" />
+              <span>Model Context Protocol (MCP) Support</span>
+            </div>
+            
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight text-white">
+              Connect Your Workspace <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400">
+                Directly to AI Coding Tools
+              </span>
+            </h2>
+
+            <p className="text-slate-300 text-lg leading-relaxed font-light">
+              DoneOne features a native, built-in MCP server. Expose your active board, task lists, and project details directly to <strong>Cursor</strong>, <strong>Cline</strong>, <strong>Claude Desktop</strong>, or any custom agentic environment.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4 pt-4">
+              <div className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex gap-3">
+                <div className="p-2 h-fit bg-indigo-500/10 rounded-lg text-indigo-400 shrink-0">
+                  <Terminal size={16} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-slate-100">Full Context Injection</h4>
+                  <p className="text-xs text-slate-400 mt-1">Let LLMs read the active column structure and find tasks by short ID.</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex gap-3">
+                <div className="p-2 h-fit bg-emerald-500/10 rounded-lg text-emerald-400 shrink-0">
+                  <Check size={16} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-slate-100">Write / Mutate Tasks</h4>
+                  <p className="text-xs text-slate-400 mt-1">AI can create tasks, log time, modify tags, and update progress as you code.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 flex flex-wrap items-center gap-4">
+              <button
+                onClick={() => {
+                  const el = document.getElementById('faq-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-full text-sm shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Read Setup Guide</span>
+                <ArrowRight size={14} />
+              </button>
+              <div className="flex items-center gap-2 text-xs text-slate-400 px-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span>Available for all premium workspaces</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 relative">
+            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-6 font-mono text-left shadow-2xl relative overflow-hidden">
+              <div className="flex items-center gap-1.5 border-b border-slate-850 pb-3 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+                <span className="text-[10px] text-slate-500 ml-2">mcp-config.json</span>
+              </div>
+              <pre className="text-xs text-indigo-300 overflow-x-auto select-all cursor-pointer leading-relaxed">
+{`{
+  "mcpServers": {
+    "doneone": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@doneone/mcp-server"
+      ],
+      "env": {
+        "DONEONE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </div>
         </div>
       </motion.div>
 

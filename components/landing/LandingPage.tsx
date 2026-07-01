@@ -2,7 +2,7 @@ import LandingNavbar from './LandingNavbar';
 import LandingHero from './LandingHero';
 import LandingTrustBar from './LandingTrustBar';
 import TimelineFeatures from './TimelineFeatures';
-import LandingVideoSection from './LandingVideoSection';
+// import LandingVideoSection from './LandingVideoSection';
 import LandingMetrics from './LandingMetrics';
 import LandingTestimonials from './LandingTestimonials';
 import LandingPricing from './LandingPricing';
@@ -36,7 +36,7 @@ const LandingPage = ({ onLogin, onRegister }: LandingPageProps) => {
             <TimelineFeatures />
 
             {/* Video Demo Section */}
-            <LandingVideoSection />
+            {/* <LandingVideoSection /> */}
 
             {/* Testimonials */}
             <LandingTestimonials />

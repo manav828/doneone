@@ -22,7 +22,10 @@ const LandingBentoFeatures = () => {
         gradient: string;
     }) => (
         <motion.div
-            variants={itemVariants}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
             className="flex-1 min-h-0 group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:border-primary/30 hover:shadow-xl transition-all duration-300 flex flex-col"
         >
             <div className={`h-1 bg-gradient-to-r ${gradient} flex-shrink-0`} />
@@ -169,30 +172,30 @@ const LandingBentoFeatures = () => {
                         <div className="relative z-10">
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-black uppercase tracking-widest mb-6">
                                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                                Enterprise Grade
+                                Team Ready
                             </div>
 
-                            <h3 className="text-3xl font-black text-white mb-4">Unmatched Security & Control</h3>
+                            <h3 className="text-3xl font-black text-white mb-4">Structured Team Organization</h3>
                             <p className="text-slate-400 text-lg max-w-2xl mb-8 font-medium">
-                                Designed for organizations that require the highest standards of security, compliance, and deployment flexibility.
+                                Designed for teams that require clear division of labor, structured departments, and absolute clarity on task ownership.
                             </p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                 <div className="space-y-2 text-center md:text-left">
-                                    <div className="text-white font-bold text-base">Self-Hosted</div>
-                                    <p className="text-slate-500 text-xs">Deploy on your private infrastructure</p>
+                                    <div className="text-white font-bold text-base">Workspace Depts</div>
+                                    <p className="text-slate-500 text-xs">Organize team members in workspace departments</p>
                                 </div>
                                 <div className="space-y-2 text-center md:text-left border-l border-slate-800 pl-6">
-                                    <div className="text-white font-bold text-base">SSO & SAML</div>
-                                    <p className="text-slate-500 text-xs">Standardized identity management</p>
+                                    <div className="text-white font-bold text-base">Role Control</div>
+                                    <p className="text-slate-500 text-xs">Define managers, admins, and members easily</p>
                                 </div>
                                 <div className="space-y-2 text-center md:text-left border-l border-slate-800 pl-6">
-                                    <div className="text-white font-bold text-base">Custom SSL</div>
-                                    <p className="text-slate-500 text-xs">Your domain, your security</p>
+                                    <div className="text-white font-bold text-base">Google & GitHub</div>
+                                    <p className="text-slate-500 text-xs">Single sign-on using Supabase Auth</p>
                                 </div>
                                 <div className="space-y-2 text-center md:text-left border-l border-slate-800 pl-6">
-                                    <div className="text-white font-bold text-base">24/7 Support</div>
-                                    <p className="text-slate-500 text-xs">Dedicated account management</p>
+                                    <div className="text-white font-bold text-base">Dedicated Support</div>
+                                    <p className="text-slate-500 text-xs">We are here to help your team succeed</p>
                                 </div>
                             </div>
                         </div>

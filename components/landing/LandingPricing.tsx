@@ -120,7 +120,7 @@ const LandingPricing = ({ onRegister }: LandingPricingProps) => {
                     className="text-center mb-8"
                 >
                     <p className="text-slate-400 text-sm">
-                        Trusted by 50,000+ professionals • 4.9★ Chrome Web Store rating
+                        Trusted by 500+ professionals worldwide
                     </p>
                 </motion.div>
 

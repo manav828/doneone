@@ -168,10 +168,18 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
         onClick={handleCardClick}
         className={containerClasses}
       >
+        {/* Task Short ID badge */}
+        <div 
+          className="absolute top-2 right-2 text-[9px] font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 select-none z-10"
+          title={`Task UUID: ${task.id}`}
+        >
+          #{task.id.slice(0, 6)}
+        </div>
+
         {/* Toggle Collapse Button */}
         <button
           onClick={(e) => { e.stopPropagation(); toggleTaskCollapse(task.id); }}
-          className="absolute top-2 right-2 p-1 text-slate-400 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity z-20 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary rounded"
+          className="absolute top-2 right-14 p-1 text-slate-400 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity z-20 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary rounded"
           title={isCollapsed ? "Expand" : "Collapse"}
           aria-label={isCollapsed ? "Expand task" : "Collapse task"}
           aria-expanded={!isCollapsed}
@@ -185,7 +193,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
         {/* Tags (Hidden if collapsed) */}
         {!isCollapsed && (
-          <div className="flex flex-wrap gap-1.5 mb-2.5 pr-6">
+          <div className="flex flex-wrap gap-1.5 mb-2.5 pr-14">
             {/* Discussion Badge */}
             {isActiveDiscussion && (
               <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide bg-purple-500 text-white shadow-sm animate-pulse">
@@ -207,7 +215,7 @@ export const TaskCard: React.FC<Props> = ({ task }) => {
 
         {/* Header */}
         <div className={`flex items-start justify-between gap-2 ${isCollapsed ? 'mb-0' : 'mb-1.5'}`}>
-          <h4 className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug break-words pr-6 capitalize line-clamp-3">
+          <h4 className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug break-words pr-14 capitalize line-clamp-3">
             {task.title}
           </h4>
           {task.reminderAt && remindersEnabled && !isCollapsed && (

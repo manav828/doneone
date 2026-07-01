@@ -45,10 +45,38 @@ const AnimatedCounter = ({ end, suffix = '', duration = 2 }: CounterProps) => {
 
 const LandingMetrics = () => {
     const stats = [
-        { value: 50000, suffix: '+', label: 'Active Users', icon: '👥', useCounter: true },
-        { value: 4.9, suffix: '★', label: 'Chrome Rating', icon: '⭐', useCounter: false },
-        { displayValue: '2M+', label: 'Tasks Completed', icon: '✅', useCounter: false },
-        { value: 99.9, suffix: '%', label: 'Uptime', icon: '🚀', useCounter: false },
+        { 
+            value: 500, 
+            suffix: '+', 
+            label: 'Active Users', 
+            icon: (
+                <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            ), 
+            useCounter: true 
+        },
+        { 
+            displayValue: '10k+', 
+            label: 'Tasks Completed', 
+            icon: (
+                <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+            ), 
+            useCounter: false 
+        },
+        { 
+            value: 99.9, 
+            suffix: '%', 
+            label: 'Uptime', 
+            icon: (
+                <svg className="w-8 h-8 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            ), 
+            useCounter: false 
+        },
     ];
 
     return (
@@ -93,7 +121,7 @@ const LandingMetrics = () => {
                 </motion.div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
                     {stats.map((stat, index) => (
                         <motion.div
                             key={stat.label}
@@ -105,7 +133,7 @@ const LandingMetrics = () => {
                         >
                             <div className="glass-dark rounded-2xl p-8 text-center h-full transition-all duration-300 group-hover:scale-105">
                                 {/* Icon */}
-                                <div className="text-4xl mb-4">{stat.icon}</div>
+                                <div className="flex justify-center mb-4">{stat.icon}</div>
 
                                 {/* Number */}
                                 <div className="stat-number mb-2">

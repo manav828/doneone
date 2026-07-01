@@ -94,7 +94,7 @@ const LandingCTASection = ({ onRegister }: LandingCTASectionProps) => {
 
                     {/* Subheadline */}
                     <p className="text-xl md:text-2xl text-white/90 mb-10 max-w-2xl mx-auto">
-                        Join 50,000+ professionals who work smarter, not harder with DoneOne
+                        Join 500+ professionals who work smarter, not harder with DoneOne
                     </p>
 
                     {/* CTA Buttons */}
